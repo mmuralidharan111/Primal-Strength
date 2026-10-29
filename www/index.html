@@ -1628,7 +1628,7 @@ async function cloudInit(){
     firebase.initializeApp(FB_CONFIG);
     Cloud.db = firebase.firestore();
     try { await Cloud.db.enablePersistence({synchronizeTabs:true}); } catch(e){}
-    firebase.auth().onAuthStateChanged(u => { Cloud.authKnown = true; S.obOffered = false; if (!u) S.forceRender = true; onAuth(u).then(() => { if (!u){ S.forceRender = true; render(); } }).catch(err => { console.error(err); toast("Couldn't load your account — check your connection."); }); });
+    firebase.auth().onAuthStateChanged(u => { Cloud.authKnown = true; S.obOffered = false; S.ob = null; if (!u) S.forceRender = true; onAuth(u).then(() => { if (!u){ S.forceRender = true; render(); } }).catch(err => { console.error(err); toast("Couldn't load your account — check your connection."); }); });
   } catch(e){ console.error(e); Cloud.db = null; }
 }
 function stopListeners(){ Cloud.unsub.forEach(f => { try { f(); } catch(e){} }); Cloud.unsub = []; Cloud.attached = null; closeClient(); }
@@ -1654,7 +1654,7 @@ async function onAuth(u){
       if (Cloud.attached !== "trainer"){ Cloud.attached = "trainer"; attachTrainer(); S.view = "clients"; }
     } else {
       S.profile = {program: d.program || standardProgram(), settings: {...defaultsFor(false).settings, ...(d.settings || {})}, created: ""};
-      if (Cloud.attached !== "client"){ Cloud.attached = "client"; attachClient(); if (!["today","workouts","cardio","body","progress","log"].includes(S.view)) S.view = "today"; }
+      if (Cloud.attached !== "client"){ Cloud.attached = "client"; attachClient(); if (!["today","workouts","cardio","body","progress","log","onboard"].includes(S.view)) S.view = "today"; }
     }
     S.forceRender = S.view !== "log"; render();
   }, () => toast("Lost connection to your account.")));
@@ -2011,7 +2011,7 @@ const firstName = () => { const n = (Cloud.me && Cloud.me.name) || (S.profile &&
 function greeting(){ const h = new Date().getHours(); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; }
 function needsOnboarding(){
   if (!S.profile || set_().intakeDone) return false;
-  if (cloudOK()) return isCloudClient() && !Cloud.me.trainerId;
+  if (window.firebase) return cloudOK() && isCloudClient() && !Cloud.me.trainerId;
   return true;
 }
 function startOnboarding(){ const prev = (S.profile && set_().intake) || {}; S.ob = {step: 0, a: {pain: [], health: {}, lifts: {}, days: 3, mins: 60, ...clean(prev)}}; S.view = "onboard"; S.forceRender = true; render(); window.scrollTo(0,0); }

@@ -1,8 +1,8 @@
 {
-  "name": "strength-log",
+  "name": "primal-strength",
   "version": "1.0.0",
   "private": true,
-  "description": "12-Week Strength Log — Android app",
+  "description": "Primal Strength \u2014 Android app",
   "dependencies": {
     "@capacitor/android": "^7.0.0",
     "@capacitor/app": "^7.0.0",

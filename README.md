@@ -1,4 +1,4 @@
-# Strength Log — Android app
+# Primal Strength — Android app
 
 The 12-week strength and cardio logger, packaged as an Android app you can sideload.
 
@@ -9,7 +9,7 @@ The 12-week strength and cardio logger, packaged as an Android app you can sidel
 3. Drag in everything from this folder, including the hidden `.github` folder. On a Mac, press Cmd+Shift+. in Finder to show it.
 4. Click **Commit changes**.
 5. Open the **Actions** tab. The "Build APK" job starts on its own and takes about 5 minutes.
-6. When it shows a green tick, open **Releases** on the repository's main page and download `StrengthLog-N.apk`.
+6. When it shows a green tick, open **Releases** on the repository's main page and download `PrimalStrength-N.apk`.
 
 Every time you change a file and commit, a new APK is built with a higher build number.
 

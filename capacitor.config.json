@@ -1,6 +1,8 @@
 {
   "appId": "com.strengthlog.app",
-  "appName": "Strength Log",
+  "appName": "Primal Strength",
   "webDir": "www",
-  "android": { "backgroundColor": "#0F1215" }
+  "android": {
+    "backgroundColor": "#FFFFFF"
+  }
 }

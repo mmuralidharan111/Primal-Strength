@@ -99,7 +99,28 @@ async function load(fb){
   /* ===== 1. Offline client flow ===== */
   step = "offline";
   let A = await load(null);
-  check(A.text().includes("Primal Strength"), "home renders with app name");
+  step = "onboarding";
+  check(A.text().includes("I'm your Primal Strength coach"), "first run opens the coach questionnaire");
+  await A.type("#ob-name", "Manas");
+  await A.click('[data-act="ob-next"]', "start questionnaire");
+  await A.click('[data-act="ob-pick"][data-k="goal"][data-v="strength"]', "pick goal");
+  await A.click('[data-act="ob-next"]');
+  await A.click('[data-act="ob-pick"][data-k="experience"][data-v="experienced"]', "pick experience");
+  await A.click('[data-act="ob-next"]');
+  await A.click('[data-act="ob-pick"][data-k="days"][data-v="3"]', "pick days"); await A.click('[data-act="ob-next"]');
+  await A.click('[data-act="ob-pick"][data-k="equipment"][data-v="gym"]', "pick equipment"); await A.click('[data-act="ob-next"]');
+  await A.type("#ob-age", "45"); await A.type("#ob-weight", "86"); await A.click('[data-act="ob-next"]');
+  await A.click('[data-act="ob-pain"][data-v="back"]', "flag lower back"); await A.click('[data-act="ob-next"]');
+  await A.type("#ob-squat-kg", "100"); await A.type("#ob-squat-reps", "5"); await A.type("#ob-bench-kg", "80"); await A.type("#ob-bench-reps", "5");
+  await A.click('[data-act="ob-next"]', "build plan");
+  check(A.text().includes("here's your plan"), "plan screen shown");
+  check(A.text().includes("Goblet squat") && !A.text().includes("Back squat ["), "back answer swaps to a back-friendly squat");
+  check(/@ \d+(\.\d)? kg/.test(A.text()), "target weights calculated from strength numbers");
+  check(A.text().includes("Work with a trainer"), "plan recommends a trainer");
+  await A.click('[data-act="ob-start"]', "start plan");
+  step = "offline";
+  check(A.text().includes(", Manas"), "home greets the user by name");
+  check(A.text().includes("starter block"), "home mentions the starter block");
   for (const v of ["workouts", "cardio", "body", "progress", "today"]){ await A.click(`[data-act="tab"][data-v="${v}"]`, `tab ${v}`); }
   await A.click('[data-act="openday"]', "open next workout");
   check(A.text().includes("Start now"), "overview shows Start now");
@@ -128,21 +149,24 @@ async function load(fb){
   step = "trainer-signup";
   const fb = makeFirebase();
   let T = await load(fb);
-  await T.click('[data-act="settings"]'); await T.click('[data-act="auth"][data-v="up"]', "open create account");
+  check(T.text().includes("Train with a plan"), "signed-out app opens on the sign-up page");
+  check(!T.$('[data-act="tab"]'), "app content is hidden until signed in");
   await T.click('[data-act="auth-role"][data-v="trainer"]', "pick trainer role");
   await T.type("#a-name", "Coach Ravi"); await T.type("#a-email", "coach@test.in"); await T.type("#a-pass", "secret1");
   await T.click('[data-act="auth-go"]', "create trainer account"); await sleep(600);
-  check(T.text().includes("Clients"), "trainer lands on Clients");
+  check(T.text().includes("Clients") || T.text().includes("clients"), "trainer lands on Clients");
+  check(T.text().includes(", Coach"), "trainer greeted by name");
   const code = [...fb._docs.keys()].find(k => k.startsWith("codes/"));
   check(!!code, "invite code created"); const inviteCode = code && code.split("/")[1];
   check(T.text().includes(inviteCode), "invite code shown to trainer");
 
   step = "client-signup";
   let C = await load(makeFirebase());      // client's phone: same backend, its own sign-in
-  await C.click('[data-act="settings"]'); await C.click('[data-act="auth"][data-v="up"]');
   await C.type("#a-name", "Asha"); await C.type("#a-email", "asha@test.in"); await C.type("#a-pass", "secret2");
   await C.click('[data-act="auth-go"]', "create client account"); await sleep(600);
-  await C.click('[data-act="settings"]'); await C.type("#t-code", inviteCode);
+  check(C.text().includes("Hi Asha"), "new client greeted by name in the questionnaire");
+  await C.click('[data-act="ob-havetrainer"]', "client says they have a trainer's code"); await sleep(200);
+  await C.type("#t-code", inviteCode);
   await C.click('[data-act="connect-trainer"]', "connect to trainer"); await sleep(400);
   check(fb._docs.get("users/u_asha").trainerId === "u_coach", "client linked to trainer");
 

@@ -522,7 +522,7 @@ const TEMPLATES = [
 function templateProgram(key){
   const t = TEMPLATES.find(x => x.key === key); if (!t) return blankProgram();
   return {name: t.name, byTrainer: true, startDate: mondayOf(addDays(today(), 7)), cardioWeekly: t.cardio, notes: [...t.notes],
-    block: {weeks: t.weeks, deload: [...t.deload], extra: [], builtin: false}, days: JSON.parse(JSON.stringify(t.days))};
+    block: {weeks: t.weeks, deload: [...t.deload], extra: [], builtin: false}, days: JSON.parse(JSON.stringify(t.days)).map((d, i) => ({...d, id: String.fromCharCode(65 + i)}))};
 }
 
 /* ============ Block structure ============ */
@@ -824,11 +824,18 @@ let pendingRender = false;
 function render(){
   if (!S.ready){ app.innerHTML = `<main><div class="wrap"><p class="muted">Opening your log…</p></div></main>`; return; }
   const ae = document.activeElement;
-  if (!S.forceRender && (S.view === "log" || S.view === "builder")) return;
+  if (!S.forceRender && (S.view === "log" || S.view === "builder" || S.view === "onboard")) return;
   if (S.view !== "log" && ae && ae.matches && ae.matches("main input, main textarea, main select") && !S.forceRender){ pendingRender = true; return; }
   S.forceRender = false; pendingRender = false;
   let html = "";
-  if (isTrainer()){
+  if (needsOnboarding() && !S.ob && S.view !== "log" && !S.obOffered){
+    S.obOffered = true; const prev = set_().intake || {};
+    S.ob = {step: 0, a: {pain: [], health: {}, lifts: {}, days: 3, mins: 60, ...clean(prev)}}; S.view = "onboard";
+  }
+  if (cloudOK() && (!Cloud.authKnown || (Cloud.user && !Cloud.me))) html = viewSplash();
+  else if (cloudOK() && !Cloud.user) html = viewWelcome();
+  else if (S.view === "onboard" && S.ob && !isTrainer()) html = viewOnboard();
+  else if (isTrainer()){
     if (S.view === "builder" && S.builder) html = viewBuilder();
     else {
       if (S.view === "client" && !S.cctx) S.view = "clients";
@@ -861,7 +868,8 @@ function nav(){
 function viewToday(){
   const t = today(), w = weekOf(t), dow = parse(t).getDay();
   const nw = nextWorkout(), st = weekStats(Math.max(1,w));
-  const ds = dexaStatus(); let out = "";
+  const ds = dexaStatus(); const nm = firstName();
+  let out = `<div><span class="eyebrow">${DOW[dow]} · ${shortDate(t)}</span><h1>${greeting()}${nm ? ", " + esc(nm) : ""}</h1>${prog().starter ? `<span class="muted small">You're on your starter block. A trainer can build your full program.</span>` : ""}</div>`;
   if (set_().trackBack){
     const last = sessionsSorted()[0];
     if (last && last.backPain != null && set_().backNormal != null && +last.backPain >= +set_().backNormal + 2)
@@ -900,7 +908,8 @@ function viewToday(){
   out += `<section class="grid3"><div class="stat"><b class="num">${lw ? fmt(lw.weight) : "–"}</b><span>Weight kg</span></div>
   <div class="stat"><b class="num">${lwa ? fmt(lwa.waist) : "–"}</b><span>Waist cm${firstWaist && lwa && firstWaist.id !== lwa.id ? ` (${(lwa.waist-firstWaist.waist>0?"+":"")}${fmt(lwa.waist-firstWaist.waist)})` : ""}</span></div>
   <div class="stat"><b class="num">${S.data.sessions.length}</b><span>Workouts logged</span></div></section>`;
-  if (prog().notes && prog().notes.length) out += `<section class="card"><span class="eyebrow">Program rules</span>${prog().notes.map(n => `<p class="small" style="margin:0">${esc(n)}</p>`).join("")}</section>`;
+  if (isCloudClient() && !Cloud.me.trainerId) out += `<section class="card"><div class="row between" style="flex-wrap:nowrap"><div><b>Working with a trainer?</b><div class="small muted">Enter their invite code to get your program from them.</div></div><button class="btn blue" data-act="settings">Add code</button></div></section>`;
+  if (prog().notes && prog().notes.length) out += `<section class="card"><span class="eyebrow">Program notes</span>${prog().notes.map(n => `<p class="small" style="margin:0">${esc(n)}</p>`).join("")}</section>`;
   return out;
 }
 
@@ -1236,6 +1245,7 @@ function sheetHTML(){
     <button class="btn primary block" data-act="settings-save">Save settings</button>
     <hr style="border:0;border-top:1px solid var(--line);width:100%">
     ${trainerManaged() ? `<h3>Program</h3><span class="muted small">${esc(prog().name || "Your program")} is set by ${esc(Cloud.me.trainerName || "your trainer")}. You can still swap an exercise for a single workout.</span><hr style="border:0;border-top:1px solid var(--line);width:100%">` : `    <h3>Program</h3><span class="muted small">Current: \${prog().kind === "personal" ? "back-friendly with extra right-side core sets" : "standard 3-day block"}. Switching keeps your logged workouts.</span>
+    <button class="btn blue block" data-act="ob-retake">Get a starter plan from the coach questionnaire</button>
     <div class="grid2"><button class="btn" data-act="ask-prog" data-v="standard">Standard</button><button class="btn" data-act="ask-prog" data-v="personal">Back-friendly + right side</button></div>
     <hr style="border:0;border-top:1px solid var(--line);width:100%">
 `}
@@ -1360,6 +1370,18 @@ app.addEventListener("click", async ev => {
   const t = ev.target.closest("[data-act]"); if (!t) return;
   const a = t.dataset.act;
   if (a === "scrim"){ if (ev.target === t) closeSheet(); return; }
+  if (a === "ob-retake"){ S.sheet = null; S.obOffered = true; return startOnboarding(); }
+  if (a === "ob-pick"){ const k = t.dataset.k, v = t.dataset.v; S.ob.a[k] = (k === "days" || k === "mins") ? +v : v; if (k === "goal" && v !== "event") delete S.ob.a.event; S.forceRender = true; return rerenderLogKeepScroll(); }
+  if (a === "ob-pain"){ const p = S.ob.a.pain, v = t.dataset.v; obCollect(); S.ob.a.pain = p.includes(v) ? p.filter(x => x !== v) : [...p, v]; return rerenderLogKeepScroll(); }
+  if (a === "ob-next"){
+    obCollect();
+    if (OB_STEPS[S.ob.step] === "strength"){ S.ob.result = coachPlan(S.ob.a); }
+    S.ob.step = Math.min(OB_STEPS.length - 1, S.ob.step + 1); S.forceRender = true; render(); window.scrollTo(0,0); return;
+  }
+  if (a === "ob-back"){ obCollect(); S.ob.step = Math.max(0, S.ob.step - 1); S.forceRender = true; render(); window.scrollTo(0,0); return; }
+  if (a === "ob-skip") return obSkip();
+  if (a === "ob-start") return obStart();
+  if (a === "ob-havetrainer"){ await obSkip(); return openSheet({kind:"settings", back: set_().trackBack}); }
   if (a === "ttab"){ closeClient(); S.view = t.dataset.v; S.builder = null; S.forceRender = true; render(); window.scrollTo(0,0); return; }
   if (a === "open-client"){ S.ctab = "overview"; return openClient(t.dataset.id); }
   if (a === "ctab"){ S.ctab = t.dataset.v; S.noteEdit = null; S.forceRender = true; return render(); }
@@ -1398,8 +1420,8 @@ app.addEventListener("click", async ev => {
   if (a === "b-rmex"){ S.builder.p.days[+t.dataset.d].ex.splice(+t.dataset.e, 1); return rerenderLogKeepScroll(); }
   if (a === "b-up" || a === "b-down"){ const ex = S.builder.p.days[+t.dataset.d].ex, i = +t.dataset.e, j = a === "b-up" ? i-1 : i+1; if (j < 0 || j >= ex.length) return; [ex[i], ex[j]] = [ex[j], ex[i]]; return rerenderLogKeepScroll(); }
   if (a === "auth") return openSheet({kind:"auth", mode:t.dataset.v, role:"client"});
-  if (a === "auth-mode"){ S.sheet.mode = t.dataset.v; S.forceRender = true; return render(); }
-  if (a === "auth-role"){ S.sheet.role = t.dataset.v; const keep = {n:val("a-name"), e:val("a-email")}; S.forceRender = true; render(); const n = document.getElementById("a-name"), e = document.getElementById("a-email"); if (n) n.value = keep.n; if (e) e.value = keep.e; return; }
+  if (a === "auth-mode"){ const st = (S.sheet && S.sheet.kind === "auth") ? S.sheet : S.authPage; st.mode = t.dataset.v; S.forceRender = true; return render(); }
+  if (a === "auth-role"){ const st = (S.sheet && S.sheet.kind === "auth") ? S.sheet : S.authPage; st.role = t.dataset.v; const keep = {n:val("a-name"), e:val("a-email")}; S.forceRender = true; render(); const n = document.getElementById("a-name"), e = document.getElementById("a-email"); if (n) n.value = keep.n; if (e) e.value = keep.e; return; }
   if (a === "auth-go") return authGo();
   if (a === "auth-reset"){ const e = val("a-email"); if (!e) return toast("Enter your email first."); try { await firebase.auth().sendPasswordResetEmail(e); toast("Password reset email sent"); } catch(err){ toast("Couldn't send the reset email."); } return; }
   if (a === "signout"){ S.sheet = null; await firebase.auth().signOut(); return; }
@@ -1606,7 +1628,7 @@ async function cloudInit(){
     firebase.initializeApp(FB_CONFIG);
     Cloud.db = firebase.firestore();
     try { await Cloud.db.enablePersistence({synchronizeTabs:true}); } catch(e){}
-    firebase.auth().onAuthStateChanged(u => { onAuth(u).catch(err => { console.error(err); toast("Couldn't load your account — check your connection."); }); });
+    firebase.auth().onAuthStateChanged(u => { Cloud.authKnown = true; S.obOffered = false; if (!u) S.forceRender = true; onAuth(u).then(() => { if (!u){ S.forceRender = true; render(); } }).catch(err => { console.error(err); toast("Couldn't load your account — check your connection."); }); });
   } catch(e){ console.error(e); Cloud.db = null; }
 }
 function stopListeners(){ Cloud.unsub.forEach(f => { try { f(); } catch(e){} }); Cloud.unsub = []; Cloud.attached = null; closeClient(); }
@@ -1767,7 +1789,8 @@ function trainerNav(){
 function lastAlertFor(id){ return (S.alerts || []).find(a => a.clientId === id); }
 function viewClients(){
   const code = Cloud.me.inviteCode;
-  let out = `<div><span class="eyebrow">Coach</span><h1>Clients</h1></div>
+  const nm = firstName();
+  let out = `<div><span class="eyebrow">Coach</span><h1>${greeting()}${nm ? ", " + esc(nm) : ""}</h1><span class="muted small">${(S.clients||[]).length ? `${(S.clients||[]).length} client${(S.clients||[]).length===1?"":"s"}` : "Your clients will appear here"}</span></div>
   <section class="card"><div class="row between"><div><span class="eyebrow">Your invite code</span><div style="font-family:var(--f-display);font-size:32px;letter-spacing:.12em" class="num">${esc(code || "······")}</div></div>${code ? `<button class="btn" data-act="copy-code" data-v="${esc(code)}">Copy</button>` : `<button class="btn" data-act="new-code">Create code</button>`}</div>
   <span class="small muted">Clients install Primal Strength, create an account, then enter this code under Settings → Trainer.</span></section>`;
   const cl = S.clients || [];
@@ -1802,12 +1825,28 @@ function viewClient(){
   if (S.ctab === "notes") return out + clientNotes();
   return out + withCtx(clientOverview);
 }
+function intakeCard(){
+  const c = clientDoc(S.cctx.uid); const it = c && c.settings && c.settings.intake; if (!it || it.skipped) return "";
+  const lbl = (arr, v) => (arr.find(x => x[0] === v) || [, v || "–"])[1];
+  const flags = HEALTH_Q.filter(([k]) => (it.health || {})[k]).map(x => x[1]);
+  const lifts = LIFTS.filter(([k]) => it.lifts && it.lifts[k] && it.lifts[k].kg).map(([k, l]) => `${l} ${it.lifts[k].kg} kg × ${it.lifts[k].reps}`);
+  return `<section class="card"><h3>Intake answers</h3><span class="muted small">From the client's questionnaire${it.completed ? `, ${shortDate(it.completed)}` : ""}.</span>
+  <div class="tbl"><table>
+  <tr><td>Goal</td><td>${esc(lbl(GOALS, it.goal))}${it.event ? " · " + esc(lbl(EVENTS, it.event)) : ""}</td></tr>
+  <tr><td>Experience</td><td>${esc(lbl(EXPERIENCE, it.experience))}</td></tr>
+  <tr><td>Schedule</td><td>${it.days || "–"} days a week · ${it.mins || "–"} min</td></tr>
+  <tr><td>Equipment</td><td>${esc(lbl(EQUIPMENT, it.equipment))}</td></tr>
+  <tr><td>About</td><td>${[it.age ? it.age + " yrs" : "", it.sex || "", it.height ? it.height + " cm" : "", it.weight ? it.weight + " kg" : ""].filter(Boolean).join(" · ") || "–"}</td></tr>
+  <tr><td>Pain / injuries</td><td>${(it.pain || []).length ? esc(it.pain.map(p => lbl(PAIN, p)).join(", ")) : "None"}${it.other ? " · " + esc(it.other) : ""}</td></tr>
+  <tr><td>Strength</td><td style="white-space:normal">${lifts.length ? esc(lifts.join(" · ")) : "Not given"}</td></tr>
+  </table></div>${flags.length ? `<div class="banner bad"><div><b>Health screening flags:</b> ${esc(flags.join("; "))}. Ask for medical clearance before progressing intensity.</div></div>` : ""}</section>`;
+}
 function clientOverview(){
   const w = weekOf(today()), st = weekStats(Math.max(1, w)); const lw = latestBody("weight"), lwa = latestBody("waist");
   const last = sessionsSorted()[0];
   let out = `<section class="grid3"><div class="stat"><b class="num">${w < 1 ? "–" : w}</b><span>Week of ${blk().weeks}</span></div><div class="stat"><b class="num">${st.sessions.length}/${prog().days.length}</b><span>Workouts this week</span></div><div class="stat"><b class="num">${st.cardio}</b><span>Cardio min${st.plan ? ` / ${st.plan}` : ""}</span></div>
   <div class="stat"><b class="num">${lw ? fmt(lw.weight) : "–"}</b><span>Weight kg${lw ? " · " + shortDate(lw.date) : ""}</span></div><div class="stat"><b class="num">${lwa ? fmt(lwa.waist) : "–"}</b><span>Waist cm</span></div><div class="stat"><b class="num">${st.pain != null ? fmt(st.pain) : "–"}</b><span>Back pain avg</span></div></section>`;
-  out += `<section class="card"><h3>Recent workouts</h3>${clientHistoryList(6)}</section>`;
+  out += `<section class="card"><h3>Recent workouts</h3>${clientHistoryList(6)}</section>` + intakeCard();
   if (last) out += `<p class="small muted" style="margin:0">Last workout ${shortDate(last.date)}.</p>`;
   return out;
 }
@@ -1915,35 +1954,38 @@ async function saveBuilder(){
 }
 
 /* ---- Auth sheet ---- */
-function authSheet(){
-  const up = S.sheet.mode === "up";
-  return `<h2>${up ? "Create your account" : "Sign in"}</h2>
+function authSheet(){ return authForm(S.sheet, false); }
+function authForm(st, inPage){
+  const up = st.mode === "up";
+  return `${inPage ? "" : `<h2>${up ? "Create your account" : "Sign in"}</h2>`}
   <div class="chips"><button class="chip ${up?"":"on"}" data-act="auth-mode" data-v="in">Sign in</button><button class="chip ${up?"on":""}" data-act="auth-mode" data-v="up">Create account</button></div>
   ${up ? `<label class="f">Your name<input id="a-name" autocomplete="name"></label>` : ""}
   <label class="f">Email<input id="a-email" type="email" autocomplete="email" inputmode="email"></label>
   <label class="f">Password${up ? " (6+ characters)" : ""}<input id="a-pass" type="password" autocomplete="${up ? "new-password" : "current-password"}"></label>
-  ${up ? `<div><div class="small muted" style="font-weight:600;margin-bottom:6px">I am a</div><div class="grid2"><button type="button" class="btn ${S.sheet.role!=="trainer"?"blue":""}" data-act="auth-role" data-v="client">Client / athlete</button><button type="button" class="btn ${S.sheet.role==="trainer"?"blue":""}" data-act="auth-role" data-v="trainer">Trainer</button></div>
-  <span class="small muted">${S.sheet.role === "trainer" ? "Trainers build programs for clients and see their progress." : "Your log on this phone moves into your account, so it's safe if you lose the phone."}</span></div>` : ""}
+  ${up ? `<div><div class="small muted" style="font-weight:600;margin-bottom:6px">I am a</div><div class="grid2"><button type="button" class="btn ${st.role!=="trainer"?"blue":""}" data-act="auth-role" data-v="client">Client / athlete</button><button type="button" class="btn ${st.role==="trainer"?"blue":""}" data-act="auth-role" data-v="trainer">Trainer</button></div>
+  <span class="small muted">${st.role === "trainer" ? "Trainers build programs for clients and see their progress." : "You'll answer a few questions and get a starter plan. Any workouts already on this phone move into your account."}</span></div>` : ""}
   <button class="btn primary block" data-act="auth-go">${up ? "Create account" : "Sign in"}</button>
   ${up ? "" : `<button class="btn ghost" data-act="auth-reset">Forgot password?</button>`}
-  <button class="btn block" data-act="sheet-close">Cancel</button>`;
+  ${inPage ? "" : `<button class="btn block" data-act="sheet-close">Cancel</button>`}`;
 }
 async function authGo(){
   const email = val("a-email"), pass = (document.getElementById("a-pass") || {}).value || "";
   if (!email || !pass) return toast("Enter your email and password.");
   const btn = document.querySelector('[data-act="auth-go"]'); if (btn){ btn.disabled = true; btn.textContent = "Please wait…"; }
   try {
-    if (S.sheet.mode === "up"){
+    const st = (S.sheet && S.sheet.kind === "auth") ? S.sheet : S.authPage;
+    if (st.mode === "up"){
       const name = val("a-name"); if (!name){ if (btn){ btn.disabled = false; btn.textContent = "Create account"; } return toast("Enter your name."); }
-      Cloud.pending = {role: S.sheet.role === "trainer" ? "trainer" : "client", name};
+      Cloud.pending = {role: st.role === "trainer" ? "trainer" : "client", name};
       await firebase.auth().createUserWithEmailAndPassword(email, pass);
     } else await firebase.auth().signInWithEmailAndPassword(email, pass);
-    S.sheet = null; S.forceRender = true; render();
+    if (S.sheet && S.sheet.kind === "auth") S.sheet = null; S.forceRender = true; render();
   } catch(e){
     Cloud.pending = null;
     const m = {"auth/email-already-in-use":"That email already has an account — sign in instead.","auth/invalid-email":"That email address isn't valid.","auth/weak-password":"Use at least 6 characters for the password.","auth/invalid-credential":"Wrong email or password.","auth/wrong-password":"Wrong email or password.","auth/user-not-found":"No account with that email.","auth/network-request-failed":"No internet connection.","auth/too-many-requests":"Too many attempts. Wait a few minutes and try again."}[e.code];
     toast(m || "Couldn't sign in: " + (e.code || e.message));
-    if (btn){ btn.disabled = false; btn.textContent = S.sheet && S.sheet.mode === "up" ? "Create account" : "Sign in"; }
+    const st2 = (S.sheet && S.sheet.kind === "auth") ? S.sheet : S.authPage;
+    if (btn){ btn.disabled = false; btn.textContent = st2 && st2.mode === "up" ? "Create account" : "Sign in"; }
   }
 }
 function accountSection(){
@@ -1953,6 +1995,266 @@ function accountSection(){
   return `<span class="muted small">Signed in as ${esc(Cloud.user.email)}. Your log syncs to your account.</span>
   <h3>Trainer</h3>${me.trainerId ? `<span class="small">Connected to <b>${esc(me.trainerName || "your trainer")}</b>. They can see your workouts and set your program.</span><button class="btn danger block" data-act="ask-disconnect">Disconnect from trainer</button>` : `<label class="f">Trainer's invite code<input id="t-code" autocapitalize="characters" placeholder="6 letters and numbers"></label><button class="btn blue block" data-act="connect-trainer">Connect</button>`}
   <button class="btn block" data-act="signout">Sign out</button>`;
+}
+
+/* ============ First-run coach: questionnaire + starter plan ============ */
+const OB_STEPS = ["hello","goal","experience","schedule","equipment","about","health","strength","plan"];
+const GOALS = [["strength","Get stronger","Lift heavier on the big lifts"],["muscle","Build muscle","Look and feel more muscular"],["fatloss","Lose fat","Lower body fat and waist size"],["fitness","Get fitter","Better stamina and endurance"],["health","Feel healthier","Move well, more energy, long-term health"],["event","Train for an event","Hyrox, marathon, half marathon or 10K"]];
+const EVENTS = [["hyrox","Hyrox"],["marathon","Marathon"],["half","Half marathon"],["10k","10K run"]];
+const EXPERIENCE = [["new","New to training","Less than 6 months of regular workouts"],["some","Some experience","6 months to 2 years"],["experienced","Experienced","2+ years of consistent training"]];
+const EQUIPMENT = [["gym","Full gym","Barbells, dumbbells, cables and machines"],["home","Home: dumbbells","Dumbbells and a bench"],["bodyweight","Bodyweight only","No equipment"]];
+const HEALTH_Q = [["heart","A doctor has said I have a heart condition or should only exercise under medical supervision"],["chest","I get chest pain during physical activity, or have had it in the past month"],["dizzy","I lose balance because of dizziness or have lost consciousness"],["joint","I have a bone or joint problem that exercise could make worse"],["bp","I take medication for blood pressure or a heart condition"],["pregnant","I'm pregnant or have given birth in the last 6 months"]];
+const PAIN = [["back","Lower back"],["knee","Knees"],["shoulder","Shoulders"],["hip","Hips"]];
+const LIFTS = [["squat","Squat"],["bench","Bench press"],["deadlift","Deadlift"],["ohp","Overhead press"]];
+
+const firstName = () => { const n = (Cloud.me && Cloud.me.name) || (S.profile && set_().name) || ""; return n.trim().split(/\s+/)[0] || ""; };
+function greeting(){ const h = new Date().getHours(); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; }
+function needsOnboarding(){
+  if (!S.profile || set_().intakeDone) return false;
+  if (cloudOK()) return isCloudClient() && !Cloud.me.trainerId;
+  return true;
+}
+function startOnboarding(){ const prev = (S.profile && set_().intake) || {}; S.ob = {step: 0, a: {pain: [], health: {}, lifts: {}, days: 3, mins: 60, ...clean(prev)}}; S.view = "onboard"; S.forceRender = true; render(); window.scrollTo(0,0); }
+
+/* ---- plan generator ---- */
+function e1rmOf(l){ const kg = +l.kg, r = +l.reps; if (!(kg > 0) || !(r >= 1) || r > 12) return null; return kg * (1 + r / 30); }
+function workKg(e1, reps, rir, factor){ if (!e1) return null; const k = e1 * factor / (1 + (reps + rir) / 30) * 0.95; return Math.max(2.5, Math.round(k / 2.5) * 2.5); }
+function coachPlan(a){
+  const why = [], warn = [], tips = [];
+  const flagged = Object.values(a.health || {}).some(Boolean);
+  const exp = flagged ? "new" : a.experience || "new";
+  const age = +a.age || null;
+  const eq = a.equipment || "gym";
+  const pain = new Set(a.pain || []);
+  const lvl = {new:{rir:3, setsMain:3, setsAcc:2}, some:{rir:2, setsMain:3, setsAcc:3}, experienced:{rir:2, setsMain:4, setsAcc:3}}[exp];
+  if (age && age >= 60){ lvl.rir = Math.max(lvl.rir, 3); why.push("Effort is kept a little further from failure, which suits training in your 60s and beyond."); }
+
+  // Event goals start from the matching event template
+  if (flagged && a.goal === "event"){ a = {...a, goal:"fitness"}; warn.push("Because of your health answers, this plan builds general fitness first instead of event training."); }
+  if (a.goal === "event" && a.event){
+    const p = templateProgram(a.event); p.byTrainer = false; p.starter = true; p.name = "Starter: " + p.name;
+    why.push(`Built from our ${TEMPLATES.find(t => t.key === a.event).name} template: ${TEMPLATES.find(t => t.key === a.event).desc}`);
+    if (exp === "new") warn.push("Event training is demanding for someone new to training. Build a base for a few weeks first and get a coach to adjust the volumes for you.");
+    return finishPlan(p, a, why, warn, tips, flagged);
+  }
+
+  const g = a.goal || "health";
+  const rx = {
+    strength:{main:"5", acc:"8–10", restMain:180, restAcc:90, mainSetsBonus:1},
+    muscle:{main:"8–10", acc:"10–12", restMain:120, restAcc:75, mainSetsBonus:0},
+    fatloss:{main:"8–10", acc:"12–15", restMain:90, restAcc:60, mainSetsBonus:0},
+    fitness:{main:"10", acc:"12–15", restMain:75, restAcc:60, mainSetsBonus:0},
+    health:{main:"10", acc:"12", restMain:90, restAcc:60, mainSetsBonus:0}
+  }[g];
+  if (exp === "new" && g === "strength") rx.main = "6–8";
+
+  // exercise choices by equipment, experience and pain
+  const back = pain.has("back"), knee = pain.has("knee"), sh = pain.has("shoulder"), hip = pain.has("hip");
+  const pick = {
+    gym: {
+      squat: back ? "Goblet squat" : knee ? "Box squat" : exp === "new" ? "Goblet squat" : "Back squat",
+      squat2: back || knee ? "Leg press" : "Front squat",
+      hinge: back ? "Cable pull-through" : exp === "new" ? "Kettlebell deadlift from a step" : g === "strength" ? "Trap-bar deadlift" : "Romanian deadlift",
+      hinge2: back ? "45° hip extension" : "Hip thrust",
+      hpush: sh ? "DB floor press" : exp === "experienced" && g === "strength" ? "Barbell bench press" : "DB bench press",
+      hpush2: sh ? "Machine chest press" : "Incline DB press",
+      hpull: "Chest-supported DB row", hpull2: "Seated cable row",
+      vpush: sh ? "Landmine press" : "Seated DB overhead press",
+      vpull: sh ? "Neutral-grip lat pulldown" : exp === "experienced" ? "Pull-up" : "Lat pulldown",
+      single: knee || hip ? "Single-leg glute bridge" : exp === "new" ? "Split squat" : "Bulgarian split squat",
+      core: back ? "Pallof press" : "Dead bug", core2: "Side plank", carry: "Farmer carry",
+      cond: back || knee ? "Bike erg" : "Row erg", arms1: "DB curl", arms2: "Cable triceps pushdown", calf: "Standing calf raise"
+    },
+    home: {
+      squat: "Goblet squat", squat2: knee ? "Single-leg glute bridge" : "Split squat",
+      hinge: back ? "Single-leg glute bridge" : "DB Romanian deadlift", hinge2: "Glute bridge",
+      hpush: sh ? "DB floor press" : "DB bench press", hpush2: "Push-up",
+      hpull: "Single-arm DB row", hpull2: "Rear-delt fly",
+      vpush: sh ? "Push-up" : "Seated DB overhead press", vpull: "Single-arm DB row",
+      single: knee || hip ? "Single-leg glute bridge" : "Reverse lunge",
+      core: "Dead bug", core2: "Side plank", carry: "Suitcase carry",
+      cond: knee ? "Mountain climber" : "Burpee", arms1: "Hammer curl", arms2: "Bench dip", calf: "Standing calf raise"
+    },
+    bodyweight: {
+      squat: knee ? "Wall sit" : "Bodyweight squat", squat2: knee ? "Glute bridge" : "Split squat",
+      hinge: "Single-leg glute bridge", hinge2: "Glute bridge",
+      hpush: "Push-up", hpush2: sh ? "Push-up" : "Pike push-up",
+      hpull: "Inverted row", hpull2: "Band pull-apart",
+      vpush: sh ? "Push-up" : "Pike push-up", vpull: "Inverted row",
+      single: knee || hip ? "Single-leg glute bridge" : "Split squat",
+      core: "Dead bug", core2: "Side plank", carry: "Bird dog",
+      cond: knee ? "Mountain climber" : "Burpee", arms1: "Bench dip", arms2: "Push-up", calf: "Bird dog"
+    }
+  }[eq];
+  if (back) why.push("Your lower back: squats are front-loaded, hinges avoid loaded forward bending, and core work trains the trunk to stay still (Pallof press, dead bug, side plank).");
+  if (knee) why.push("Your knees: box squats and hip-dominant moves keep knee load moderate; stop any exercise that causes sharp pain.");
+  if (sh) why.push("Your shoulders: floor press, landmine press and neutral-grip pulls limit the painful end ranges.");
+
+  const days = Math.max(2, Math.min(6, +a.days || 3));
+  const perDay = {30:4, 45:5, 60:6, 75:7}[+a.mins || 60] || 6;
+  const lib = n => LIBMAP[n] || {type:"load"};
+  const E = (n, main) => {
+    const t = lib(n).type, heavy = /Barbell|Trap bar|Machine/.test(lib(n).equip || "");
+    const sets = main ? lvl.setsMain + (exp !== "new" && heavy ? rx.mainSetsBonus : 0) : lvl.setsAcc;
+    const mainReps = main && g === "strength" && !heavy ? "8–10" : rx.main;
+    const reps = t === "time" ? "30–45" : t === "carry" ? "40" : t === "dist" ? "250" : main ? mainReps : rx.acc;
+    return {n, sets, reps, rest: main ? rx.restMain : rx.restAcc, type: t, rir: t === "load" ? lvl.rir : null, main: !!main,
+      kgInc: main && t === "load" && exp !== "new" ? 2.5 : null, cue: ""};
+  };
+  const full = [
+    [E(pick.squat,1), E(pick.hpush,1), E(pick.hpull), E(pick.hinge2), E(pick.core), E(pick.carry), E(pick.arms1)],
+    [E(pick.hinge,1), E(pick.vpush,1), E(pick.vpull), E(pick.single), E(pick.core2), E(pick.cond), E(pick.arms2)],
+    [E(pick.squat2,1), E(pick.hpush2), E(pick.hpull2), E(pick.hinge2), E(pick.core), E(pick.carry), E(pick.calf)]
+  ];
+  const upper = [[E(pick.hpush,1), E(pick.hpull,1), E(pick.vpush), E(pick.vpull), E(pick.arms1), E(pick.arms2), E(pick.core2)],
+                 [E(pick.vpush,1), E(pick.vpull,1), E(pick.hpush2), E(pick.hpull2), E(pick.arms1), E(pick.arms2), E(pick.core)]];
+  const lower = [[E(pick.squat,1), E(pick.hinge2), E(pick.single), E(pick.calf), E(pick.core), E(pick.carry), E(pick.cond)],
+                 [E(pick.hinge,1), E(pick.squat2), E(pick.single), E(pick.hinge2), E(pick.core2), E(pick.carry), E(pick.cond)]];
+  const cardioDay = exp === "new" || eq !== "gym" && eq !== "home" ? {n:"Incline walk", sets:1, reps:"30", rest:0, type:"cardio", repsInc:5, repsMax:45, cue:"Brisk, conversational pace"}
+    : (g === "fitness" ? {n:"Easy run", sets:1, reps:"3 km easy", rest:0, type:"run", repsInc:0.5, repsMax:6, cue:"Conversational pace; walk breaks are fine"} : {n:"Incline walk", sets:1, reps:"35", rest:0, type:"cardio", repsInc:5, repsMax:50, cue:"Brisk, conversational pace"});
+  const cardioDays = (g === "fitness" || g === "fatloss" || g === "health") ? (days >= 5 ? 2 : days >= 3 ? 1 : 0) : (days >= 5 ? 1 : 0);
+  const liftDays = days - cardioDays;
+  let lifts;
+  if (liftDays >= 4) lifts = [["Upper A", upper[0]], ["Lower A", lower[0]], ["Upper B", upper[1]], ["Lower B", lower[1]]];
+  else lifts = [["Full body A", full[0]], ["Full body B", full[1]], ["Full body C", full[2]]];
+  if (liftDays > lifts.length) lifts = [...lifts, ["Full body", full[0]], ["Full body 2", full[1]]];
+  lifts = lifts.slice(0, liftDays).map(([title, ex]) => ({title, ex: dedupe(ex).slice(0, perDay)}));
+  const PATTERN = {"2-0":"LL","3-0":"LLL","3-1":"LCL","4-0":"LLLL","4-1":"LCLL","5-1":"LLCLL","5-2":"LCLCL","6-1":"LLLCLL","6-2":"LLCLLC"}[`${days}-${cardioDays}`] || "L".repeat(days);
+  const WEEKDAYS = {2:[1,4],3:[1,3,5],4:[1,2,4,5],5:[1,2,3,5,6],6:[1,2,3,4,5,6]}[days];
+  let li = 0; const plan = [...PATTERN].map(ch => ch === "L" ? lifts[li++] : {title: cardioDay.n === "Easy run" ? "Easy run" : "Zone 2 cardio", ex:[{...cardioDay}]});
+  const program = {name: "Starter block", byTrainer: false, starter: true, startDate: null, cardioWeekly: {fatloss:150, fitness:150, health:150, strength:90, muscle:90}[g],
+    notes: [], block: {weeks: 4, deload: [], extra: [], builtin: false},
+    days: plan.map((d, i) => ({id: String.fromCharCode(65 + i), title: d.title, dow: WEEKDAYS[i], equip: [], ex: d.ex}))};
+
+  // target weights from strength numbers
+  const L = a.lifts || {}, E1 = {squat:e1rmOf(L.squat||{}), bench:e1rmOf(L.bench||{}), deadlift:e1rmOf(L.deadlift||{}), ohp:e1rmOf(L.ohp||{})};
+  const MAP = {"Back squat":["squat",1], "Box squat":["squat",0.9], "Front squat":["squat",0.8], "Barbell bench press":["bench",1], "DB bench press":["bench",0.38], "DB floor press":["bench",0.36], "Incline DB press":["bench",0.32],
+    "Trap-bar deadlift":["deadlift",1.05], "Romanian deadlift":["deadlift",0.6], "Seated DB overhead press":["ohp",0.38], "Standing barbell overhead press":["ohp",1]};
+  let targets = 0;
+  if (!flagged && exp !== "new") program.days.forEach(d => d.ex.forEach(e => {
+    const m = MAP[e.n]; if (!m || !E1[m[0]] || e.type !== "load") return;
+    e.kg = workKg(E1[m[0]], parseInt(e.reps, 10) || 8, e.rir || 2, m[1]); targets++;
+  }));
+  if (targets) why.push(`Target weights come from the strength numbers you gave: each is about 5% below what your best set predicts for these reps, so week 1 should feel controlled.`);
+  else if (exp === "new") why.push("No target weights yet: in week 1 pick a weight you could lift about 3 more times than the set asks for. The app remembers it and shows it next time.");
+
+  why.unshift(`${days} day${days===1?"":"s"} a week of ${{strength:"strength", muscle:"muscle-building", fatloss:"fat-loss", fitness:"fitness", health:"general health"}[g]} training, ${program.days.length - cardioDays >= 4 ? "split into upper- and lower-body days" : "full-body each time"}, sized for about ${a.mins || 60} minutes.`);
+  why.push(`Each set stops with ${lvl.rir} reps still in the tank (RIR ${lvl.rir}). Add weight once every set reaches the top of its rep range.`);
+  return finishPlan(program, a, why, warn, tips, flagged);
+}
+function dedupe(ex){ const seen = new Set(); return ex.filter(e => { if (seen.has(e.n)) return false; seen.add(e.n); return true; }); }
+function finishPlan(p, a, why, warn, tips, flagged){
+  const t = today(), dow = parse(t).getDay();
+  p.startDate = dow >= 1 && dow <= 3 ? mondayOf(t) : mondayOf(addDays(t, 7));
+  if (flagged) warn.unshift("Your health answers mean you should speak to your doctor before starting a new exercise program. This plan is deliberately gentle; stop and seek medical advice if you feel chest pain, dizziness or unusual breathlessness.");
+  if ((a.pain || []).length) warn.push("If an exercise causes sharp or worsening pain, stop it and swap it from the exercise list. Persistent pain needs a physiotherapist's assessment.");
+  if (+a.age && +a.age < 16) warn.push("Under 16s should train with a qualified coach supervising.");
+  const kg = +a.weight;
+  tips.push("Warm up for 5–10 minutes: easy cardio, then 2 lighter sets of your first exercise.");
+  if (kg) tips.push(`Aim for roughly ${Math.round(kg * 1.6)} g of protein a day (about 1.6 g per kg of body weight) to support recovery and muscle.`);
+  tips.push("Sleep 7–9 hours. It's when the training turns into progress.");
+  if (a.goal === "fatloss") tips.push("Fat loss comes mostly from eating a little less than you burn; training keeps the muscle while you lose fat.");
+  tips.push(`Get ${p.cardioWeekly || 150} minutes of moderate cardio across the week — brisk walking counts.`);
+  p.notes = [...(p.notes || []), "This is a starter block from the app's coach. Ask a trainer to build your full program."];
+  return {program: p, why, warn, tips};
+}
+
+/* ---- onboarding view ---- */
+function viewOnboard(){
+  const O = S.ob, step = OB_STEPS[O.step], a = O.a, n = firstName();
+  const pct = Math.round(O.step / (OB_STEPS.length - 1) * 100);
+  const choice = (key, items) => `<div style="display:flex;flex-direction:column;gap:8px">${items.map(([v, l, d]) => `<button class="wcard" data-act="ob-pick" data-k="${key}" data-v="${v}" style="${a[key]===v ? "border-color:var(--accent);background:var(--accent-soft)" : ""}"><div style="flex:1"><b style="display:block">${esc(l)}</b>${d ? `<span class="small muted">${esc(d)}</span>` : ""}</div>${a[key]===v ? `<span class="pill blue">Selected</span>` : ""}</button>`).join("")}</div>`;
+  const nav = (nextLabel = "Next", canNext = true) => `<div class="grid2">${O.step > 0 ? `<button class="btn" data-act="ob-back">Back</button>` : "<span></span>"}<button class="btn primary" data-act="ob-next" ${canNext ? "" : "disabled"}>${nextLabel}</button></div>`;
+  let body = "";
+  if (step === "hello"){
+    body = `<img src="${MARK_NAVY}" alt="" style="height:72px;width:auto;align-self:flex-start" class="mark lt"><img src="${MARK_WHITE}" alt="" style="height:72px;width:auto;align-self:flex-start" class="mark dk">
+    <h1>${n ? `Hi ${esc(n)}, ` : "Hi, "}I'm your Primal Strength coach.</h1>
+    <p style="margin:0">Answer a few quick questions and I'll build you a 4-week starter block: the right exercises, sets and reps, and starting weights for your goal, your schedule and any injuries.</p>
+    <p class="small muted" style="margin:0">It takes about 2 minutes. A starter block is a safe first step; a trainer can then build your full program.</p>
+    ${cloudOK() ? "" : `<label class="f">Your first name<input id="ob-name" value="${esc(set_().name || "")}" autocomplete="given-name"></label>`}
+    <button class="btn primary block" data-act="ob-next">Let's start</button>
+    <button class="btn block" data-act="ob-skip">Skip — I'll set up my own program</button>
+    ${isCloudClient() ? `<button class="btn ghost" data-act="ob-havetrainer">I have a trainer's invite code</button>` : ""}`;
+  } else if (step === "goal"){
+    body = `<h2>What's your main goal?</h2>${choice("goal", GOALS)}${a.goal === "event" ? `<h3>Which event?</h3>${choice("event", EVENTS)}` : ""}${nav("Next", a.goal && (a.goal !== "event" || a.event))}`;
+  } else if (step === "experience"){
+    body = `<h2>How much have you trained?</h2>${choice("experience", EXPERIENCE)}${nav("Next", !!a.experience)}`;
+  } else if (step === "schedule"){
+    body = `<h2>Your week</h2><div><div class="small muted" style="font-weight:600;margin-bottom:6px">Days a week you can train</div><div class="seg">${[2,3,4,5,6].map(d => `<button data-act="ob-pick" data-k="days" data-v="${d}" class="${+a.days===d?"on":""}">${d}</button>`).join("")}</div></div>
+    <div><div class="small muted" style="font-weight:600;margin-bottom:6px">Minutes per session</div><div class="seg">${[30,45,60,75].map(d => `<button data-act="ob-pick" data-k="mins" data-v="${d}" class="${+a.mins===d?"on":""}" style="min-width:56px">${d}</button>`).join("")}</div></div>${nav()}`;
+  } else if (step === "equipment"){
+    body = `<h2>Where will you train?</h2>${choice("equipment", EQUIPMENT)}${nav("Next", !!a.equipment)}`;
+  } else if (step === "about"){
+    body = `<h2>About you</h2><span class="muted small">Optional, but it helps set safe targets.</span>
+    <div class="grid2"><label class="f">Age<input id="ob-age" inputmode="numeric" value="${esc(a.age || "")}"></label>
+    <label class="f">Sex<select id="ob-sex"><option value="">Prefer not to say</option>${[["female","Female"],["male","Male"]].map(([v,l]) => `<option value="${v}" ${a.sex===v?"selected":""}>${l}</option>`).join("")}</select></label>
+    <label class="f">Height cm<input id="ob-height" inputmode="decimal" value="${esc(a.height || "")}"></label>
+    <label class="f">Weight kg<input id="ob-weight" inputmode="decimal" value="${esc(a.weight || "")}"></label></div>${nav()}`;
+  } else if (step === "health"){
+    body = `<h2>Health check</h2><span class="muted small">Tick anything that applies to you. This is the standard pre-exercise screening coaches use.</span>
+    ${HEALTH_Q.map(([k, l]) => `<label class="row small" style="flex-wrap:nowrap;align-items:flex-start;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px"><input type="checkbox" data-obh="${k}" ${a.health[k]?"checked":""} style="width:22px;height:22px;flex:none;margin:0"><span>${esc(l)}</span></label>`).join("")}
+    <h3>Any pain or past injuries?</h3><div class="chips" style="flex-wrap:wrap">${PAIN.map(([k, l]) => `<button class="chip ${a.pain.includes(k)?"on":""}" data-act="ob-pain" data-v="${k}">${l}</button>`).join("")}</div>
+    <label class="f">Anything else your coach should know?<input id="ob-other" value="${esc(a.other || "")}" placeholder="Optional"></label>${nav()}`;
+  } else if (step === "strength"){
+    const skip = a.experience === "new" || a.equipment === "bodyweight" || Object.values(a.health).some(Boolean);
+    body = `<h2>Your strength now</h2>${skip ? `<p style="margin:0">${a.equipment === "bodyweight" ? "You're training with bodyweight, so no lifting numbers are needed." : Object.values(a.health).some(Boolean) ? "Because of your health answers, we'll skip strength testing and start light." : "As you're new to training, we'll skip this — you'll find your starting weights in week 1."}</p>` :
+    `<span class="muted small">Enter your best recent set for each lift — the weight and how many clean reps you did. Leave it blank if you don't do that lift or aren't sure.</span>
+    ${LIFTS.map(([k, l]) => `<div><b class="small">${l}</b><div class="grid2"><label class="f">Kg<input id="ob-${k}-kg" inputmode="decimal" value="${esc((a.lifts[k]||{}).kg || "")}"></label><label class="f">Reps (1–12)<input id="ob-${k}-reps" inputmode="numeric" value="${esc((a.lifts[k]||{}).reps || "")}"></label></div></div>`).join("")}`}
+    ${nav("Build my plan")}`;
+  } else if (step === "plan"){
+    const r = O.result;
+    body = `<span class="eyebrow">Your starter block</span><h1>${n ? esc(n) + ", here" : "Here"}'s your plan</h1>
+    ${r.warn.map(w => `<div class="banner bad"><div>${esc(w)}</div></div>`).join("")}
+    <section class="card"><h3>Why this plan</h3>${r.why.map(w => `<p class="small" style="margin:0">${esc(w)}</p>`).join("")}</section>
+    ${r.program.days.map((d, di) => `<section class="card" style="padding-block:10px"><div class="row" style="flex-wrap:nowrap"><div class="dayblock sm">${d.id}</div><div><b>${esc(d.title)}</b><div class="muted small">${DOW[d.dow]} · ${d.ex.length} exercise${d.ex.length===1?"":"s"}</div></div></div>
+      ${d.ex.map((e, i) => `<div class="small" style="border-top:1px solid var(--line);padding-top:6px"><b>${esc(e.n)}</b> <span class="muted">${esc(withProgram(r.program, () => targetText(e, i, 1)))}${e.rest ? ` · ${fmtRest(e.rest)} rest` : ""}${e.rir != null ? ` · RIR ${e.rir}` : ""}</span></div>`).join("")}</section>`).join("")}
+    <section class="card"><h3>Coach's tips</h3>${r.tips.map(w => `<p class="small" style="margin:0">${esc(w)}</p>`).join("")}</section>
+    <section class="card" style="border-color:var(--accent)"><h3>Work with a trainer</h3><p class="small" style="margin:0">This starter block is a safe first step, not a full program. A trainer can assess you in person, check your technique and build a program around your goals, history and progress.</p>
+    <p class="small" style="margin:0">${isCloudClient() ? "Already have a trainer? Ask for their invite code and enter it any time under <b>Settings → Trainer</b>." : "Create an account in the Android app to connect with a trainer."}</p></section>
+    <button class="btn primary block" data-act="ob-start">Start my plan · begins ${shortDate(r.program.startDate)}</button>
+    <button class="btn block" data-act="ob-back">Change my answers</button>
+    <button class="btn ghost" data-act="ob-skip">Skip — keep my current program</button>`;
+  }
+  return `<main style="padding-bottom:calc(30px + env(safe-area-inset-bottom,0px))"><div class="wrap">${O.step > 0 ? `<div class="meter" aria-label="Progress"><i style="width:${pct}%"></i></div>` : ""}${body}</div></main>`;
+}
+function withProgram(p, fn){ const old = S.profile.program; S.profile.program = p; try { return fn(); } finally { S.profile.program = old; } }
+function obCollect(){
+  const O = S.ob, a = O.a, step = OB_STEPS[O.step];
+  if (step === "hello" && document.getElementById("ob-name")) S.profile.settings.name = val("ob-name");
+  if (step === "about"){ a.age = numOrNull(val("ob-age")); a.sex = val("ob-sex"); a.height = numOrNull(val("ob-height")); a.weight = numOrNull(val("ob-weight")); }
+  if (step === "health"){ a.health = {}; document.querySelectorAll("[data-obh]").forEach(c => { if (c.checked) a.health[c.dataset.obh] = true; }); a.other = val("ob-other"); }
+  if (step === "strength") LIFTS.forEach(([k]) => { const kg = numOrNull(val(`ob-${k}-kg`)), reps = numOrNull(val(`ob-${k}-reps`)); if (document.getElementById(`ob-${k}-kg`)) a.lifts[k] = kg && reps ? {kg, reps} : {}; });
+}
+async function obStart(){
+  const r = S.ob.result, a = S.ob.a;
+  S.profile.program = r.program;
+  S.profile.settings.intake = clean({...a, completed: today()});
+  S.profile.settings.intakeDone = true;
+  S.profile.settings.trackBack = (a.pain || []).includes("back") || S.profile.settings.trackBack;
+  S.profile.settings.startDate = r.program.startDate;
+  await persistProfile();
+  if (a.weight) await saveRec("body", {id: uid("b"), date: today(), weight: a.weight, source: "check-in"}).catch(()=>{});
+  S.ob = null; S.view = "today"; S.forceRender = true; render(); window.scrollTo(0,0);
+  toast("Your starter block is ready");
+}
+async function obSkip(){
+  S.profile.settings.intakeDone = true;
+  if (S.ob && S.ob.a) S.profile.settings.intake = clean({...S.ob.a, skipped: today()});
+  await persistProfile(); S.ob = null; S.view = "today"; S.forceRender = true; render();
+}
+
+/* ---- welcome / sign-in gate ---- */
+function viewWelcome(){
+  S.authPage = S.authPage || {kind:"auth", mode:"up", role:"client"};
+  return `<main style="padding-bottom:calc(30px + env(safe-area-inset-bottom,0px))"><div class="wrap" style="max-width:440px">
+  <div style="display:flex;flex-direction:column;align-items:center;gap:10px;padding-top:24px;text-align:center">
+  <img src="${MARK_NAVY}" alt="" class="mark lt" style="height:110px"><img src="${MARK_WHITE}" alt="" class="mark dk" style="height:110px">
+  <h1 style="font-size:36px">Primal Strength</h1><p class="muted" style="margin:0">Train with a plan. Track every rep. Work with your coach.</p></div>
+  <section class="card">${authForm(S.authPage, true)}</section>
+  <p class="small muted" style="margin:0;text-align:center">Your account keeps your training log safe and lets you connect with a trainer.</p></div></main>`;
+}
+function viewSplash(){
+  return `<main><div class="wrap" style="align-items:center;padding-top:30vh"><img src="${MARK_NAVY}" alt="" class="mark lt" style="height:90px"><img src="${MARK_WHITE}" alt="" class="mark dk" style="height:90px"><p class="muted">Opening Primal Strength…</p></div></main>`;
 }
 
 /* ============ Boot ============ */

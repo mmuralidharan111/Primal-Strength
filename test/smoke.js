@@ -183,6 +183,10 @@ async function load(fb){
   check(T.text().includes("Back squat"), "session detail opens from alert");
   await T.click('[data-act="sheet-close"]'); await T.click('[data-act="ctab"][data-v="progress"]'); check(T.text().includes("Lifts"), "trainer sees client progress");
 
-  console.log(errors.length ? `\n${errors.length} problem(s):\n` + errors.join("\n") : "\nAll checks passed");
-  process.exit(errors.length ? 1 : 0);
-})().catch(e => { console.error(e); process.exit(1); });
+  report();
+})().catch(e => { errors.push("crash: " + (e && (e.stack || e.message) || e)); report(); });
+function report(){
+  const enc = x => String(x).replace(/%/g, "%25").replace(/\r/g, "").replace(/\n/g, "%0A");
+  if (errors.length){ console.log(`::error title=Smoke test (${errors.length} problems)::` + enc(errors.slice(0, 25).join("\n").slice(0, 3800))); process.exit(1); }
+  console.log("All checks passed"); process.exit(0);
+}

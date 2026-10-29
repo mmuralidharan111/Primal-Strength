@@ -13,9 +13,10 @@ let step = "boot";
 function check(cond, msg){ if (!cond){ errors.push(`[${step}] ${msg}`); console.log("  ✗", msg); } else console.log("  ✓", msg); }
 
 /* ---------- in-memory Firebase stand-in ---------- */
+const SHARED = {docs: new Map(), listeners: new Set(), accounts: {}};
 function makeFirebase(){
-  const docs = new Map();             // path -> data
-  const listeners = new Set();        // {kind, path, filter, cb}
+  const docs = SHARED.docs;
+  const listeners = SHARED.listeners;
   const SERVER_TS = {__ts: true};
   const resolveTs = o => JSON.parse(JSON.stringify(o, (k, v) => v && v.__ts ? new Date().toISOString() : v));
   const isDirectChild = (p, col) => p.startsWith(col + "/") && !p.slice(col.length + 1).includes("/");
@@ -62,7 +63,7 @@ function makeFirebase(){
     doc: p => docRef(p),
     batch: () => { const ops = []; return {set: (r, d) => ops.push(() => r.set(d)), update: (r, d) => ops.push(() => r.update(d)), commit: async () => { for (const o of ops) await o(); }}; }
   };
-  let user = null; const authCbs = []; const accounts = {};
+  let user = null; const authCbs = []; const accounts = SHARED.accounts;
   const emit = () => authCbs.forEach(cb => cb(user));
   const auth = {
     onAuthStateChanged: cb => { authCbs.push(cb); setTimeout(() => cb(user), 0); },
@@ -120,7 +121,7 @@ async function load(fb){
   await A.click('[data-act="finish"]', "save workout");
   check(A.text().includes("History"), "back on workouts after save");
   await A.click('[data-act="tab"][data-v="progress"]'); check(A.text().includes("Lifts"), "progress renders after a workout");
-  await A.click('[data-act="settings"]', "open settings"); check(A.text().includes("Create account"), "settings offers account creation");
+  await A.click('[data-act="settings"]', "open settings"); check(A.text().includes("Android app"), "settings explains accounts need the Android app");
   A.w.close();
 
   /* ===== 2. Trainer + client with accounts ===== */
@@ -137,7 +138,7 @@ async function load(fb){
   check(T.text().includes(inviteCode), "invite code shown to trainer");
 
   step = "client-signup";
-  let C = await load(fb);                       // same backend, separate device
+  let C = await load(makeFirebase());      // client's phone: same backend, its own sign-in
   await C.click('[data-act="settings"]'); await C.click('[data-act="auth"][data-v="up"]');
   await C.type("#a-name", "Asha"); await C.type("#a-email", "asha@test.in"); await C.type("#a-pass", "secret2");
   await C.click('[data-act="auth-go"]', "create client account"); await sleep(600);

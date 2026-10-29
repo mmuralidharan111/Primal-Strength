@@ -1050,6 +1050,7 @@ function sheetHTML(){
     <label class="f">Exercise (${LIB.length} in the library)<select id="swap-sel">${libOptions("", current, S.sheet.cat)}</select></label>
     ${inLog && !trainerManaged() ? `<label class="row small" style="flex-wrap:nowrap"><input type="checkbox" id="swap-always" style="width:20px;height:20px"> Make this my regular exercise from now on</label>` : inLog ? `<span class="small muted">Your trainer sets your program, so this swap is for today only.</span>` : `<span class="small muted">This changes the exercise in your program from now on. Sets, reps and rest stay the same.</span>`}
     <button class="btn primary block" data-act="swap-apply">Use this exercise</button>
+    <button class="btn block" data-act="sheet-close">Cancel</button>
     <details><summary class="small" style="cursor:pointer">Not in the list? Add a custom exercise</summary><div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
     <label class="f">Exercise name<input id="swap-custom"></label>
     <label class="f">Logged as<select id="swap-type"><option value="load">Reps and kg</option><option value="bw">Reps only</option><option value="time">Seconds (and optional kg)</option><option value="carry">Metres and kg</option></select></label>

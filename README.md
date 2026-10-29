@@ -23,7 +23,7 @@ Friends install the same way. iPhones can't sideload APKs; iPhone friends can us
 
 ## Updating
 
-Install a newer APK over the old one. The log is kept, because each build uses the same app ID (`com.strengthlog.app`) and the same debug signature from GitHub's build machine. If Android refuses the update with a signature error, uninstall the old app, then install the new one. Before you uninstall, use **Settings → Save full backup**, then restore it afterwards. Uninstalling deletes the log.
+Builds are signed with the app's permanent key, which is stored in the repository secret `ANDROID_KEYSTORE_B64`. Each build gets a higher version number, so a new APK installs over the old one and keeps the log. Keep a private copy of the key file: if it is lost, users must uninstall and reinstall, which deletes their logs unless they restore a backup.
 
 ## Data
 

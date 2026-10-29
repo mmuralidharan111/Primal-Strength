@@ -250,6 +250,162 @@ function standardProgram(){
   return p;
 }
 
+/* ============ Exercise library ============ */
+const LIB_RAW = `Squat|Back squat|Barbell|load|b
+Squat|Front squat|Barbell|load|b
+Squat|Zercher squat|Barbell|load|
+Squat|Goblet squat|Dumbbell / kettlebell|load|
+Squat|Safety-bar squat|Barbell|load|b
+Squat|Box squat|Barbell|load|b
+Squat|Belt squat|Machine|load|
+Squat|Hack squat|Machine|load|
+Squat|Leg press|Machine|load|
+Squat|Smith machine squat|Machine|load|
+Squat|Pendulum squat|Machine|load|
+Squat|Bodyweight squat|Bodyweight|bw|
+Squat|Wall sit|Bodyweight|time|
+Hinge|Trap-bar deadlift (high handles)|Trap bar|load|
+Hinge|Trap-bar deadlift|Trap bar|load|b
+Hinge|Conventional deadlift|Barbell|load|b
+Hinge|Sumo deadlift|Barbell|load|b
+Hinge|Romanian deadlift|Barbell|load|b
+Hinge|DB Romanian deadlift|Dumbbell|load|b
+Hinge|Kettlebell deadlift from a step|Kettlebell|load|
+Hinge|Rack pull|Barbell|load|b
+Hinge|Good morning|Barbell|load|b
+Hinge|Cable pull-through|Cable|load|
+Hinge|Kettlebell swing|Kettlebell|load|b
+Hinge|45° hip extension|Bench|load|
+Hinge|Reverse hyperextension|Machine|load|
+Glutes|Hip thrust|Barbell|load|
+Glutes|Machine hip thrust|Machine|load|
+Glutes|Glute bridge|Barbell / bodyweight|load|
+Glutes|Single-leg glute bridge|Bodyweight|bw|
+Glutes|Cable kickback|Cable|load|
+Glutes|Hip abduction machine|Machine|load|
+Glutes|Banded lateral walk|Band|bw|
+Single leg|Bulgarian split squat|Dumbbell|load|
+Single leg|Split squat|Dumbbell|load|
+Single leg|Front-foot-elevated split squat|Dumbbell|load|
+Single leg|Reverse lunge|Dumbbell|load|
+Single leg|Walking lunge|Dumbbell|load|
+Single leg|Forward lunge|Dumbbell|load|
+Single leg|Lateral lunge|Dumbbell|load|
+Single leg|Step-up|Dumbbell|load|
+Single leg|Single-leg RDL|Dumbbell|load|
+Single leg|Skater squat|Bodyweight|bw|
+Legs (isolation)|Leg extension|Machine|load|
+Legs (isolation)|Seated leg curl|Machine|load|
+Legs (isolation)|Lying leg curl|Machine|load|
+Legs (isolation)|Nordic hamstring curl|Bodyweight|bw|
+Legs (isolation)|Hip adduction machine|Machine|load|
+Legs (isolation)|Standing calf raise|Machine|load|
+Legs (isolation)|Seated calf raise|Machine|load|
+Chest|DB bench press|Dumbbell|load|
+Chest|Barbell bench press|Barbell|load|
+Chest|Barbell bench in a rack|Barbell|load|
+Chest|Incline DB press|Dumbbell|load|
+Chest|Incline barbell press|Barbell|load|
+Chest|Machine chest press|Machine|load|
+Chest|Incline machine press|Machine|load|
+Chest|DB floor press|Dumbbell|load|
+Chest|Push-up|Bodyweight|bw|
+Chest|Weighted push-up|Bodyweight + plate|load|
+Chest|Dip|Bodyweight|bw|
+Chest|Cable fly|Cable|load|
+Chest|DB fly|Dumbbell|load|
+Chest|Pec deck|Machine|load|
+Shoulders (press)|Seated DB overhead press|Dumbbell|load|
+Shoulders (press)|Standing DB overhead press|Dumbbell|load|
+Shoulders (press)|Standing barbell overhead press|Barbell|load|b
+Shoulders (press)|Push press|Barbell|load|b
+Shoulders (press)|Landmine press|Barbell|load|
+Shoulders (press)|Half-kneeling landmine press|Barbell|load|
+Shoulders (press)|Machine shoulder press|Machine|load|
+Shoulders (press)|Arnold press|Dumbbell|load|
+Shoulders (press)|Pike push-up|Bodyweight|bw|
+Shoulders|Lateral raise|Dumbbell|load|
+Shoulders|Cable lateral raise|Cable|load|
+Shoulders|Rear-delt fly|Dumbbell|load|
+Shoulders|Reverse pec deck|Machine|load|
+Shoulders|Front raise|Dumbbell|load|
+Shoulders|Face pull|Cable|load|
+Shoulders|Band pull-apart|Band|bw|
+Shoulders|DB shrug|Dumbbell|load|
+Back (rows)|Chest-supported DB row|Dumbbell|load|
+Back (rows)|Single-arm DB row|Dumbbell|load|
+Back (rows)|Seated cable row|Cable|load|
+Back (rows)|Single-arm cable row|Cable|load|
+Back (rows)|Machine row|Machine|load|
+Back (rows)|Chest-supported T-bar row|Machine|load|
+Back (rows)|Barbell bent-over row|Barbell|load|b
+Back (rows)|Pendlay row|Barbell|load|b
+Back (rows)|T-bar row|Barbell|load|b
+Back (rows)|Inverted row|Bodyweight|bw|
+Back (pulldowns)|Lat pulldown|Cable|load|
+Back (pulldowns)|Neutral-grip lat pulldown|Cable|load|
+Back (pulldowns)|Single-arm cable pulldown|Cable|load|
+Back (pulldowns)|Straight-arm pulldown|Cable|load|
+Back (pulldowns)|Pull-up|Bodyweight|bw|
+Back (pulldowns)|Chin-up|Bodyweight|bw|
+Back (pulldowns)|Weighted pull-up|Bodyweight + plate|load|
+Back (pulldowns)|Assisted pull-up|Machine|load|
+Arms|DB curl|Dumbbell|load|
+Arms|Hammer curl|Dumbbell|load|
+Arms|Incline DB curl|Dumbbell|load|
+Arms|Barbell curl|Barbell|load|
+Arms|Preacher curl|Machine|load|
+Arms|Cable curl|Cable|load|
+Arms|Cable triceps pushdown|Cable|load|
+Arms|Overhead cable triceps extension|Cable|load|
+Arms|Skull crusher|Barbell|load|
+Arms|Close-grip bench press|Barbell|load|
+Arms|Bench dip|Bodyweight|bw|
+Core|Dead bug|Bodyweight|bw|
+Core|Bird dog|Bodyweight|bw|
+Core|McGill curl-up|Bodyweight|bw|
+Core|Side plank|Bodyweight|time|
+Core|Front plank|Bodyweight|time|
+Core|Copenhagen plank|Bodyweight|time|
+Core|Stir the pot|Swiss ball|time|
+Core|Pallof press|Cable|load|
+Core|Band Pallof press|Band|bw|
+Core|Half-kneeling cable chop|Cable|load|
+Core|Ab wheel rollout|Bodyweight|bw|
+Core|Hanging knee raise|Bodyweight|bw|
+Core|Sit-up|Bodyweight|bw|b
+Core|Russian twist|Bodyweight|bw|b
+Core|Cable crunch|Cable|load|b
+Carries|Farmer carry|Dumbbell / kettlebell|carry|
+Carries|Suitcase carry|Dumbbell / kettlebell|carry|
+Carries|Single-arm overhead carry|Dumbbell / kettlebell|carry|
+Carries|Front-rack carry|Kettlebell|carry|
+Carries|Sandbag carry|Sandbag|carry|
+Carries|Sled push|Sled|carry|
+Carries|Sled drag|Sled|carry|
+Conditioning|Row erg|Machine|carry|
+Conditioning|Ski erg|Machine|carry|
+Conditioning|Assault bike|Machine|time|
+Conditioning|Battle ropes|Ropes|time|
+Conditioning|Jump rope|Rope|time|
+Conditioning|Box jump|Bodyweight|bw|
+Conditioning|Burpee|Bodyweight|bw|
+Conditioning|Mountain climber|Bodyweight|bw|`;
+const LIB = LIB_RAW.split("\n").map(l => { const [cat,n,equip,type,flag] = l.split("|"); return {cat,n,equip,type,back:flag==="b"}; });
+const LIBMAP = Object.fromEntries(LIB.map(e => [e.n, e]));
+const libCat = n => (LIBMAP[n] || {}).cat || null;
+function libOptions(q, current, firstCat){
+  const qq = (q || "").toLowerCase().trim();
+  const hit = e => !qq || (e.n + " " + e.cat + " " + e.equip).toLowerCase().includes(qq);
+  const cats = [...new Set(LIB.map(e => e.cat))].sort((a,b) => (b===firstCat) - (a===firstCat));
+  const personal = S.profile && prog().kind === "personal";
+  let html = "", n = 0;
+  cats.forEach(c => {
+    const items = LIB.filter(e => e.cat === c && hit(e)); if (!items.length) return;
+    html += `<optgroup label="${esc(c)}">` + items.map(e => { n++; return `<option value="${esc(e.n)}" ${e.n===current?"selected":""}>${esc(e.n)} · ${esc(e.equip)}${personal && e.back ? " · back caution" : ""}</option>`; }).join("") + `</optgroup>`;
+  });
+  return n ? html : `<option value="">No matches — add it as a custom exercise below</option>`;
+}
 /* ============ Block structure ============ */
 function phaseOf(w){
   if (w < 1) return {name:"Not started", short:"Pre-block"};
@@ -612,13 +768,13 @@ function viewOverview(id){
   <h1>${esc(d.title)}</h1>
   <div class="metaline"><div>${I.sort}<span>${phaseOf(w).name}${isDeload(w) ? " — lighter week, 2 sets each" : ""}</span></div><div>${I.clock}<span>est. ${estMinutes(d,w)} minutes</span></div><div>${I.dumbbell}<span>${d.ex.length} exercises</span></div></div>
   <div><b>Equipment</b><div class="equip" style="margin-top:8px">${d.equip.map(e => `<span>${esc(e)}</span>`).join("")}</div></div>
-  <section class="card" style="padding-block:6px"><div class="exlist">`;
+  <p class="small muted" style="margin:0">Tap ${I.swap.replace("<svg",'<svg width="14" height="14" style="vertical-align:-2px"')} to change an exercise in your program.</p><section class="card" style="padding-block:6px"><div class="exlist">`;
   let lastGroup = null;
   d.ex.forEach((e,i) => {
     if (e.group && e.group !== lastGroup) out += `<div class="group-head">${esc(e.group)}</div>`;
     lastGroup = e.group || null;
     const rir = rirFor(e,w);
-    out += `<div class="exitem"><div class="dayblock sm num">${i+1}</div><div style="min-width:0"><b>${esc(e.n)}</b><span class="muted small">${esc(targetText(e,i,w))}${rir!=null?` · RIR ${rir}`:""}${e.rest ? `, ${fmtRest(e.rest)} rest` : ""}</span></div></div>`;
+    out += `<div class="exitem"><div class="dayblock sm num">${i+1}</div><div style="min-width:0;flex:1"><b>${esc(e.n)}</b><span class="muted small">${esc(targetText(e,i,w))}${rir!=null?` · RIR ${rir}`:""}${e.rest ? `, ${fmtRest(e.rest)} rest` : ""}</span></div><button class="iconbtn" style="color:var(--accent);background:var(--accent-soft);border-color:transparent" data-act="swap-prog" data-d="${d.id}" data-k="${i}" aria-label="Change ${esc(e.n)}">${I.swap}</button></div>`;
   });
   out += `</div></section><div class="sticky-cta"><button class="btn primary" data-act="startday" data-d="${d.id}">Start now</button></div>`;
   return out;
@@ -845,11 +1001,21 @@ function sheetHTML(){
     ${set_().trackBack ? `<div><div class="small muted" style="font-weight:600;margin-bottom:6px">Back pain right now (0–10)</div><div class="seg" id="p-back">${[...Array(11)].map((_,i)=>`<button type="button" data-act="p-pain" data-v="${i}" class="${S.sheet.pain===i?"on":""}">${i}</button>`).join("")}</div></div>` : ""}
     <button class="btn primary block" data-act="precheck-go">Start workout</button><button class="btn block" data-act="precheck-skip">Skip check-in</button>`;
   } else if (k === "swap"){
-    const x = S.draft.exercises[S.sheet.x]; const e = exDef(x);
-    const opts = [e.n, ...(e.alts||[])];
-    body = `<h2>Swap ${esc(x.base)}</h2><span class="muted small">Logged under the exercise you actually do, so progress stays accurate.</span>
-    ${opts.map(o => `<button class="btn block ${o===x.performedAs?"blue":""}" data-act="swap-pick" data-v="${esc(o)}">${esc(o)}</button>`).join("")}
-    <label class="f">Or type another<input id="swap-custom" placeholder="Exercise name"></label><button class="btn block" data-act="swap-custom">Use this exercise</button>`;
+    const inLog = S.sheet.x != null;
+    const def = inLog ? exDef(S.draft.exercises[S.sheet.x]) : dayById(S.sheet.day).ex[S.sheet.key];
+    const current = inLog ? S.draft.exercises[S.sheet.x].performedAs : def.n;
+    const sugg = [def.n, ...(def.alts||[])].filter((v,i,a) => a.indexOf(v) === i);
+    S.sheet.current = current; S.sheet.cat = libCat(def.n);
+    body = `<h2>Change ${esc(current)}</h2>
+    ${sugg.length > 1 ? `<div><div class="small muted" style="font-weight:600;margin-bottom:6px">Suggested swaps</div><div class="chips" style="flex-wrap:wrap">${sugg.map(o => `<button class="chip ${o===current?"on":""}" data-act="swap-chip" data-v="${esc(o)}">${esc(o)}</button>`).join("")}</div></div>` : ""}
+    <label class="f">Search the exercise library<input id="swap-q" placeholder="Try row, lunge, cable, core" autocomplete="off"></label>
+    <label class="f">Exercise (${LIB.length} in the library)<select id="swap-sel">${libOptions("", current, S.sheet.cat)}</select></label>
+    ${inLog ? `<label class="row small" style="flex-wrap:nowrap"><input type="checkbox" id="swap-always" style="width:20px;height:20px"> Make this my regular exercise from now on</label>` : `<span class="small muted">This changes the exercise in your program from now on. Sets, reps and rest stay the same.</span>`}
+    <button class="btn primary block" data-act="swap-apply">Use this exercise</button>
+    <details><summary class="small" style="cursor:pointer">Not in the list? Add a custom exercise</summary><div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
+    <label class="f">Exercise name<input id="swap-custom"></label>
+    <label class="f">Logged as<select id="swap-type"><option value="load">Reps and kg</option><option value="bw">Reps only</option><option value="time">Seconds (and optional kg)</option><option value="carry">Metres and kg</option></select></label>
+    <button class="btn block" data-act="swap-custom">Use custom exercise</button></div></details>`;
   } else if (k === "exinfo"){
     const x = S.draft.exercises[S.sheet.x]; const e = exDef(x);
     body = `<h2>${esc(x.performedAs)}</h2>${e.cue ? `<p style="margin:0">${esc(e.cue)}</p>` : ""}${prog().kind==="personal" && e.cueMe ? `<p style="margin:0">${esc(e.cueMe)}</p>` : ""}
@@ -1045,11 +1211,19 @@ app.addEventListener("click", async ev => {
   if (a === "rmset"){ const x = S.draft.exercises[+t.dataset.x]; x.sets.pop(); saveDraft(); return rerenderLogKeepScroll(); }
   if (a === "restcycle"){ const x = S.draft.exercises[+t.dataset.x]; const steps = [30,45,60,90,120,150,180,240]; const i = steps.indexOf(x.rest); x.rest = steps[(i+1) % steps.length]; saveDraft(); return rerenderLogKeepScroll(); }
   if (a === "swap") return openSheet({kind:"swap", x:+t.dataset.x});
-  if (a === "swap-pick" || a === "swap-custom"){
-    const v = a === "swap-pick" ? t.dataset.v : val("swap-custom"); if (!v) return toast("Type an exercise name first.");
-    const x = S.draft.exercises[S.sheet.x]; x.performedAs = v; x.sets.forEach(s => { if (!s.done){ s.reps = ""; s.kg = ""; } });
-    if (S.ui.autofill) applyAutofill(); saveDraft(); S.sheet = null; return rerenderLogKeepScroll();
+  if (a === "swap-prog") return openSheet({kind:"swap", day:t.dataset.d, key:+t.dataset.k});
+  if (a === "swap-chip"){
+    const sel = document.getElementById("swap-sel"), q = document.getElementById("swap-q");
+    if (q) q.value = ""; if (sel){ sel.innerHTML = libOptions("", t.dataset.v, S.sheet.cat); if (!LIBMAP[t.dataset.v]) sel.insertAdjacentHTML("afterbegin", `<option value="${esc(t.dataset.v)}">${esc(t.dataset.v)}</option>`); sel.value = t.dataset.v; }
+    t.parentElement.querySelectorAll(".chip").forEach(c => c.classList.toggle("on", c === t)); return;
   }
+  if (a === "swap-apply"){
+    const v = (document.getElementById("swap-sel") || {}).value; if (!v) return toast("Pick an exercise first.");
+    const def = S.sheet.x != null ? exDef(S.draft.exercises[S.sheet.x]) : dayById(S.sheet.day).ex[S.sheet.key];
+    const type = LIBMAP[v] ? LIBMAP[v].type : (v === def.n ? def.type : "load");
+    return applySwap(v, type, !!(document.getElementById("swap-always") || {}).checked);
+  }
+  if (a === "swap-custom"){ const v = val("swap-custom"); if (!v) return toast("Type the exercise name first."); return applySwap(v, val("swap-type") || "load", !!(document.getElementById("swap-always") || {}).checked); }
   if (a === "exinfo") return openSheet({kind:"exinfo", x:+t.dataset.x});
   if (a === "exnote-save"){ S.draft.exercises[S.sheet.x].note = val("ex-note"); saveDraft(); S.sheet = null; return rerenderLogKeepScroll(); }
   if (a === "lognote") return openSheet({kind:"lognote"});
@@ -1091,13 +1265,31 @@ app.addEventListener("click", async ev => {
   if (a === "backup") return exportJSON("backup");
   if (a === "copy-out"){ const ta = document.getElementById("out-text"); try { await navigator.clipboard.writeText(ta.value); toast("Copied"); } catch(e){ ta.select(); toast("Text selected — copy it from the menu."); } return; }
 });
+async function applySwap(v, type, always){
+  const sh = S.sheet;
+  if (sh.x != null){
+    const x = S.draft.exercises[sh.x];
+    x.performedAs = v; x.type = type; x.sets.forEach(z => { if (!z.done){ z.reps = ""; z.kg = ""; } });
+    if (always){ updateProgramEx(S.draft.day, x.key, v, type); x.base = v; }
+    if (S.ui.autofill) applyAutofill(); saveDraft(); S.sheet = null; rerenderLogKeepScroll();
+  } else { updateProgramEx(sh.day, sh.key, v, type); S.sheet = null; S.forceRender = true; render(); }
+  if (always || sh.x == null){ try { await Store.saveProfile(S.profile); } catch(e){} toast(`${v} is now in your program`); }
+  else toast(`Swapped to ${v} for this workout`);
+}
+function updateProgramEx(dayId, key, v, type){
+  const e = dayById(dayId).ex[key]; if (!e || e.n === v) return;
+  e.alts = [e.n, ...(e.alts || [])].filter((a,i,arr) => a !== v && arr.indexOf(a) === i).slice(0, 4);
+  e.n = v; e.type = type; delete e.cue; delete e.cueMe;
+}
 function rerenderLogKeepScroll(){ const y = window.scrollY; S.forceRender = true; render(); window.scrollTo(0, y); }
 function applyAutofill(){
   S.draft.exercises.forEach(x => { const prev = previousFor(x.performedAs, S.draft.id); if (!prev) return;
     x.sets.forEach(s => { const p = prev.sets.find(t => t.label === s.label && t.done); if (!p || s.done) return; if (s.reps === "") s.reps = p.reps; if (s.kg === "" && x.type !== "bw") s.kg = p.kg; }); });
 }
 app.addEventListener("input", ev => {
-  const el = ev.target; const f = el.dataset && el.dataset.in; if (!f || !S.draft) return;
+  const el = ev.target;
+  if (el.id === "swap-q" && S.sheet){ const sel = document.getElementById("swap-sel"); if (sel) sel.innerHTML = libOptions(el.value, S.sheet.current, S.sheet.cat); return; }
+  const f = el.dataset && el.dataset.in; if (!f || !S.draft) return;
   if (f === "notes"){ S.draft.notes = el.value; } else { const s = S.draft.exercises[+el.dataset.x].sets[+el.dataset.s]; s[f] = el.value.replace(",", "."); }
   saveDraft();
 });

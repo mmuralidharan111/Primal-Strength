@@ -40,6 +40,22 @@ jobs:
         run: |
           sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.VIBRATE" />#' android/app/src/main/AndroidManifest.xml
 
+      - name: Set version number
+        run: |
+          sed -i "s/versionCode 1$/versionCode ${{ github.run_number }}/; s/versionName \"1.0\"/versionName \"1.0.${{ github.run_number }}\"/" android/app/build.gradle
+          grep -E "versionCode|versionName" android/app/build.gradle
+
+      - name: Use the app's permanent signing key
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS" ]; then
+            mkdir -p ~/.android && echo "$KS" | base64 -d > ~/.android/debug.keystore
+            echo "Signing with the permanent key"
+          else
+            echo "::warning::ANDROID_KEYSTORE_B64 secret is not set, so this build uses a temporary key and will not install over other builds."
+          fi
+
       - name: Copy the app into Android
         run: npx cap sync android
 

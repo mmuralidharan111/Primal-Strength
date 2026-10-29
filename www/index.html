@@ -1084,21 +1084,24 @@ function viewProgress(){
   out += `<section class="card"><h3>Body weight</h3>${bw.length > 1 ? lineChart([{pts:dedupe(bw)}], {unit:" kg"}) : `<div class="empty">Weigh in before workouts to build this graph.</div>`}</section>`;
   out += `<section class="card"><h3>Waist</h3><span class="muted small">Target: −1 to −2 cm a month.</span>${wa.length > 1 ? lineChart([{pts:dedupe(wa)}], {unit:" cm"}) : `<div class="empty">Add a weekly waist measurement in Body.</div>`}</section>`;
   // cardio weekly
-  const cw = Math.min(12, Math.max(1, weekOf(today())));
-  const rows = []; for (let w = Math.max(1, cw-7); w <= cw; w++){ const st = weekStats(w); rows.push({label:"W"+w, v:st.cardio, plan:st.plan}); }
+  const cw = weekOf(today());
+  const dataWeeks = [...S.data.sessions, ...S.data.cardio, ...S.data.body].map(r => weekOf(r.date));
+  const firstW = Math.min(1, cw, ...dataWeeks);
+  const wLabel = w => w >= 1 ? "W" + w : shortDate(addDays(startDate(), (w-1)*7)).replace(/\s.*/, "") + "·";
+  const rows = []; for (let w = Math.max(firstW, cw-7); w <= cw; w++){ const st = weekStats(w); rows.push({label:wLabel(w), v:st.cardio, plan: w >= 1 ? st.plan : 0}); }
   const runRows = []; let anyRun = false;
-  for (let w = Math.max(1, cw-7); w <= cw; w++){
+  for (let w = Math.max(firstW, cw-7); w <= cw; w++){
     const st = weekStats(w); let km = 0;
     st.sessions.forEach(ss => ss.exercises.forEach(e => e.sets.filter(x => x.done).forEach(x => {
       const cat = libCat(e.performedAs);
       if (e.type === "run") km += +x.reps || 0; else if (e.type === "dist" && cat === "Running") km += (+x.reps || 0) / 1000;
     })));
-    if (km) anyRun = true; runRows.push({label:"W"+w, v:Math.round(km*10)/10});
+    if (km) anyRun = true; runRows.push({label:wLabel(w), v:Math.round(km*10)/10});
   }
   if (anyRun) out += `<section class="card"><h3>Running km per week</h3>${barChart(runRows)}</section>`;
   out += `<section class="card"><h3>Cardio minutes per week</h3>${barChart(rows)}<div class="legend"><span><i></i>Logged</span><span><i style="background:var(--ink);height:2px"></i>Plan</span></div></section>`;
   // weekly table
-  const wrows = []; for (let w = 1; w <= cw; w++){ const st = weekStats(w); const bodyW = S.data.body.filter(b => b.date >= st.start && b.date <= st.end && b.waist).sort(byDateDesc)[0]; wrows.push(`<tr><td>W${w}</td><td>${st.sessions.length}/${prog().days.length}</td><td>${st.cardio}/${st.plan}</td>${set_().trackBack?`<td>${st.pain!=null?fmt(st.pain):"–"}</td>`:""}<td>${bodyW?fmt(bodyW.waist):"–"}</td></tr>`); }
+  const wrows = []; for (let w = firstW; w <= cw; w++){ const st = weekStats(w); const bodyW = S.data.body.filter(b => b.date >= st.start && b.date <= st.end && b.waist).sort(byDateDesc)[0]; wrows.push(`<tr><td>${w >= 1 ? "W" + w : "Before W1"}</td><td>${st.sessions.length}/${prog().days.length}</td><td>${st.cardio}/${st.plan}</td>${set_().trackBack?`<td>${st.pain!=null?fmt(st.pain):"–"}</td>`:""}<td>${bodyW?fmt(bodyW.waist):"–"}</td></tr>`); }
   out += `<section class="card"><h3>Week by week</h3><div class="tbl"><table><tr><th>Week</th><th>Lifts</th><th>Cardio min</th>${set_().trackBack?"<th>Back avg</th>":""}<th>Waist</th></tr>${wrows.reverse().join("")}</table></div></section>`;
   // DEXA trends
   const dx = S.data.dexa.filter(d => d.date).sort((a,b)=>a.date.localeCompare(b.date));

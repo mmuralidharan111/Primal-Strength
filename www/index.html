@@ -388,14 +388,38 @@ Carries|Front-rack carry|Kettlebell|carry|
 Carries|Sandbag carry|Sandbag|carry|
 Carries|Sled push|Sled|carry|
 Carries|Sled drag|Sled|carry|
-Conditioning|Row erg|Machine|carry|
-Conditioning|Ski erg|Machine|carry|
+Conditioning|Row erg|Machine|dist|
+Conditioning|Ski erg|Machine|dist|
 Conditioning|Assault bike|Machine|time|
 Conditioning|Battle ropes|Ropes|time|
 Conditioning|Jump rope|Rope|time|
 Conditioning|Box jump|Bodyweight|bw|
 Conditioning|Burpee|Bodyweight|bw|
-Conditioning|Mountain climber|Bodyweight|bw|`;
+Conditioning|Mountain climber|Bodyweight|bw|
+Conditioning|Wall ball|Medicine ball|load|
+Conditioning|Thruster|Barbell / dumbbell|load|
+Conditioning|Burpee broad jump|Bodyweight|bw|
+Conditioning|Double-under|Rope|bw|
+Conditioning|Sandbag lunge|Sandbag|carry|
+Conditioning|Sled pull|Sled|carry|
+Conditioning|Bike erg|Machine|dist|
+Conditioning|Incline walk|Treadmill|cardio|
+Running|Easy run|Running|run|
+Running|Tempo run|Running|run|
+Running|Long run|Running|run|
+Running|Recovery run|Running|run|
+Running|Run intervals|Running|dist|
+Running|Hill repeats|Running|dist|
+Running|Strides|Running|dist|
+Running|Fartlek run|Running|cardio|
+Olympic lifts|Power clean|Barbell|load|
+Olympic lifts|Hang clean|Barbell|load|
+Olympic lifts|Power snatch|Barbell|load|
+Olympic lifts|Clean and jerk|Barbell|load|
+Gymnastics|Toes-to-bar|Bodyweight|bw|
+Gymnastics|Handstand push-up|Bodyweight|bw|
+Gymnastics|Muscle-up|Bodyweight|bw|
+Gymnastics|Rope climb|Bodyweight|bw|`;
 const LIB = LIB_RAW.split("\n").map(l => { const [cat,n,equip,type,flag] = l.split("|"); return {cat,n,equip,type,back:flag==="b"}; });
 const LIBMAP = Object.fromEntries(LIB.map(e => [e.n, e]));
 const libCat = n => (LIBMAP[n] || {}).cat || null;
@@ -411,6 +435,96 @@ function libOptions(q, current, firstCat){
   });
   return n ? html : `<option value="">No matches — add it as a custom exercise below</option>`;
 }
+/* ============ Program templates for coaches ============ */
+const T = (n, sets, reps, rest, x = {}) => ({n, sets, reps: String(reps), rest, type: (LIBMAP[n] || {}).type || "load", ...x});
+const DAY = (title, dow, ex) => ({id:"", title, dow, equip:[], ex});
+const TEMPLATES = [
+  {key:"hyrox", name:"Hyrox — 12-week race prep", goal:"Hyrox", weeks:12, deload:[4,8,12], cardio:60,
+   desc:"4 days: strength, running intervals, station work, and compromised running (stations straight into 1 km runs). Week 12 tapers into race day.",
+   notes:["Race format: 8 × 1 km run, each followed by a station — SkiErg 1,000 m, sled push 50 m, sled pull 50 m, burpee broad jumps 80 m, row 1,000 m, farmers carry 200 m, sandbag lunges 100 m, wall balls 100.",
+          "Run intervals at about 5K pace; easy runs and the long aerobic work at conversational pace.",
+          "Set sled and wall-ball loads to the client's race division."],
+   days:[
+    DAY("Lower strength + sled", 1, [T("Back squat",4,5,150,{rir:2,kgInc:2.5}), T("Romanian deadlift",3,8,120,{rir:2}), T("Sandbag lunge",3,20,90,{cue:"20 m per set"}), T("Sled push",4,25,90), T("Wall ball",3,20,60)]),
+    DAY("Running intervals", 2, [T("Easy run",1,"2 km warm-up",0), T("Run intervals",5,1000,90,{cue:"About 5K pace; 90 s walk or jog between reps"}), T("Easy run",1,"1.5 km cool-down",0)]),
+    DAY("Upper strength + stations", 4, [T("Pull-up",4,6,120), T("Standing DB overhead press",3,8,90,{rir:2}), T("Row erg",4,500,90), T("Ski erg",4,500,90), T("Farmer carry",4,50,60), T("Burpee broad jump",3,10,60)]),
+    DAY("Compromised running", 6, [T("Run intervals",4,1000,0,{group:"Race simulation · 4 rounds", cue:"Straight into the station after each run"}), T("Wall ball",4,20,0,{group:"Race simulation · 4 rounds"}), T("Sandbag lunge",4,20,0,{group:"Race simulation · 4 rounds"}), T("Row erg",4,500,90,{group:"Race simulation · 4 rounds"}), T("Long run",1,"6 km easy",0,{repsInc:0.5, repsMax:10})])
+   ]},
+  {key:"marathon", name:"Marathon — 16 weeks", goal:"Marathon", weeks:16, deload:[4,8,12,15,16], cardio:0,
+   desc:"4 days: easy run, tempo run, runner's strength and a long run building to 32 km. Cut-back weeks every 4th week; 2-week taper.",
+   notes:["Most running is easy: you can talk in full sentences. Tempo is comfortably hard — about 1-hour race pace.",
+          "Race week: the long run is the race. Keep the other runs short and easy.",
+          "Practise race-day fuelling on long runs over 20 km."],
+   days:[
+    DAY("Easy run + strides", 2, [T("Easy run",1,"6 km easy",0,{repsInc:0.5, repsMax:12}), T("Strides",6,100,60,{cue:"Fast but relaxed, full recovery"})]),
+    DAY("Tempo run", 4, [T("Easy run",1,"2 km warm-up",0), T("Tempo run",1,"5 km tempo",0,{repsInc:0.5, repsMax:12}), T("Easy run",1,"1.5 km cool-down",0)]),
+    DAY("Runner's strength", 5, [T("Goblet squat",3,10,90,{rir:2}), T("Single-leg RDL",3,8,60,{each:true}), T("Step-up",3,10,60,{each:true}), T("Standing calf raise",3,15,60), T("Side plank",2,"30–45",30), T("Dead bug",3,8,30,{each:true})]),
+    DAY("Long run", 0, [T("Long run",1,"14 km easy",0,{repsInc:1.5, repsMax:32})])
+   ]},
+  {key:"half", name:"Half marathon — 12 weeks", goal:"Half marathon", weeks:12, deload:[4,8,12], cardio:0,
+   desc:"4 days: easy run, 800 m intervals, runner's strength and a long run building to 19 km. Week 12 tapers into race day.",
+   notes:["Intervals at about 10K pace with a 90-second jog between reps.", "Race week: the long run is the race."],
+   days:[
+    DAY("Easy run", 2, [T("Easy run",1,"5 km easy",0,{repsInc:0.5, repsMax:9})]),
+    DAY("Intervals", 4, [T("Easy run",1,"2 km warm-up",0), T("Run intervals",6,800,90), T("Easy run",1,"1.5 km cool-down",0)]),
+    DAY("Runner's strength", 5, [T("Goblet squat",3,10,90,{rir:2}), T("Reverse lunge",3,8,60,{each:true}), T("Single-leg glute bridge",3,12,45,{each:true}), T("Standing calf raise",3,15,60), T("Side plank",2,"30–45",30)]),
+    DAY("Long run", 0, [T("Long run",1,"10 km easy",0,{repsInc:1, repsMax:19})])
+   ]},
+  {key:"10k", name:"10K — 8 weeks", goal:"10K run", weeks:8, deload:[4,8], cardio:0,
+   desc:"3 days: 400 m intervals, an easy run with strength, and a long run building to 12 km.",
+   notes:["Intervals at about 5K pace; easy and long runs at conversational pace.", "Week 8 tapers into race day."],
+   days:[
+    DAY("Intervals + core", 2, [T("Easy run",1,"1.5 km warm-up",0), T("Run intervals",8,400,75), T("Dead bug",3,8,30,{each:true}), T("Side plank",2,"30–45",30)]),
+    DAY("Easy run + strength", 4, [T("Easy run",1,"4 km easy",0,{repsInc:0.5, repsMax:7}), T("Goblet squat",3,10,90), T("Single-leg RDL",3,8,60,{each:true}), T("Standing calf raise",3,15,60)]),
+    DAY("Long run", 6, [T("Long run",1,"6 km easy",0,{repsInc:0.75, repsMax:12})])
+   ]},
+  {key:"crossfit", name:"CrossFit-style — 8 weeks", goal:"Functional fitness", weeks:8, deload:[4,8], cardio:0,
+   desc:"5 days: squat, gymnastics and engine, Olympic lifting, deadlift, and a long aerobic day — each pairing strength with a short conditioning piece.",
+   notes:["Scale gymnastics (pull-ups, toes-to-bar, handstand push-ups) to the client's level.", "Conditioning pieces are hard but controlled: technique first."],
+   days:[
+    DAY("Squat + metcon", 1, [T("Back squat",5,5,150,{rir:2,kgInc:2.5}), T("Thruster",3,10,0,{group:"Metcon · 3 rounds"}), T("Box jump",3,12,0,{group:"Metcon · 3 rounds"}), T("Row erg",3,300,90,{group:"Metcon · 3 rounds"})]),
+    DAY("Gymnastics + engine", 2, [T("Pull-up",5,5,90), T("Toes-to-bar",4,8,60), T("Handstand push-up",4,6,90), T("Assault bike",6,60,60,{cue:"60 s hard, 60 s easy"})]),
+    DAY("Olympic lifting", 3, [T("Power clean",6,3,120,{rir:2}), T("Push press",4,5,120,{rir:2}), T("Front squat",4,5,150,{rir:2}), T("Burpee",3,12,60)]),
+    DAY("Deadlift + metcon", 5, [T("Conventional deadlift",5,3,180,{rir:2,kgInc:2.5}), T("Kettlebell swing",4,15,0,{group:"Metcon · 4 rounds"}), T("Wall ball",4,15,0,{group:"Metcon · 4 rounds"}), T("Double-under",4,40,90,{group:"Metcon · 4 rounds"})]),
+    DAY("Long aerobic", 6, [T("Row erg",1,5000,0), T("Ski erg",1,2000,0), T("Easy run",1,"5 km easy",0)])
+   ]},
+  {key:"upperlower", name:"Upper / lower — 4 days, 8 weeks", goal:"Muscle and strength", weeks:8, deload:[4,8], cardio:120,
+   desc:"Classic 4-day split: two upper and two lower days, heavy then moderate, with weekly load increases.",
+   notes:["Add load once every set hits the top of the rep range."],
+   days:[
+    DAY("Upper A (heavy)", 1, [T("Barbell bench press",4,"5–6",150,{rir:2,kgInc:2.5}), T("Barbell bent-over row",4,"6–8",120,{rir:2}), T("Seated DB overhead press",3,"8–10",90), T("Lat pulldown",3,"10–12",90), T("DB curl",2,"10–12",60), T("Cable triceps pushdown",2,"10–12",60)]),
+    DAY("Lower A (heavy)", 2, [T("Back squat",4,"5–6",180,{rir:2,kgInc:2.5}), T("Romanian deadlift",3,"6–8",150,{rir:2}), T("Leg press",3,"10–12",120), T("Lying leg curl",3,"10–12",90), T("Standing calf raise",3,"12–15",60)]),
+    DAY("Upper B (moderate)", 4, [T("Incline DB press",4,"8–10",120,{rir:2}), T("Chest-supported DB row",4,"8–10",90), T("Pull-up",3,"6–10",120), T("Lateral raise",3,"12–15",60), T("Face pull",3,"12–15",60)]),
+    DAY("Lower B (moderate)", 5, [T("Trap-bar deadlift",4,"5",180,{rir:2,kgInc:2.5}), T("Bulgarian split squat",3,"8–10",90,{each:true}), T("Hip thrust",3,"10",90), T("Leg extension",3,"12–15",60), T("Hanging knee raise",3,"10–12",60)])
+   ]},
+  {key:"ppl", name:"Push / pull / legs — 6 days, 8 weeks", goal:"Muscle", weeks:8, deload:[4,8], cardio:90,
+   desc:"High-frequency bodybuilding split for experienced lifters: push, pull and legs, twice a week.",
+   notes:["Run each day twice a week (Mon–Sat). Keep 1–2 reps in reserve on most sets."],
+   days:[
+    DAY("Push", 1, [T("Barbell bench press",4,"6–8",150,{rir:2}), T("Standing barbell overhead press",3,"6–8",120,{rir:2}), T("Incline DB press",3,"10–12",90), T("Lateral raise",4,"12–15",60), T("Overhead cable triceps extension",3,"10–12",60)]),
+    DAY("Pull", 2, [T("Pull-up",4,"6–10",120), T("Barbell bent-over row",4,"8–10",120,{rir:2}), T("Seated cable row",3,"10–12",90), T("Face pull",3,"12–15",60), T("Hammer curl",3,"10–12",60)]),
+    DAY("Legs", 3, [T("Back squat",4,"6–8",180,{rir:2}), T("Romanian deadlift",3,"8–10",150), T("Leg press",3,"10–12",120), T("Seated leg curl",3,"10–12",90), T("Standing calf raise",4,"12–15",60)]),
+    DAY("Push 2", 4, [T("Incline barbell press",4,"6–8",150,{rir:2}), T("Machine shoulder press",3,"8–10",90), T("Cable fly",3,"12–15",60), T("Cable lateral raise",3,"12–15",60), T("Skull crusher",3,"10–12",60)]),
+    DAY("Pull 2", 5, [T("Chest-supported T-bar row",4,"8–10",120), T("Neutral-grip lat pulldown",3,"10–12",90), T("Single-arm DB row",3,"10–12",60,{each:true}), T("Rear-delt fly",3,"12–15",60), T("Incline DB curl",3,"10–12",60)]),
+    DAY("Legs 2", 6, [T("Front squat",4,"6–8",180,{rir:2}), T("Hip thrust",3,"8–10",120), T("Bulgarian split squat",3,"8–10",90,{each:true}), T("Leg extension",3,"12–15",60), T("Seated calf raise",4,"12–15",60)])
+   ]},
+  {key:"fatloss", name:"Fat loss — strength + conditioning, 8 weeks", goal:"Fat loss", weeks:8, deload:[4,8], cardio:180,
+   desc:"3 full-body strength days plus 2 low-intensity cardio days and short conditioning finishers. Keeps muscle while the diet drives fat loss.",
+   notes:["Fat loss comes from a calorie deficit; training keeps the muscle.", "Zone 2 days: conversational pace for 40–60 minutes."],
+   days:[
+    DAY("Full body A", 1, [T("Goblet squat",3,"8–10",90,{rir:2}), T("DB bench press",3,"8–10",90,{rir:2}), T("Chest-supported DB row",3,"10–12",90), T("Farmer carry",3,40,60), T("Assault bike",5,30,60,{cue:"30 s hard, 60 s easy"})]),
+    DAY("Zone 2 cardio", 2, [T("Incline walk",1,"45",0,{cue:"Conversational pace; heart rate in Zone 2"})]),
+    DAY("Full body B", 3, [T("Trap-bar deadlift",3,"6–8",150,{rir:2}), T("Seated DB overhead press",3,"8–10",90), T("Lat pulldown",3,"10–12",90), T("Reverse lunge",3,"8–10",60,{each:true}), T("Row erg",4,250,60)]),
+    DAY("Zone 2 cardio", 4, [T("Incline walk",1,"45",0,{repsInc:2.5, repsMax:60})]),
+    DAY("Full body C", 5, [T("Leg press",3,"10–12",120), T("Incline DB press",3,"10–12",90), T("Single-arm cable row",3,"10–12",60,{each:true}), T("Hip thrust",3,"10–12",90), T("Kettlebell swing",4,15,60)])
+   ]}
+];
+function templateProgram(key){
+  const t = TEMPLATES.find(x => x.key === key); if (!t) return blankProgram();
+  return {name: t.name, byTrainer: true, startDate: mondayOf(addDays(today(), 7)), cardioWeekly: t.cardio, notes: [...t.notes],
+    block: {weeks: t.weeks, deload: [...t.deload], extra: [], builtin: false}, days: JSON.parse(JSON.stringify(t.days))};
+}
+
 /* ============ Block structure ============ */
 const DEFAULT_BLOCK = {weeks:12, deload:[6,12], extra:[7,8,9,10,11], builtin:true};
 const blk = () => (S.profile && prog().block) || DEFAULT_BLOCK;
@@ -447,18 +561,29 @@ function setLabels(ex, idx, w){
   let n = isDeload(w) ? Math.min(2, +ex.sets) : ((blk().extra || []).includes(w) && idx === 0 ? +ex.sets + 1 : +ex.sets);
   return Array.from({length:n}, (_,i) => String(i+1));
 }
+function targetReps(ex, w){
+  const base = repTop(ex.reps), inc = +ex.repsInc || 0;
+  if (base == null || (!inc && !(isDeload(w) && (ex.type === "run" || ex.type === "cardio")))) return String(ex.reps);
+  let n = base + inc * Math.max(0, w - 1);
+  if (ex.repsMax) n = Math.min(n, +ex.repsMax);
+  if (isDeload(w) && (ex.type === "run" || ex.type === "cardio")) n = n * 0.7;
+  n = ex.type === "run" ? Math.round(n * 2) / 2 : Math.round(n);
+  return String(ex.reps).replace(/(\d+(?:\.\d+)?)(?!.*\d)/, String(n));
+}
 function targetText(ex, idx, w){
-  const unit = ex.type === "carry" ? " m" : ex.type === "time" ? " s" : "";
-  let sets;
+  const r = targetReps(ex, w);
+  const unit = ex.type === "carry" ? " m" : ex.type === "time" ? " s" : ex.type === "run" ? (/km|mi/i.test(r) ? "" : " km") : ex.type === "dist" ? (/\bm\b|km/i.test(r) ? "" : " m") : ex.type === "cardio" ? (/min/i.test(r) ? "" : " min") : "";
+  let sets, n = setLabels(ex, idx, w).length;
   if (ex.side){
-    const n = isDeload(w) ? 2 : ex.sets;
+    const k = isDeload(w) ? 2 : ex.sets;
     const extra = !isDeload(w) && ex.side.extra ? ` (+1 ${ex.side.names[ex.side.extra].toLowerCase()})` : "";
-    sets = `${n} sets each side${extra}`;
-  } else sets = `${setLabels(ex, idx, w).length} sets`;
+    sets = `${k} sets each side${extra} × `;
+  } else sets = n === 1 ? "" : `${n} sets × `;
   const kg = targetKg(ex, w);
-  return `${sets} × ${ex.reps}${unit}${ex.each ? " each" : ""}${kg != null ? ` @ ${fmt(kg)} kg` : ""}`;
+  return `${sets}${r}${unit}${ex.each ? " each" : ""}${kg != null ? ` @ ${fmt(kg)} kg` : ""}`;
 }
 function targetKg(ex, w){
+  if (["run","dist","cardio","bw"].includes(ex.type)) return null;
   if (ex.kg == null || ex.kg === "" || isNaN(+ex.kg)) return null;
   let k = +ex.kg + (+ex.kgInc || 0) * Math.max(0, Math.min(w, blk().weeks || w) - 1);
   if (isDeload(w)) k = Math.round(k * 0.85 / 2.5) * 2.5;
@@ -472,7 +597,7 @@ function cardioPlan(w, dow){
            4:["Zone 2 incline walk", [35,45,50][p]], 5:["Zone 2 walk after Day C", lift], 6:["Easy walk", [40,50,65][p]], 0:["Rest — walks after meals", 0]})[dow];
 }
 const weekCardioPlan = w => !blk().builtin ? (+prog().cardioWeekly || 0) : [0,1,2,3,4,5,6].reduce((s,d) => s + cardioPlan(Math.max(1,w), d)[1], 0);
-const COL = {load:["Reps","Kg"], carry:["Metres","Kg/hand"], time:["Sec","Kg"], bw:["Reps",""]};
+const COL = {load:["Reps","Kg"], carry:["Metres","Kg/hand"], time:["Sec","Kg"], bw:["Reps",""], run:["Km","Min"], dist:["Metres","Sec"], cardio:["Min","Km"]};
 const fmtRest = s => s >= 60 ? (s % 60 ? `${Math.floor(s/60)}m ${s%60}s` : `${s/60}m`) : `${s}s`;
 
 /* ============ Dates ============ */
@@ -580,7 +705,7 @@ function topSet(e){
   return best;
 }
 const e1rm = (kg, reps) => reps > 0 && reps <= 12 ? kg * (1 + reps/30) : null;
-function repTop(reps){ const m = String(reps).match(/(\d+)(?!.*\d)/); return m ? +m[1] : null; }
+function repTop(reps){ const m = String(reps).match(/(\d+(?:\.\d+)?)(?!.*\d)/); return m ? +m[1] : null; }
 function loadHint(ex, prev){
   if (!prev || ex.type !== "load") return null;
   const done = prev.sets.filter(t => t.done && +t.kg > 0);
@@ -855,7 +980,7 @@ function viewLog(){
       const pText = p ? `${p.reps || "–"} × ${p.kg ? p.kg + " kg" : "–"}` : "–";
       const lbl = e.side ? `${s.label[0]}${s.label.slice(1)}` : s.label;
       out += `<span class="lbl num" title="${e.side ? esc(e.side.names[s.label[0]]) : ""}">${esc(lbl)}</span><span class="prev num">${esc(pText)}</span>
-      <input inputmode="numeric" data-in="reps" data-x="${xi}" data-s="${si}" value="${esc(s.reps)}" placeholder="${p ? esc(p.reps) : esc(String(repTop(e.reps) ?? ""))}" aria-label="${cols[0]} set ${esc(lbl)}" id="r-${xi}-${si}">
+      <input inputmode="numeric" data-in="reps" data-x="${xi}" data-s="${si}" value="${esc(s.reps)}" placeholder="${p ? esc(p.reps) : esc(String(repTop(targetReps(e, w)) ?? ""))}" aria-label="${cols[0]} set ${esc(lbl)}" id="r-${xi}-${si}">
       <input inputmode="decimal" data-in="kg" data-x="${xi}" data-s="${si}" value="${esc(s.kg)}" placeholder="${p && p.kg ? esc(p.kg) : (targetKg(e, w) != null ? esc(targetKg(e, w)) : "")}" ${x.type==="bw"?"disabled":""} aria-label="Kg set ${esc(lbl)}" id="k-${xi}-${si}">
       <button class="tick ${s.done?"on":""}" data-act="tick" data-x="${xi}" data-s="${si}" aria-label="Mark set ${esc(lbl)} done" aria-pressed="${s.done}">${I.check}</button>`;
     });
@@ -961,6 +1086,16 @@ function viewProgress(){
   // cardio weekly
   const cw = Math.min(12, Math.max(1, weekOf(today())));
   const rows = []; for (let w = Math.max(1, cw-7); w <= cw; w++){ const st = weekStats(w); rows.push({label:"W"+w, v:st.cardio, plan:st.plan}); }
+  const runRows = []; let anyRun = false;
+  for (let w = Math.max(1, cw-7); w <= cw; w++){
+    const st = weekStats(w); let km = 0;
+    st.sessions.forEach(ss => ss.exercises.forEach(e => e.sets.filter(x => x.done).forEach(x => {
+      const cat = libCat(e.performedAs);
+      if (e.type === "run") km += +x.reps || 0; else if (e.type === "dist" && cat === "Running") km += (+x.reps || 0) / 1000;
+    })));
+    if (km) anyRun = true; runRows.push({label:"W"+w, v:Math.round(km*10)/10});
+  }
+  if (anyRun) out += `<section class="card"><h3>Running km per week</h3>${barChart(runRows)}</section>`;
   out += `<section class="card"><h3>Cardio minutes per week</h3>${barChart(rows)}<div class="legend"><span><i></i>Logged</span><span><i style="background:var(--ink);height:2px"></i>Plan</span></div></section>`;
   // weekly table
   const wrows = []; for (let w = 1; w <= cw; w++){ const st = weekStats(w); const bodyW = S.data.body.filter(b => b.date >= st.start && b.date <= st.end && b.waist).sort(byDateDesc)[0]; wrows.push(`<tr><td>W${w}</td><td>${st.sessions.length}/${prog().days.length}</td><td>${st.cardio}/${st.plan}</td>${set_().trackBack?`<td>${st.pain!=null?fmt(st.pain):"–"}</td>`:""}<td>${bodyW?fmt(bodyW.waist):"–"}</td></tr>`); }
@@ -1023,9 +1158,10 @@ function sheetHTML(){
   if (k === "auth"){ body = authSheet(); }
   else if (k === "btpl"){
     const others = (S.clients || []).filter(c => c.id !== S.cctx.uid && c.program && c.program.byTrainer);
-    body = `<h2>New program</h2><span class="muted small">Start from a template, then change anything.</span>
+    body = `<h2>New program</h2><span class="muted small">Start from a template, then change anything — days, exercises, sets, weights and weeks.</span>
     <button class="btn block" data-act="b-tpl" data-v="blank">Blank program</button>
-    <button class="btn block" data-act="b-tpl" data-v="standard">3-Day Strength Block (12 weeks)</button>
+    ${TEMPLATES.map(t => `<button class="wcard" data-act="b-tpl" data-v="tpl:${t.key}" style="flex-direction:column;align-items:flex-start;gap:4px"><b>${esc(t.name)}</b><span class="small muted">${t.days.length} days a week · ${t.weeks} weeks · ${esc(t.goal)}</span><span class="small">${esc(t.desc)}</span></button>`).join("")}
+    <button class="wcard" data-act="b-tpl" data-v="standard" style="flex-direction:column;align-items:flex-start;gap:4px"><b>3-Day Strength Block — 12 weeks</b><span class="small muted">3 days a week · 12 weeks · General strength</span><span class="small">Back-friendly full-body strength with carries and core; deloads in weeks 6 and 12.</span></button>
     ${others.map(c => `<button class="btn block" data-act="b-tpl" data-v="copy:${c.id}">Copy ${esc(c.name || c.email)}'s program</button>`).join("")}
     <button class="btn block" data-act="sheet-close">Cancel</button>`;
   }
@@ -1223,7 +1359,7 @@ app.addEventListener("click", async ev => {
   if (a === "scrim"){ if (ev.target === t) closeSheet(); return; }
   if (a === "ttab"){ closeClient(); S.view = t.dataset.v; S.builder = null; S.forceRender = true; render(); window.scrollTo(0,0); return; }
   if (a === "open-client"){ S.ctab = "overview"; return openClient(t.dataset.id); }
-  if (a === "ctab"){ S.ctab = t.dataset.v; S.forceRender = true; return render(); }
+  if (a === "ctab"){ S.ctab = t.dataset.v; S.noteEdit = null; S.forceRender = true; return render(); }
   if (a === "open-alert"){
     const al = (S.alerts || []).find(x => x.id === t.dataset.id); if (!al) return;
     if (!al.read) Cloud.db.collection("trainers").doc(Cloud.user.uid).collection("alerts").doc(al.id).update({read:true}).catch(()=>{});
@@ -1233,11 +1369,20 @@ app.addEventListener("click", async ev => {
   if (a === "alerts-read"){ const b = Cloud.db.batch(); (S.alerts || []).filter(x => !x.read).forEach(x => b.update(Cloud.db.collection("trainers").doc(Cloud.user.uid).collection("alerts").doc(x.id), {read:true})); b.commit().catch(()=>{}); return; }
   if (a === "copy-code"){ try { await navigator.clipboard.writeText(t.dataset.v); toast("Code copied"); } catch(e){ toast("Code: " + t.dataset.v); } return; }
   if (a === "new-code"){ await makeInviteCode(Cloud.me.name); return; }
+  if (a === "note-save"){
+    const text = val("n-text"), date = val("n-date") || today(); if (!text) return toast("Write the note first.");
+    const data = {clientId: S.cctx.uid, date, text, created: S.noteEdit ? ((S.cctx.notes.find(n => n.id === S.noteEdit) || {}).created || new Date().toISOString()) : new Date().toISOString()};
+    (S.noteEdit ? notesRef().doc(S.noteEdit).set(data) : notesRef().add(data)).catch(e => toast("Couldn't save the note: " + (e.code || "error")));
+    S.noteEdit = null; toast("Note saved"); S.forceRender = true; return render();
+  }
+  if (a === "note-edit"){ S.noteEdit = t.dataset.id; S.forceRender = true; render(); window.scrollTo(0,0); return; }
+  if (a === "note-cancel"){ S.noteEdit = null; S.forceRender = true; return render(); }
+  if (a === "note-del"){ const id = t.dataset.id; S.sheet = {kind:"confirm", title:"Delete this note?", text:"This can't be undone.", yes:"Delete note", danger:true, run: () => notesRef().doc(id).delete().catch(() => toast("Couldn't delete the note."))}; S.forceRender = true; return render(); }
   if (a === "b-edit") return withCtx(() => startBuilder(prog()));
   if (a === "b-new") return openSheet({kind:"btpl"});
   if (a === "b-tpl"){
     const v = t.dataset.v; S.sheet = null;
-    let p = v === "blank" ? blankProgram() : v === "standard" ? standardProgram() : clientDoc(v.slice(5)).program;
+    let p = v === "blank" ? blankProgram() : v === "standard" ? standardProgram() : v.startsWith("tpl:") ? templateProgram(v.slice(4)) : clientDoc(v.slice(5)).program;
     p = clean(p); if (v === "standard"){ p.name = "3-Day Strength Block"; p.startDate = mondayOf(addDays(today(), 7)); }
     if (v.startsWith("copy:")) p.startDate = mondayOf(addDays(today(), 7));
     return startBuilder(p);
@@ -1578,7 +1723,24 @@ function openClient(id){
   closeClient();
   S.cctx = {uid: id, data: {sessions:[], cardio:[], body:[], dexa:[]}, unsub: []};
   COLS.forEach(c => S.cctx.unsub.push(uref(id).collection(c).onSnapshot(q => { if (S.cctx && S.cctx.uid === id){ S.cctx.data[c] = q.docs.map(d => d.data()); render(); } }, () => {})));
+  S.cctx.notes = [];
+  S.cctx.unsub.push(notesRef().where("clientId", "==", id).onSnapshot(q => {
+    if (!S.cctx || S.cctx.uid !== id) return;
+    S.cctx.notes = q.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b) => (b.date + (b.created||"")).localeCompare(a.date + (a.created||"")));
+    render();
+  }, () => {}));
   S.view = "client"; S.ctab = S.ctab || "overview"; S.forceRender = true; render(); window.scrollTo(0,0);
+}
+const notesRef = () => Cloud.db.collection("trainers").doc(Cloud.user.uid).collection("notes");
+function clientNotes(){
+  const ed = S.noteEdit ? (S.cctx.notes || []).find(n => n.id === S.noteEdit) : null;
+  let out = `<section class="card"><h3>${ed ? "Edit note" : "Add a note"}</h3><span class="muted small">Private to you — your client never sees these.</span>
+  <label class="f">Date<input type="date" id="n-date" value="${esc(ed ? ed.date : today())}"></label>
+  <label class="f">Note<textarea id="n-text" placeholder="Session observations, goals, injuries, conversations…">${esc(ed ? ed.text : "")}</textarea></label>
+  <div class="grid2"><button class="btn primary" data-act="note-save">${ed ? "Save changes" : "Save note"}</button>${ed ? `<button class="btn" data-act="note-cancel">Cancel</button>` : ""}</div></section>`;
+  const notes = S.cctx.notes || [];
+  out += `<section class="card"><h3>Notes</h3>${notes.length ? notes.map(n => `<div style="border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:4px"><div class="row between"><b>${shortDate(n.date)} ${parse(n.date).getFullYear()}</b><div class="row" style="gap:4px"><button class="btn ghost" data-act="note-edit" data-id="${n.id}">Edit</button><button class="btn ghost danger" data-act="note-del" data-id="${n.id}">Delete</button></div></div><div style="white-space:pre-wrap">${esc(n.text)}</div></div>`).join("") : `<div class="empty">No notes yet. They're listed newest first, by date.</div>`}</section>`;
+  return out;
 }
 function closeClient(){ if (S.cctx){ S.cctx.unsub.forEach(f => { try { f(); } catch(e){} }); S.cctx = null; } }
 function withCtx(fn){
@@ -1628,12 +1790,13 @@ function viewTrainerAccount(){
 }
 function viewClient(){
   const c = clientDoc(S.cctx.uid); if (!c) return `<div class="empty">This client is no longer connected to you.</div><button class="btn" data-act="ttab" data-v="clients">Back to clients</button>`;
-  const tabs = [["overview","Overview"],["program","Program"],["progress","Progress"],["history","History"]];
+  const tabs = [["overview","Overview"],["program","Program"],["progress","Progress"],["history","History"],["notes","Notes"]];
   let out = `<div class="row" style="flex-wrap:nowrap"><button class="iconbtn" data-act="ttab" data-v="clients" aria-label="Back">${I.back}</button><div style="min-width:0"><span class="eyebrow">Client</span><h1 style="font-size:26px">${esc(c.name || c.email)}</h1></div></div>
   <div class="chips">${tabs.map(([k,l]) => `<button class="chip ${S.ctab===k?"on":""}" data-act="ctab" data-v="${k}">${l}</button>`).join("")}</div>`;
   if (S.ctab === "program") return out + withCtx(clientProgramView);
   if (S.ctab === "progress") return out + withCtx(viewProgress);
   if (S.ctab === "history") return out + withCtx(clientHistory);
+  if (S.ctab === "notes") return out + clientNotes();
   return out + withCtx(clientOverview);
 }
 function clientOverview(){
@@ -1697,13 +1860,19 @@ function viewBuilder(){
       out += `<div style="border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--sunk)">
       <div class="row between"><b class="small">${ei+1}. ${esc(e.n)}</b><div class="row" style="gap:4px"><button class="btn ghost" data-act="b-up" data-d="${di}" data-e="${ei}" aria-label="Move up" ${ei===0?"disabled":""}>↑</button><button class="btn ghost" data-act="b-down" data-d="${di}" data-e="${ei}" aria-label="Move down" ${ei===d.ex.length-1?"disabled":""}>↓</button><button class="btn ghost danger" data-act="b-rmex" data-d="${di}" data-e="${ei}">Remove</button></div></div>
       <label class="f">Exercise<select data-bp="days.${di}.ex.${ei}.n" data-exsel="1">${inLib ? "" : `<option value="${esc(e.n)}" selected>${esc(e.n)} (custom)</option>`}${libOptions("", e.n, libCat(e.n))}</select></label>
-      <div class="grid3">${numIn(`days.${di}.ex.${ei}.sets`, e.sets, "Sets")}<label class="f">${e.type==="carry"?"Metres":e.type==="time"?"Seconds":"Reps"}<input data-bp="days.${di}.ex.${ei}.reps" value="${esc(e.reps)}" placeholder="8–10"></label>${numIn(`days.${di}.ex.${ei}.kg`, e.kg, "Target kg", 'placeholder="–"')}
-      ${numIn(`days.${di}.ex.${ei}.kgInc`, e.kgInc, "+kg each week", 'placeholder="0"')}${numIn(`days.${di}.ex.${ei}.rest`, e.rest, "Rest (sec)")}${e.type==="load" ? numIn(`days.${di}.ex.${ei}.rir`, e.rir, "Reps in reserve", 'placeholder="–"') : "<span></span>"}</div>
+      ${(() => { const ty = e.type, repLbl = {carry:"Metres", time:"Seconds", run:"Distance (km)", dist:"Metres per rep", cardio:"Minutes"}[ty] || "Reps";
+        const incLbl = ty === "run" ? "+km each week" : ty === "cardio" ? "+min each week" : ty === "dist" ? "+m each week" : "+reps each week";
+        const showKg = !["run","dist","cardio","bw"].includes(ty);
+        return `<div class="grid3">${numIn(`days.${di}.ex.${ei}.sets`, e.sets, ty === "run" || ty === "cardio" ? "Times" : ty === "dist" ? "Reps" : "Sets")}<label class="f">${repLbl}<input data-bp="days.${di}.ex.${ei}.reps" value="${esc(e.reps)}" placeholder="${ty === "run" ? "8 km easy" : ty === "dist" ? "800" : "8–10"}"></label>${numIn(`days.${di}.ex.${ei}.rest`, e.rest, "Rest (sec)")}
+        ${showKg ? numIn(`days.${di}.ex.${ei}.kg`, e.kg, "Target kg", 'placeholder="–"') + numIn(`days.${di}.ex.${ei}.kgInc`, e.kgInc, "+kg each week", 'placeholder="0"') : ""}
+        ${ty === "load" ? numIn(`days.${di}.ex.${ei}.rir`, e.rir, "Reps in reserve", 'placeholder="–"') : ""}
+        ${numIn(`days.${di}.ex.${ei}.repsInc`, e.repsInc, incLbl, 'placeholder="0"')}${numIn(`days.${di}.ex.${ei}.repsMax`, e.repsMax, "Up to (cap)", 'placeholder="–"')}</div>`; })()}
       <label class="f">Coaching cue<input data-bp="days.${di}.ex.${ei}.cue" value="${esc(e.cue || "")}" placeholder="Optional"></label></div>`;
     });
     out += `<button class="btn" data-act="b-addex" data-d="${di}">${I.plus.replace("<svg",'<svg width="18" height="18"')} Add exercise</button></section>`;
   });
-  out += `<button class="btn block" data-act="b-addday">${I.plus.replace("<svg",'<svg width="18" height="18"')} Add a training day</button>
+  out += `<p class="small muted" style="margin:0">${p.days.length} training day${p.days.length===1?"":"s"} a week. Add or remove days to suit the client; two sessions can share a weekday.</p>
+  <button class="btn block" data-act="b-addday" ${p.days.length >= 14 ? "disabled" : ""}>${I.plus.replace("<svg",'<svg width="18" height="18"')} Add a training day</button>
   <button class="btn primary block" data-act="b-save">Save and send to client</button></div></main>`;
   return out;
 }
@@ -1730,6 +1899,8 @@ async function saveBuilder(){
       e.kg = e.kg === "" || e.kg == null || isNaN(+e.kg) ? null : +e.kg;
       e.kgInc = e.kgInc === "" || e.kgInc == null || isNaN(+e.kgInc) ? null : +e.kgInc;
       e.rir = e.rir === "" || e.rir == null || isNaN(+e.rir) ? null : +e.rir;
+      e.repsInc = e.repsInc === "" || e.repsInc == null || isNaN(+e.repsInc) || !+e.repsInc ? null : +e.repsInc;
+      e.repsMax = e.repsMax === "" || e.repsMax == null || isNaN(+e.repsMax) || !+e.repsMax ? null : +e.repsMax;
       e.reps = String(e.reps || "").trim() || "8";
       if (e.side) e.side.extra = e.side.extra || null;
     }

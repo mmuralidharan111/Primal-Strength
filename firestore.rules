@@ -37,6 +37,12 @@ service cloud.firestore {
       allow update, delete: if signedIn() && resource.data.trainerId == request.auth.uid;
     }
 
+    // A trainer's private notes on their clients
+    match /trainers/{tid}/notes/{nid} {
+      allow read, delete: if isMe(tid);
+      allow create, update: if isMe(tid) && isTrainerOf(request.resource.data.clientId);
+    }
+
     // Workout-completed alerts for a trainer
     match /trainers/{tid}/alerts/{aid} {
       allow read, update, delete: if isMe(tid);

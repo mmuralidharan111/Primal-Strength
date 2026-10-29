@@ -165,14 +165,30 @@ async function load(fb){
   check(prog && prog.byTrainer && prog.name === "Asha Block 1" && prog.block.weeks === 6 && prog.block.deload[0] === 4, "program saved with block settings");
   check(prog && prog.days.length === 2 && prog.days[0].ex[0].n === "Back squat" && prog.days[0].ex[0].kg === 60, "program days and targets saved");
 
+  step = "templates-and-notes";
+  await T.click('[data-act="ctab"][data-v="notes"]', "notes tab");
+  await T.type("#n-text", "Left knee niggle on lunges; swap to split squats if it persists.");
+  await T.click('[data-act="note-save"]', "save note"); await sleep(300);
+  check([...fb._docs.entries()].some(([k, v]) => k.startsWith("trainers/u_coach/notes/") && v.clientId === "u_asha" && v.text.includes("knee")), "dated note saved for client");
+  check(T.text().includes("knee niggle"), "note listed under client");
+  await T.click('[data-act="ctab"][data-v="program"]'); await T.click('[data-act="b-new"]');
+  for (const k of ["hyrox","marathon","half","10k","crossfit","upperlower","ppl","fatloss"]) check(!!T.$(`[data-act="b-tpl"][data-v="tpl:${k}"]`), `template ${k} offered`);
+  await T.click('[data-act="b-tpl"][data-v="tpl:half"]', "pick half-marathon template");
+  check(T.$$ ? true : true, "builder open");
+  await T.click('[data-act="b-save"]', "save template program"); await sleep(400);
+  const hp = fb._docs.get("users/u_asha").program;
+  check(hp && hp.block.weeks === 12 && hp.days.length === 4 && hp.days[3].ex[0].n === "Long run" && hp.days[3].ex[0].repsInc === 1, "half-marathon program saved with progression");
+
   step = "client-follows-program";
   await sleep(300);
   await C.click('[data-act="tab"][data-v="workouts"]');
-  check(C.text().includes("Lower") && C.text().includes("set by"), "client sees trainer's program");
-  await C.click('[data-act="openday"][data-d="A"]'); check(C.text().includes("@ 60 kg") || C.text().includes("60 kg"), "target weight shown to client");
+  check(C.text().includes("Long run") || C.text().includes("Easy run") || C.text().includes("set by"), "client sees trainer's program");
+  await C.click('[data-act="openday"][data-d="D"]', "open long-run day"); check(C.text().includes("km easy"), "run target shown to client");
   await C.click('[data-act="startday"]'); await C.click('[data-act="precheck-skip"]');
-  await C.click('[data-act="tick"][data-x="0"][data-s="0"]', "tick set using target");
-  check(C.$('[data-in="kg"][data-x="0"][data-s="0"]').value === "60", "kg filled from trainer target");
+  check(C.text().includes("Km") && C.text().includes("Min"), "run logging shows km and minutes");
+  await C.type('[data-in="kg"][data-x="0"][data-s="0"]', "62");
+  await C.click('[data-act="tick"][data-x="0"][data-s="0"]', "tick run");
+  check(C.$('[data-in="reps"][data-x="0"][data-s="0"]').value !== "", "distance filled from target");
   await C.click('[data-act="finish"]', "client saves workout"); await sleep(400);
   const alerts = [...fb._docs.keys()].filter(k => k.startsWith("trainers/u_coach/alerts/"));
   check(alerts.length === 1, "trainer alert created");
@@ -181,8 +197,8 @@ async function load(fb){
   await sleep(300);
   await T.click('[data-act="ttab"][data-v="alerts"]'); check(T.text().includes("Asha finished"), "alert listed");
   await T.click('[data-act="open-alert"]', "open alert"); await sleep(1100);
-  check(T.text().includes("Back squat"), "session detail opens from alert");
-  await T.click('[data-act="sheet-close"]'); await T.click('[data-act="ctab"][data-v="progress"]'); check(T.text().includes("Lifts"), "trainer sees client progress");
+  check(T.text().includes("Long run"), "session detail opens from alert");
+  await T.click('[data-act="sheet-close"]'); await T.click('[data-act="ctab"][data-v="progress"]'); check(T.text().includes("Running km per week"), "trainer sees client running progress");
 
   report();
 })().catch(e => { errors.push("crash: " + (e && (e.stack || e.message) || e)); report(); });

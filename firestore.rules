@@ -1,0 +1,47 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isMe(uid) { return signedIn() && request.auth.uid == uid; }
+    function userData(uid) { return get(/databases/$(database)/documents/users/$(uid)).data; }
+    function isTrainerOf(uid) { return signedIn() && userData(uid).get('trainerId', null) == request.auth.uid; }
+
+    // A person's profile, settings and program
+    match /users/{uid} {
+      allow read: if isMe(uid) || (signedIn() && resource.data.get('trainerId', null) == request.auth.uid);
+      allow create: if isMe(uid)
+        && request.resource.data.role in ['client', 'trainer']
+        && request.resource.data.get('trainerId', null) == null;
+      // The person themselves: can't change role; can only link to a trainer through that trainer's invite code
+      allow update: if isMe(uid)
+        && request.resource.data.role == resource.data.role
+        && (request.resource.data.get('trainerId', null) == resource.data.get('trainerId', null)
+            || request.resource.data.get('trainerId', null) == null
+            || get(/databases/$(database)/documents/codes/$(request.resource.data.trainerCode)).data.trainerId == request.resource.data.trainerId);
+      // Their trainer: may only change the program
+      allow update: if signedIn() && resource.data.get('trainerId', null) == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['program', 'programUpdatedAt']);
+
+      // Workouts, cardio, check-ins and DEXA scans
+      match /{col}/{doc} {
+        allow read: if isMe(uid) || isTrainerOf(uid);
+        allow write: if isMe(uid) && col in ['sessions', 'cardio', 'body', 'dexa'];
+      }
+    }
+
+    // Trainer invite codes
+    match /codes/{code} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.trainerId == request.auth.uid
+        && userData(request.auth.uid).role == 'trainer';
+      allow update, delete: if signedIn() && resource.data.trainerId == request.auth.uid;
+    }
+
+    // Workout-completed alerts for a trainer
+    match /trainers/{tid}/alerts/{aid} {
+      allow read, update, delete: if isMe(tid);
+      allow create: if signedIn() && request.resource.data.clientId == request.auth.uid
+        && userData(request.auth.uid).get('trainerId', null) == tid;
+    }
+  }
+}

@@ -4,6 +4,9 @@
 <meta name="theme-color" content="#043F5C">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
 </head><body>
+<script src="vendor/firebase-app-compat.js"></script>
+<script src="vendor/firebase-auth-compat.js"></script>
+<script src="vendor/firebase-firestore-compat.js"></script>
 <title>Primal Strength</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -200,6 +203,8 @@ svg.chart .plan{stroke:var(--ink);stroke-width:2}
 
 <script>
 "use strict";
+const MARK_NAVY = "data:image/png;base64,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";
+const MARK_WHITE = "data:image/png;base64,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";
 /* ============ Program ============ */
 const SIDE_L = "Left hand", SIDE_R = "Right hand";
 function baseProgram(){
@@ -407,17 +412,23 @@ function libOptions(q, current, firstCat){
   return n ? html : `<option value="">No matches — add it as a custom exercise below</option>`;
 }
 /* ============ Block structure ============ */
+const DEFAULT_BLOCK = {weeks:12, deload:[6,12], extra:[7,8,9,10,11], builtin:true};
+const blk = () => (S.profile && prog().block) || DEFAULT_BLOCK;
 function phaseOf(w){
   if (w < 1) return {name:"Not started", short:"Pre-block"};
+  const b = blk();
+  if (!b.builtin){ if (w > b.weeks) return {name:"Block complete", short:"Done"}; return (b.deload||[]).includes(w) ? {name:"Deload", short:"Deload"} : {name:"Training", short:"Training"}; }
   if (w <= 5) return {name:"Build", short:"Build"};
   if (w === 6) return {name:"Deload", short:"Deload"};
   if (w <= 11) return {name:"Push", short:"Push"};
   if (w === 12) return {name:"Deload + retest", short:"Deload"};
   return {name:"Block complete", short:"Done"};
 }
-const isDeload = w => w === 6 || w === 12;
+const isDeload = w => (blk().deload || []).includes(w);
 function rirFor(ex, w){
   if (ex.type !== "load") return null;
+  if (ex.rir != null && ex.rir !== "") return isDeload(w) ? Math.min(5, +ex.rir + 2) : +ex.rir;
+  if (!blk().builtin) return isDeload(w) ? 4 : null;
   if (isDeload(w)) return 4;
   if (w <= 2) return 3;
   if (w <= 5) return 2;
@@ -433,7 +444,7 @@ function setLabels(ex, idx, w){
     }
     return out;
   }
-  let n = isDeload(w) ? Math.min(2, ex.sets) : (w >= 7 && w <= 11 && idx === 0 ? ex.sets + 1 : ex.sets);
+  let n = isDeload(w) ? Math.min(2, +ex.sets) : ((blk().extra || []).includes(w) && idx === 0 ? +ex.sets + 1 : +ex.sets);
   return Array.from({length:n}, (_,i) => String(i+1));
 }
 function targetText(ex, idx, w){
@@ -444,15 +455,23 @@ function targetText(ex, idx, w){
     const extra = !isDeload(w) && ex.side.extra ? ` (+1 ${ex.side.names[ex.side.extra].toLowerCase()})` : "";
     sets = `${n} sets each side${extra}`;
   } else sets = `${setLabels(ex, idx, w).length} sets`;
-  return `${sets} × ${ex.reps}${unit}${ex.each ? " each" : ""}`;
+  const kg = targetKg(ex, w);
+  return `${sets} × ${ex.reps}${unit}${ex.each ? " each" : ""}${kg != null ? ` @ ${fmt(kg)} kg` : ""}`;
+}
+function targetKg(ex, w){
+  if (ex.kg == null || ex.kg === "" || isNaN(+ex.kg)) return null;
+  let k = +ex.kg + (+ex.kgInc || 0) * Math.max(0, Math.min(w, blk().weeks || w) - 1);
+  if (isDeload(w)) k = Math.round(k * 0.85 / 2.5) * 2.5;
+  return Math.round(k * 4) / 4;
 }
 function cardioPlan(w, dow){
+  if (!blk().builtin) return [null, 0];
   const p = w <= 4 ? 0 : w <= 8 ? 1 : 2;
   const lift = [20,20,25][p];
   return ({1:["Zone 2 walk after Day A", lift], 2:["Zone 2 incline walk", [35,45,50][p]], 3:["Zone 2 walk after Day B", lift],
            4:["Zone 2 incline walk", [35,45,50][p]], 5:["Zone 2 walk after Day C", lift], 6:["Easy walk", [40,50,65][p]], 0:["Rest — walks after meals", 0]})[dow];
 }
-const weekCardioPlan = w => [0,1,2,3,4,5,6].reduce((s,d) => s + cardioPlan(Math.max(1,w), d)[1], 0);
+const weekCardioPlan = w => !blk().builtin ? (+prog().cardioWeekly || 0) : [0,1,2,3,4,5,6].reduce((s,d) => s + cardioPlan(Math.max(1,w), d)[1], 0);
 const COL = {load:["Reps","Kg"], carry:["Metres","Kg/hand"], time:["Sec","Kg"], bw:["Reps",""]};
 const fmtRest = s => s >= 60 ? (s % 60 ? `${Math.floor(s/60)}m ${s%60}s` : `${s/60}m`) : `${s}s`;
 
@@ -533,7 +552,8 @@ function defaultsFor(personal){
 }
 const prog = () => S.profile.program;
 const set_ = () => S.profile.settings;
-function weekOf(dateStr){ return Math.floor(daysBetween(set_().startDate, dateStr) / 7) + 1; }
+const startDate = () => prog().startDate || set_().startDate;
+function weekOf(dateStr){ return Math.floor(daysBetween(startDate(), dateStr) / 7) + 1; }
 function dayById(id){ return prog().days.find(d => d.id === id); }
 function estMinutes(day, w){
   let sec = 600;
@@ -574,7 +594,7 @@ function loadHint(ex, prev){
   return null;
 }
 function weekStats(w){
-  const start = addDays(set_().startDate, (w-1)*7), end = addDays(start, 6);
+  const start = addDays(startDate(), (w-1)*7), end = addDays(start, 6);
   const inWeek = r => r.date >= start && r.date <= end;
   const sess = S.data.sessions.filter(inWeek);
   const cardio = S.data.cardio.filter(inWeek).reduce((s,c) => s + (+c.minutes||0), 0);
@@ -679,10 +699,18 @@ let pendingRender = false;
 function render(){
   if (!S.ready){ app.innerHTML = `<main><div class="wrap"><p class="muted">Opening your log…</p></div></main>`; return; }
   const ae = document.activeElement;
+  if (!S.forceRender && (S.view === "log" || S.view === "builder")) return;
   if (S.view !== "log" && ae && ae.matches && ae.matches("main input, main textarea, main select") && !S.forceRender){ pendingRender = true; return; }
   S.forceRender = false; pendingRender = false;
   let html = "";
-  if (S.view === "log") html = viewLog();
+  if (isTrainer()){
+    if (S.view === "builder" && S.builder) html = viewBuilder();
+    else {
+      if (S.view === "client" && !S.cctx) S.view = "clients";
+      html = trainerHeader() + `<main><div class="wrap">${S.view === "alerts" ? viewAlerts() : S.view === "account" ? viewTrainerAccount() : S.view === "client" ? viewClient() : viewClients()}</div></main>` + trainerNav();
+    }
+  }
+  else if (S.view === "log") html = viewLog();
   else {
     html = header() + `<main><div class="wrap">${
       S.view === "today" ? viewToday() : S.view === "workouts" ? (S.sub ? viewOverview(S.sub) : viewWorkouts()) :
@@ -694,8 +722,8 @@ function render(){
 }
 function header(){
   const w = weekOf(today()), ph = phaseOf(w);
-  const wk = w < 1 ? `Starts ${shortDate(set_().startDate)}` : w > 12 ? "Block complete" : `Week ${w} of 12 · ${ph.name}`;
-  return `<header class="top"><div class="wrap"><img class="mark lt" src="data:image/png;base64,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" alt=""><img class="mark dk" src="data:image/png;base64,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" alt=""><div class="brand"><b>Primal Strength</b><span>${esc(wk)}</span></div>
+  const wk = w < 1 ? `Starts ${shortDate(startDate())}` : w > blk().weeks ? "Block complete" : `Week ${w} of ${blk().weeks} · ${ph.name}`;
+  return `<header class="top"><div class="wrap"><img class="mark lt" src="${MARK_NAVY}" alt=""><img class="mark dk" src="${MARK_WHITE}" alt=""><div class="brand"><b>Primal Strength</b><span>${esc(wk)}</span></div>
   ${S.draft && S.view !== "log" ? `<button class="btn blue" data-act="resume">Resume workout</button>` : ""}
   <button class="iconbtn" data-act="settings" aria-label="Settings">${I.gear}</button></div></header>`;
 }
@@ -723,13 +751,14 @@ function viewToday(){
   // hero
   const isLiftDay = prog().days.some(d => d.dow === dow);
   const nd = nw.next ? dayById(nw.next) : null;
-  out += `<section class="card"><span class="eyebrow">${w < 1 ? "Block starts " + shortDate(set_().startDate) : DOW[dow] + " · " + shortDate(t)}</span>`;
+  out += `<section class="card"><span class="eyebrow">${w < 1 ? "Block starts " + shortDate(startDate()) : DOW[dow] + " · " + shortDate(t)}</span>`;
   if (nd){
     out += `<div class="row" style="flex-wrap:nowrap"><div class="dayblock">${esc(nd.id)}</div><div style="min-width:0"><h2>${esc(nd.title)}</h2><span class="muted small">${isLiftDay ? "Next up" : "Next in rotation — today is a cardio day"} · est. ${estMinutes(nd, Math.max(1,w))} min · ${nd.ex.length} exercises</span></div></div>
     <button class="btn primary block" data-act="openday" data-d="${nd.id}">View workout</button>`;
   } else out += `<h2>All ${prog().days.length} workouts done this week</h2><p class="muted small">Walk today and rest up. The next block of lifts starts Monday.</p>`;
   const cp = cardioPlan(Math.max(1,w), dow);
-  out += `<div class="row between small"><span>${I.walk.replace("<svg", '<svg width="18" height="18" style="vertical-align:-4px"')} <b>Cardio today:</b> ${esc(cp[0])}${cp[1] ? ` · ${cp[1]} min` : ""}</span><button class="btn ghost" data-act="tab" data-v="cardio">Log</button></div></section>`;
+  const cardioLine = cp[0] ? `<b>Cardio today:</b> ${esc(cp[0])}${cp[1] ? ` · ${cp[1]} min` : ""}` : st.plan ? `<b>Cardio this week:</b> ${st.cardio} of ${st.plan} min` : `<b>Cardio:</b> log any walks or sessions`;
+  out += `<div class="row between small"><span>${I.walk.replace("<svg", '<svg width="18" height="18" style="vertical-align:-4px"')} ${cardioLine}</span><button class="btn ghost" data-act="tab" data-v="cardio">Log</button></div></section>`;
 
   // week strip
   const mon = mondayOf(t);
@@ -753,7 +782,7 @@ function viewToday(){
 /* ---- Workouts list + overview ---- */
 function viewWorkouts(){
   const w = Math.max(1, weekOf(today())); const nw = nextWorkout();
-  let out = `<div><span class="eyebrow">Week ${w} · ${phaseOf(w).name}</span><h1>Workouts</h1></div>`;
+  let out = `<div><span class="eyebrow">Week ${w} · ${phaseOf(w).name}</span><h1>Workouts</h1>${trainerManaged() ? `<span class="muted small">${esc(prog().name || "Program")} · set by ${esc(Cloud.me.trainerName || "your trainer")}</span>` : ""}</div>`;
   prog().days.forEach(d => {
     const done = nw.remaining.includes(d.id) ? "" : `<span class="pill good">Done this week</span>`;
     out += `<button class="wcard" data-act="openday" data-d="${d.id}"><div class="dayblock">${d.id}</div><div style="min-width:0;flex:1"><b style="font-size:18px;display:block">${esc(d.title)}</b><span class="muted small">${DOW[d.dow]} · est. ${estMinutes(d,w)} min · ${d.ex.length} exercises</span><div style="margin-top:6px">${nw.next===d.id ? `<span class="pill blue">Up next</span>` : done}</div></div></button>`;
@@ -768,13 +797,13 @@ function viewOverview(id){
   <h1>${esc(d.title)}</h1>
   <div class="metaline"><div>${I.sort}<span>${phaseOf(w).name}${isDeload(w) ? " — lighter week, 2 sets each" : ""}</span></div><div>${I.clock}<span>est. ${estMinutes(d,w)} minutes</span></div><div>${I.dumbbell}<span>${d.ex.length} exercises</span></div></div>
   <div><b>Equipment</b><div class="equip" style="margin-top:8px">${d.equip.map(e => `<span>${esc(e)}</span>`).join("")}</div></div>
-  <p class="small muted" style="margin:0">Tap ${I.swap.replace("<svg",'<svg width="14" height="14" style="vertical-align:-2px"')} to change an exercise in your program.</p><section class="card" style="padding-block:6px"><div class="exlist">`;
+  ${trainerManaged() ? `<p class="small muted" style="margin:0">Program set by ${esc(Cloud.me.trainerName || "your trainer")}. Swap exercises for a single workout from inside the workout.</p>` : ""}<p class="small muted" style="margin:0" ${trainerManaged() ? "hidden" : ""}>Tap ${I.swap.replace("<svg",'<svg width="14" height="14" style="vertical-align:-2px"')} to change an exercise in your program.</p><section class="card" style="padding-block:6px"><div class="exlist">`;
   let lastGroup = null;
   d.ex.forEach((e,i) => {
     if (e.group && e.group !== lastGroup) out += `<div class="group-head">${esc(e.group)}</div>`;
     lastGroup = e.group || null;
     const rir = rirFor(e,w);
-    out += `<div class="exitem"><div class="dayblock sm num">${i+1}</div><div style="min-width:0;flex:1"><b>${esc(e.n)}</b><span class="muted small">${esc(targetText(e,i,w))}${rir!=null?` · RIR ${rir}`:""}${e.rest ? `, ${fmtRest(e.rest)} rest` : ""}</span></div><button class="iconbtn" style="color:var(--accent);background:var(--accent-soft);border-color:transparent" data-act="swap-prog" data-d="${d.id}" data-k="${i}" aria-label="Change ${esc(e.n)}">${I.swap}</button></div>`;
+    out += `<div class="exitem"><div class="dayblock sm num">${i+1}</div><div style="min-width:0;flex:1"><b>${esc(e.n)}</b><span class="muted small">${esc(targetText(e,i,w))}${rir!=null?` · RIR ${rir}`:""}${e.rest ? `, ${fmtRest(e.rest)} rest` : ""}</span></div>${trainerManaged() ? "" : `<button class="iconbtn" style="color:var(--accent);background:var(--accent-soft);border-color:transparent" data-act="swap-prog" data-d="${d.id}" data-k="${i}" aria-label="Change ${esc(e.n)}">${I.swap}</button>`}</div>`;
   });
   out += `</div></section><div class="sticky-cta"><button class="btn primary" data-act="startday" data-d="${d.id}">Start now</button></div>`;
   return out;
@@ -784,7 +813,7 @@ function viewOverview(id){
 function newDraft(dayId){
   const d = dayById(dayId); const w = Math.max(1, weekOf(today()));
   return { id: uid("s"), day: d.id, title: d.title, date: today(), week: w, startedAt: Date.now(), backPain: null, notes: "", pre: null,
-    exercises: d.ex.map((e,i) => ({ key: i, base: e.n, performedAs: e.n, type: e.type, rest: e.rest, note: "",
+    exercises: d.ex.map((e,i) => ({ key: i, base: e.n, performedAs: e.n, type: e.type, rest: +e.rest || 0, note: "",
       sets: setLabels(e,i,w).map(l => ({label:l, reps:"", kg:"", done:false})) })) };
 }
 function exDef(dx){ const d = dayById(S.draft.day); return d.ex[dx.key] || {n:dx.base, reps:"", type:dx.type, sets:dx.sets.length}; }
@@ -827,7 +856,7 @@ function viewLog(){
       const lbl = e.side ? `${s.label[0]}${s.label.slice(1)}` : s.label;
       out += `<span class="lbl num" title="${e.side ? esc(e.side.names[s.label[0]]) : ""}">${esc(lbl)}</span><span class="prev num">${esc(pText)}</span>
       <input inputmode="numeric" data-in="reps" data-x="${xi}" data-s="${si}" value="${esc(s.reps)}" placeholder="${p ? esc(p.reps) : esc(String(repTop(e.reps) ?? ""))}" aria-label="${cols[0]} set ${esc(lbl)}" id="r-${xi}-${si}">
-      <input inputmode="decimal" data-in="kg" data-x="${xi}" data-s="${si}" value="${esc(s.kg)}" placeholder="${p && p.kg ? esc(p.kg) : ""}" ${x.type==="bw"?"disabled":""} aria-label="Kg set ${esc(lbl)}" id="k-${xi}-${si}">
+      <input inputmode="decimal" data-in="kg" data-x="${xi}" data-s="${si}" value="${esc(s.kg)}" placeholder="${p && p.kg ? esc(p.kg) : (targetKg(e, w) != null ? esc(targetKg(e, w)) : "")}" ${x.type==="bw"?"disabled":""} aria-label="Kg set ${esc(lbl)}" id="k-${xi}-${si}">
       <button class="tick ${s.done?"on":""}" data-act="tick" data-x="${xi}" data-s="${si}" aria-label="Mark set ${esc(lbl)} done" aria-pressed="${s.done}">${I.check}</button>`;
     });
     out += `</div>${e.side ? `<div class="cue">${e.side.order.map(k => `${k} = ${esc(e.side.names[k])}`).join(" · ")}</div>` : ""}
@@ -951,7 +980,7 @@ function viewProgress(){
   S.data.sessions.forEach(s => s.exercises.forEach(e => { const t = topSet(e); if (t && e.type === "load"){ const v = e1rm(+t.kg, +t.reps) || +t.kg; if (!prs[e.performedAs] || v > prs[e.performedAs].v) prs[e.performedAs] = {v, t, date:s.date}; } }));
   const pk = Object.keys(prs);
   if (pk.length) out += `<section class="card"><h3>Best sets</h3><div class="tbl"><table><tr><th>Exercise</th><th>Set</th><th>Est. 1RM</th><th>Date</th></tr>${pk.map(n => `<tr><td>${esc(n)}</td><td>${prs[n].t.kg} × ${prs[n].t.reps}</td><td>${fmt(prs[n].v)}</td><td>${shortDate(prs[n].date)}</td></tr>`).join("")}</table></div></section>`;
-  out += `<button class="btn blue block" data-act="export-json">Export for Claude review</button>`;
+  if (!isTrainer()) out += `<button class="btn blue block" data-act="export-json">Export for Claude review</button>`;
   return out;
 }
 function dedupe(pts){ const m = {}; pts.forEach(p => m[p.x] = p); return Object.values(m); }
@@ -991,7 +1020,16 @@ function updateTimer(){
 function sheetHTML(){
   if (!S.sheet) return "";
   const k = S.sheet.kind; let body = "";
-  if (k === "precheck"){
+  if (k === "auth"){ body = authSheet(); }
+  else if (k === "btpl"){
+    const others = (S.clients || []).filter(c => c.id !== S.cctx.uid && c.program && c.program.byTrainer);
+    body = `<h2>New program</h2><span class="muted small">Start from a template, then change anything.</span>
+    <button class="btn block" data-act="b-tpl" data-v="blank">Blank program</button>
+    <button class="btn block" data-act="b-tpl" data-v="standard">3-Day Strength Block (12 weeks)</button>
+    ${others.map(c => `<button class="btn block" data-act="b-tpl" data-v="copy:${c.id}">Copy ${esc(c.name || c.email)}'s program</button>`).join("")}
+    <button class="btn block" data-act="sheet-close">Cancel</button>`;
+  }
+  else if (k === "precheck"){
     const lw = latestBody("weight"), lwa = latestBody("waist");
     body = `<h2>Before you start</h2><span class="muted small">Weigh in the same way each time — before eating, after the bathroom.</span>
     <div class="grid2"><label class="f">Body weight kg<input id="p-weight" inputmode="decimal" placeholder="${lw ? fmt(lw.weight) : ""}"></label>
@@ -1010,7 +1048,7 @@ function sheetHTML(){
     ${sugg.length > 1 ? `<div><div class="small muted" style="font-weight:600;margin-bottom:6px">Suggested swaps</div><div class="chips" style="flex-wrap:wrap">${sugg.map(o => `<button class="chip ${o===current?"on":""}" data-act="swap-chip" data-v="${esc(o)}">${esc(o)}</button>`).join("")}</div></div>` : ""}
     <label class="f">Search the exercise library<input id="swap-q" placeholder="Try row, lunge, cable, core" autocomplete="off"></label>
     <label class="f">Exercise (${LIB.length} in the library)<select id="swap-sel">${libOptions("", current, S.sheet.cat)}</select></label>
-    ${inLog ? `<label class="row small" style="flex-wrap:nowrap"><input type="checkbox" id="swap-always" style="width:20px;height:20px"> Make this my regular exercise from now on</label>` : `<span class="small muted">This changes the exercise in your program from now on. Sets, reps and rest stay the same.</span>`}
+    ${inLog && !trainerManaged() ? `<label class="row small" style="flex-wrap:nowrap"><input type="checkbox" id="swap-always" style="width:20px;height:20px"> Make this my regular exercise from now on</label>` : inLog ? `<span class="small muted">Your trainer sets your program, so this swap is for today only.</span>` : `<span class="small muted">This changes the exercise in your program from now on. Sets, reps and rest stay the same.</span>`}
     <button class="btn primary block" data-act="swap-apply">Use this exercise</button>
     <details><summary class="small" style="cursor:pointer">Not in the list? Add a custom exercise</summary><div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
     <label class="f">Exercise name<input id="swap-custom"></label>
@@ -1027,11 +1065,11 @@ function sheetHTML(){
   } else if (k === "confirm"){
     body = `<h2>${esc(S.sheet.title)}</h2><p style="margin:0">${esc(S.sheet.text)}</p><button class="btn block ${S.sheet.danger?"danger":"primary"}" data-act="confirm-yes">${esc(S.sheet.yes)}</button><button class="btn block" data-act="sheet-close">Cancel</button>`;
   } else if (k === "session"){
-    const s = S.data.sessions.find(x => x.id === S.sheet.id); if (!s) return "";
+    const s = (S.cctx ? S.cctx.data : S.data).sessions.find(x => x.id === S.sheet.id); if (!s) return "";
     body = `<h2>${esc(s.title)}</h2><span class="muted small">${shortDate(s.date)} · week ${s.week} · ${s.durationMin||"–"} min${s.backPain!=null?` · back ${s.backPain}/10`:""}</span>
     ${s.exercises.map(e => `<div><b>${esc(e.performedAs)}</b><div class="muted small num">${e.sets.filter(t=>t.done).map(t => `${esc(t.label)}: ${t.reps||"–"}${t.kg?` × ${t.kg} kg`:""}`).join(" · ") || "Not done"}</div>${e.note?`<div class="small">${esc(e.note)}</div>`:""}</div>`).join("")}
     ${s.notes ? `<p class="small" style="margin:0">${esc(s.notes)}</p>` : ""}
-    <button class="btn danger block" data-act="ask-del-session" data-id="${s.id}">Delete workout</button><button class="btn block" data-act="sheet-close">Close</button>`;
+    ${isTrainer() ? "" : `<button class="btn danger block" data-act="ask-del-session" data-id="${s.id}">Delete workout</button>`}<button class="btn block" data-act="sheet-close">Close</button>`;
   } else if (k === "dexa"){
     const d = S.sheet.id ? S.data.dexa.find(x => x.id === S.sheet.id) || {} : {};
     body = `<h2>${S.sheet.id ? "Edit scan" : "Add a DEXA scan"}</h2><span class="muted small">Copy the numbers from your report. Leave blanks for anything it doesn't show.</span>
@@ -1048,17 +1086,20 @@ function sheetHTML(){
   } else if (k === "settings"){
     const s = set_();
     body = `<h2>Settings</h2>
-    <label class="f">Block start (week 1 Monday)<input type="date" id="s-start" value="${esc(s.startDate)}"></label>
+    <h3>Account</h3>${accountSection()}
+    <hr style="border:0;border-top:1px solid var(--line);width:100%">
+    ${trainerManaged() ? `<span class="small muted">Your block starts ${shortDate(startDate())} — set by your trainer.</span>` : `<label class="f">Block start (week 1 Monday)<input type="date" id="s-start" value="${esc(s.startDate)}"></label>`}
     <div class="grid2"><label class="f">Zone 2 low bpm<input id="s-zl" inputmode="numeric" value="${s.zoneLow ?? ""}"></label><label class="f">Zone 2 high bpm<input id="s-zh" inputmode="numeric" value="${s.zoneHigh ?? ""}"></label>
     <label class="f">DEXA every (weeks)<input id="s-dexa" inputmode="numeric" value="${s.dexaWeeks}"></label>
     <label class="f">Normal back pain 0–10<input id="s-bn" inputmode="numeric" value="${s.backNormal ?? ""}" placeholder="Leave blank if none"></label></div>
     <div class="row between"><span>Track back pain</span><button class="toggle ${s.trackBack?"on":""}" data-act="s-back" aria-pressed="${s.trackBack}" aria-label="Track back pain"></button></div>
     <button class="btn primary block" data-act="settings-save">Save settings</button>
     <hr style="border:0;border-top:1px solid var(--line);width:100%">
-    <h3>Program</h3><span class="muted small">Current: ${prog().kind === "personal" ? "back-friendly with extra right-side core sets" : "standard 3-day block"}. Switching keeps your logged workouts.</span>
+    ${trainerManaged() ? `<h3>Program</h3><span class="muted small">${esc(prog().name || "Your program")} is set by ${esc(Cloud.me.trainerName || "your trainer")}. You can still swap an exercise for a single workout.</span><hr style="border:0;border-top:1px solid var(--line);width:100%">` : `    <h3>Program</h3><span class="muted small">Current: \${prog().kind === "personal" ? "back-friendly with extra right-side core sets" : "standard 3-day block"}. Switching keeps your logged workouts.</span>
     <div class="grid2"><button class="btn" data-act="ask-prog" data-v="standard">Standard</button><button class="btn" data-act="ask-prog" data-v="personal">Back-friendly + right side</button></div>
     <hr style="border:0;border-top:1px solid var(--line);width:100%">
-    <h3>Your data</h3><span class="muted small">Everything is saved on this device only${Store.mode === "idb" ? "" : Store.mode === "local" ? " (basic storage — report uploads are off)" : " — and this browser is blocking storage, so it will be lost when you close the app. Save a backup."}. Back up weekly; a backup also lets you move to a new phone.</span>
+`}
+    <h3>Your data</h3><span class="muted small">${isCloudClient() ? "Your log is saved to your account and on this phone, so it keeps working without signal" : "Everything is saved on this device only"}${isCloudClient() ? "" : Store.mode === "idb" ? "" : Store.mode === "local" ? " (basic storage — report uploads are off)" : " — and this browser is blocking storage, so it will be lost when you close the app. Save a backup."}. Back up weekly; a backup also lets you move to a new phone.</span>
     <button class="btn blue block" data-act="export-json">Export for Claude review (.json)</button>
     <button class="btn block" data-act="export-csv">Export sets as spreadsheet (.csv)</button>
     <button class="btn block" data-act="backup">Save full backup</button>
@@ -1079,11 +1120,13 @@ const numOrNull = v => v === "" || v == null || isNaN(+v) ? null : +v;
 async function saveRec(col, rec){
   const arr = S.data[col]; const i = arr.findIndex(r => r.id === rec.id);
   if (i >= 0) arr[i] = rec; else arr.push(rec);
+  if (isCloudClient()) return cloudSaveRec(col, rec);
   try { await Store.put({...rec, col}); } catch(e){ toast("Couldn't save on this device."); throw e; }
 }
 async function delRec(col, id){
   const rec = S.data[col].find(r => r.id === id);
   S.data[col] = S.data[col].filter(r => r.id !== id);
+  if (isCloudClient()){ cloudDelRec(col, id); if (rec && rec.fileId) Store.delFile(rec.fileId).catch(()=>{}); return; }
   try { await Store.del(id); if (rec && rec.fileId) await Store.delFile(rec.fileId); } catch(e){ toast("Couldn't delete on this device."); }
 }
 let wakeLock = null;
@@ -1101,6 +1144,7 @@ async function finishWorkout(){
     exercises: D.exercises.map(x => ({ base:x.base, performedAs:x.performedAs, type:x.type, note:x.note,
       sets: x.sets.map(s => ({label:s.label, reps:s.reps, kg:s.kg, done: s.done || (s.reps !== "")})) })) };
   try { await saveRec("sessions", session); } catch(e){ return; }
+  sendWorkoutAlert(session);
   clearDraft(); S.timer = null; keepAwake(false);
   const sets = session.exercises.reduce((a,e)=>a + e.sets.filter(s=>s.done).length, 0);
   S.view = "workouts"; S.sub = null; S.forceRender = true; render(); window.scrollTo(0,0);
@@ -1113,7 +1157,7 @@ async function exportJSON(kind){
   const text = JSON.stringify(payload, null, 1);
   const name = kind === "backup" ? `primal-strength-backup-${today()}.json` : `primal-strength-export-${today()}.json`;
   const ok = await saveFile(name, text, kind === "backup" ? "Backup" : "Export for Claude");
-  if (ok){ S.profile.settings.lastBackup = today(); await Store.saveProfile(S.profile); S.forceRender = true; render(); }
+  if (ok){ S.profile.settings.lastBackup = today(); await persistProfile(); S.forceRender = true; render(); }
 }
 function exportCSV(){
   const rows = [["date","week","day","workout","exercise","performed_as","set","reps_or_metres_or_sec","kg","done","back_pain","session_notes"]];
@@ -1156,6 +1200,12 @@ async function restore(file){
     const j = JSON.parse(await file.text());
     if (!j || !Array.isArray(j.sessions)) throw new Error("bad");
     S.sheet = {kind:"confirm", title:"Restore this backup?", text:`It holds ${j.sessions.length} workouts, ${ (j.cardio||[]).length } cardio sessions and ${(j.body||[]).length} check-ins from ${j.exportedAt ? j.exportedAt.slice(0,10) : "an earlier date"}. It replaces what's on this device now. Report files aren't included in backups.`, yes:"Replace and restore", danger:true, run: async () => {
+      if (isCloudClient()){
+        for (const c of COLS) for (const r of (j[c] || [])) await saveRec(c, {...r, fileId: c === "dexa" ? null : r.fileId});
+        if (j.settings) S.profile.settings = {...S.profile.settings, ...j.settings};
+        if (j.program && !trainerManaged()) S.profile.program = j.program;
+        await persistProfile(); toast("Backup restored to your account"); return;
+      }
       await Store.clearRecords();
       for (const c of COLS){ S.data[c] = (j[c] || []).map(r => ({...r, fileId: c === "dexa" ? null : r.fileId})); for (const r of S.data[c]) await Store.put({...r, col:c}); }
       if (Store.mode === "local") Store._local();
@@ -1170,6 +1220,42 @@ app.addEventListener("click", async ev => {
   const t = ev.target.closest("[data-act]"); if (!t) return;
   const a = t.dataset.act;
   if (a === "scrim"){ if (ev.target === t) closeSheet(); return; }
+  if (a === "ttab"){ closeClient(); S.view = t.dataset.v; S.builder = null; S.forceRender = true; render(); window.scrollTo(0,0); return; }
+  if (a === "open-client"){ S.ctab = "overview"; return openClient(t.dataset.id); }
+  if (a === "ctab"){ S.ctab = t.dataset.v; S.forceRender = true; return render(); }
+  if (a === "open-alert"){
+    const al = (S.alerts || []).find(x => x.id === t.dataset.id); if (!al) return;
+    if (!al.read) Cloud.db.collection("trainers").doc(Cloud.user.uid).collection("alerts").doc(al.id).update({read:true}).catch(()=>{});
+    if (!clientDoc(al.clientId)) return toast("That client is no longer connected to you.");
+    S.ctab = "history"; openClient(al.clientId); setTimeout(() => openSheet({kind:"session", id: al.sessionId}), 900); return;
+  }
+  if (a === "alerts-read"){ const b = Cloud.db.batch(); (S.alerts || []).filter(x => !x.read).forEach(x => b.update(Cloud.db.collection("trainers").doc(Cloud.user.uid).collection("alerts").doc(x.id), {read:true})); b.commit().catch(()=>{}); return; }
+  if (a === "copy-code"){ try { await navigator.clipboard.writeText(t.dataset.v); toast("Code copied"); } catch(e){ toast("Code: " + t.dataset.v); } return; }
+  if (a === "new-code"){ await makeInviteCode(Cloud.me.name); return; }
+  if (a === "b-edit") return withCtx(() => startBuilder(prog()));
+  if (a === "b-new") return openSheet({kind:"btpl"});
+  if (a === "b-tpl"){
+    const v = t.dataset.v; S.sheet = null;
+    let p = v === "blank" ? blankProgram() : v === "standard" ? standardProgram() : clientDoc(v.slice(5)).program;
+    p = clean(p); if (v === "standard"){ p.name = "3-Day Strength Block"; p.startDate = mondayOf(addDays(today(), 7)); }
+    if (v.startsWith("copy:")) p.startDate = mondayOf(addDays(today(), 7));
+    return startBuilder(p);
+  }
+  if (a === "b-cancel"){ S.sheet = {kind:"confirm", title:"Leave without saving?", text:"Changes to this program will be lost.", yes:"Leave", danger:true, run: () => { S.builder = null; S.view = "client"; }}; S.forceRender = true; return render(); }
+  if (a === "b-save") return saveBuilder();
+  if (a === "b-addday"){ S.builder.p.days.push({id:"", title:`Day ${String.fromCharCode(65 + S.builder.p.days.length)}`, dow:[1,3,5,2,4,6,0][S.builder.p.days.length % 7], equip:[], ex:[newBEx()]}); return rerenderLogKeepScroll(); }
+  if (a === "b-rmday"){ S.builder.p.days.splice(+t.dataset.d, 1); return rerenderLogKeepScroll(); }
+  if (a === "b-addex"){ S.builder.p.days[+t.dataset.d].ex.push(newBEx()); return rerenderLogKeepScroll(); }
+  if (a === "b-rmex"){ S.builder.p.days[+t.dataset.d].ex.splice(+t.dataset.e, 1); return rerenderLogKeepScroll(); }
+  if (a === "b-up" || a === "b-down"){ const ex = S.builder.p.days[+t.dataset.d].ex, i = +t.dataset.e, j = a === "b-up" ? i-1 : i+1; if (j < 0 || j >= ex.length) return; [ex[i], ex[j]] = [ex[j], ex[i]]; return rerenderLogKeepScroll(); }
+  if (a === "auth") return openSheet({kind:"auth", mode:t.dataset.v, role:"client"});
+  if (a === "auth-mode"){ S.sheet.mode = t.dataset.v; S.forceRender = true; return render(); }
+  if (a === "auth-role"){ S.sheet.role = t.dataset.v; const keep = {n:val("a-name"), e:val("a-email")}; S.forceRender = true; render(); const n = document.getElementById("a-name"), e = document.getElementById("a-email"); if (n) n.value = keep.n; if (e) e.value = keep.e; return; }
+  if (a === "auth-go") return authGo();
+  if (a === "auth-reset"){ const e = val("a-email"); if (!e) return toast("Enter your email first."); try { await firebase.auth().sendPasswordResetEmail(e); toast("Password reset email sent"); } catch(err){ toast("Couldn't send the reset email."); } return; }
+  if (a === "signout"){ S.sheet = null; await firebase.auth().signOut(); return; }
+  if (a === "connect-trainer") return connectTrainer(val("t-code"));
+  if (a === "ask-disconnect"){ S.sheet = {kind:"confirm", title:"Disconnect from your trainer?", text:"They'll stop seeing your workouts. You keep your log and your current program.", yes:"Disconnect", danger:true, run: () => disconnectTrainer()}; S.forceRender = true; return render(); }
   if (a === "tab"){ S.view = t.dataset.v; S.sub = null; S.forceRender = true; render(); window.scrollTo(0,0); return; }
   if (a === "settings") return openSheet({kind:"settings", back: set_().trackBack});
   if (a === "resume") return goLog();
@@ -1257,9 +1343,9 @@ app.addEventListener("click", async ev => {
     const s = S.profile.settings; const sd = val("s-start");
     if (sd) s.startDate = mondayOf(sd);
     s.zoneLow = numOrNull(val("s-zl")); s.zoneHigh = numOrNull(val("s-zh")); s.dexaWeeks = numOrNull(val("s-dexa")) || 12; s.backNormal = numOrNull(val("s-bn")); s.trackBack = !!S.sheet.back;
-    await Store.saveProfile(S.profile); S.sheet = null; S.forceRender = true; render(); return toast(sd && sd !== s.startDate ? `Saved — block starts Monday ${shortDate(s.startDate)}` : "Settings saved");
+    await persistProfile(); S.sheet = null; S.forceRender = true; render(); return toast(sd && sd !== s.startDate ? `Saved — block starts Monday ${shortDate(s.startDate)}` : "Settings saved");
   }
-  if (a === "ask-prog"){ const v = t.dataset.v; S.sheet = {kind:"confirm", title: v === "personal" ? "Switch to back-friendly + right side?" : "Switch to the standard program?", text: v === "personal" ? "Adds an extra set on the weaker side for carries, side planks and Pallof presses, plus back-pain tracking and back rules." : "Equal sets on both sides and general coaching notes. Your logged workouts stay.", yes:"Switch program", run: async () => { S.profile.program = v === "personal" ? personalProgram() : standardProgram(); if (v === "personal") S.profile.settings.trackBack = true; await Store.saveProfile(S.profile); toast("Program updated"); }}; S.forceRender = true; return render(); }
+  if (a === "ask-prog"){ const v = t.dataset.v; S.sheet = {kind:"confirm", title: v === "personal" ? "Switch to back-friendly + right side?" : "Switch to the standard program?", text: v === "personal" ? "Adds an extra set on the weaker side for carries, side planks and Pallof presses, plus back-pain tracking and back rules." : "Equal sets on both sides and general coaching notes. Your logged workouts stay.", yes:"Switch program", run: async () => { S.profile.program = v === "personal" ? personalProgram() : standardProgram(); if (v === "personal") S.profile.settings.trackBack = true; await persistProfile(); toast("Program updated"); }}; S.forceRender = true; return render(); }
   if (a === "export-json") return exportJSON("export");
   if (a === "export-csv") return exportCSV();
   if (a === "backup") return exportJSON("backup");
@@ -1273,7 +1359,7 @@ async function applySwap(v, type, always){
     if (always){ updateProgramEx(S.draft.day, x.key, v, type); x.base = v; }
     if (S.ui.autofill) applyAutofill(); saveDraft(); S.sheet = null; rerenderLogKeepScroll();
   } else { updateProgramEx(sh.day, sh.key, v, type); S.sheet = null; S.forceRender = true; render(); }
-  if (always || sh.x == null){ try { await Store.saveProfile(S.profile); } catch(e){} toast(`${v} is now in your program`); }
+  if (always || sh.x == null){ try { await persistProfile(); } catch(e){} toast(`${v} is now in your program`); }
   else toast(`Swapped to ${v} for this workout`);
 }
 function updateProgramEx(dayId, key, v, type){
@@ -1288,6 +1374,15 @@ function applyAutofill(){
 }
 app.addEventListener("input", ev => {
   const el = ev.target;
+  if (el.dataset && el.dataset.bp && S.builder){
+    let v = el.value; const path = el.dataset.bp;
+    if (path === "block.deloadText"){ S.builder.p.block.deloadText = v; return; }
+    if (path === "notesText"){ S.builder.p.notesText = v; return; }
+    setPath(S.builder.p, path, v);
+    if (el.dataset.exsel){ const parts = path.split("."); const ex = S.builder.p.days[+parts[1]].ex[+parts[3]]; ex.type = LIBMAP[v] ? LIBMAP[v].type : ex.type; delete ex.side; delete ex.main; ex.alts = []; rerenderLogKeepScroll(); }
+    if (path === "name"){ const tb = document.querySelector(".logbar .title b"); if (tb) tb.textContent = v; }
+    return;
+  }
   if (el.id === "swap-q" && S.sheet){ const sel = document.getElementById("swap-sel"); if (sel) sel.innerHTML = libOptions(el.value, S.sheet.current, S.sheet.cat); return; }
   const f = el.dataset && el.dataset.in; if (!f || !S.draft) return;
   if (f === "notes"){ S.draft.notes = el.value; } else { const s = S.draft.exercises[+el.dataset.x].sets[+el.dataset.s]; s[f] = el.value.replace(",", "."); }
@@ -1337,6 +1432,354 @@ function nativeSetup(){
     App.exitApp();
   });
 }
+/* ============ Accounts + sync (Firebase) ============ */
+const FB_CONFIG = {
+  apiKey: "AIzaSyAacLMw_ybmm8RqBiC478e13uCiz8BZmqU",
+  authDomain: "primal-strength-a9ddf.firebaseapp.com",
+  projectId: "primal-strength-a9ddf",
+  storageBucket: "primal-strength-a9ddf.firebasestorage.app",
+  messagingSenderId: "546060061659",
+  appId: "1:546060061659:web:a5fd330b697bbb45a835fe"
+};
+const Cloud = { user:null, db:null, me:null, unsub:[], attached:null, pending:null };
+const cloudOK = () => !!(window.firebase && Cloud.db);
+const isCloudClient = () => !!(Cloud.user && Cloud.me && Cloud.me.role === "client");
+const isTrainer = () => !!(Cloud.user && Cloud.me && Cloud.me.role === "trainer");
+const trainerManaged = () => !!(isCloudClient() && Cloud.me.trainerId && S.profile && prog().byTrainer);
+const clean = o => JSON.parse(JSON.stringify(o, (k, v) => v === undefined ? null : v));
+const uref = uid => Cloud.db.collection("users").doc(uid || Cloud.user.uid);
+const ts = () => firebase.firestore.FieldValue.serverTimestamp();
+const tsDate = t => t && t.toDate ? ymd(t.toDate()) : (typeof t === "string" ? t.slice(0,10) : null);
+
+async function cloudInit(){
+  if (!window.firebase) return;
+  try {
+    firebase.initializeApp(FB_CONFIG);
+    Cloud.db = firebase.firestore();
+    try { await Cloud.db.enablePersistence({synchronizeTabs:true}); } catch(e){}
+    firebase.auth().onAuthStateChanged(u => { onAuth(u).catch(err => { console.error(err); toast("Couldn't load your account — check your connection."); }); });
+  } catch(e){ console.error(e); Cloud.db = null; }
+}
+function stopListeners(){ Cloud.unsub.forEach(f => { try { f(); } catch(e){} }); Cloud.unsub = []; Cloud.attached = null; closeClient(); }
+function softRender(){ render(); }
+async function onAuth(u){
+  const had = !!Cloud.user;
+  stopListeners(); Cloud.user = u; Cloud.me = null;
+  if (!u){
+    if (!had) return;
+    const {data, profile} = await Store.loadAll(); S.data = data; if (profile) S.profile = profile;
+    S.view = "today"; S.sub = null; S.forceRender = true; render(); return;
+  }
+  let snap = null; try { snap = await uref().get(); } catch(e){}
+  if (!snap || !snap.exists){
+    const p = Cloud.pending || {role:"client", name:(u.email||"").split("@")[0]};
+    await createUserDoc(u, p.role, p.name);
+  }
+  Cloud.pending = null;
+  Cloud.unsub.push(uref().onSnapshot(sn => {
+    const d = sn.data(); if (!d) return;
+    Cloud.me = {id: sn.id, ...d};
+    if (d.role === "trainer"){
+      if (Cloud.attached !== "trainer"){ Cloud.attached = "trainer"; attachTrainer(); S.view = "clients"; }
+    } else {
+      S.profile = {program: d.program || standardProgram(), settings: {...defaultsFor(false).settings, ...(d.settings || {})}, created: ""};
+      if (Cloud.attached !== "client"){ Cloud.attached = "client"; attachClient(); if (!["today","workouts","cardio","body","progress","log"].includes(S.view)) S.view = "today"; }
+    }
+    S.forceRender = S.view !== "log"; render();
+  }, () => toast("Lost connection to your account.")));
+}
+async function createUserDoc(u, role, name){
+  const doc = {role, name: name || "", email: u.email || "", trainerId: null, createdAt: ts()};
+  if (role === "client"){ doc.settings = clean(S.profile.settings); doc.program = clean(S.profile.program); }
+  await uref().set(doc);
+  if (role === "trainer") await makeInviteCode(name);
+  if (role === "client"){
+    const local = COLS.reduce((n, c) => n + S.data[c].length, 0);
+    if (local) await uploadLocal();
+  }
+}
+async function uploadLocal(){
+  let batch = Cloud.db.batch(), n = 0, total = 0;
+  for (const c of COLS) for (const r of S.data[c]){
+    const rec = {...r}; delete rec.col;
+    batch.set(uref().collection(c).doc(rec.id), clean(rec)); n++; total++;
+    if (n >= 400){ await batch.commit(); batch = Cloud.db.batch(); n = 0; }
+  }
+  if (n) await batch.commit();
+  if (total) toast(`Moved ${total} entries from this phone to your account`);
+}
+async function makeInviteCode(name){
+  const A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  for (let i = 0; i < 6; i++){
+    const code = Array.from({length:6}, () => A[Math.floor(Math.random()*A.length)]).join("");
+    try { await Cloud.db.collection("codes").doc(code).set({trainerId: Cloud.user.uid, name: name || ""}); await uref().update({inviteCode: code}); return code; } catch(e){}
+  }
+  toast("Couldn't create an invite code. Try again from Account.");
+}
+function attachClient(){
+  S.data = {sessions:[], cardio:[], body:[], dexa:[]};
+  COLS.forEach(c => Cloud.unsub.push(uref().collection(c).onSnapshot(q => { S.data[c] = q.docs.map(d => d.data()); render(); }, () => {})));
+}
+function attachTrainer(){
+  S.clients = []; S.alerts = [];
+  Cloud.unsub.push(Cloud.db.collection("users").where("trainerId", "==", Cloud.user.uid).onSnapshot(q => {
+    S.clients = q.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b) => (a.name||"").localeCompare(b.name||""));
+    render();
+  }, e => toast("Couldn't load your clients.")));
+  Cloud.unsub.push(Cloud.db.collection("trainers").doc(Cloud.user.uid).collection("alerts").orderBy("ts", "desc").limit(80).onSnapshot(q => {
+    S.alerts = q.docs.map(d => ({id: d.id, ...d.data()})); render();
+  }, () => {}));
+}
+async function cloudSaveRec(col, rec){
+  const r = {...rec}; delete r.col;
+  uref().collection(col).doc(r.id).set(clean(r)).catch(e => toast("Couldn't sync that entry: " + (e.code || "error")));
+}
+async function cloudDelRec(col, id){ uref().collection(col).doc(id).delete().catch(() => toast("Couldn't delete online.")); }
+async function persistProfile(){
+  if (isCloudClient()){
+    const upd = {settings: clean(S.profile.settings)};
+    if (!trainerManaged()) upd.program = clean(S.profile.program);
+    uref().update(upd).catch(() => toast("Couldn't sync settings."));
+    return;
+  }
+  return Store.saveProfile(S.profile);
+}
+function sendWorkoutAlert(session){
+  if (!isCloudClient() || !Cloud.me.trainerId) return;
+  const sets = session.exercises.reduce((a, e) => a + e.sets.filter(s => s.done).length, 0);
+  Cloud.db.collection("trainers").doc(Cloud.me.trainerId).collection("alerts").add({...clean({
+    clientId: Cloud.user.uid, clientName: Cloud.me.name || Cloud.me.email, sessionId: session.id, title: session.title, day: session.day,
+    date: session.date, week: session.week, sets, durationMin: session.durationMin, backPain: session.backPain,
+    weight: session.pre ? session.pre.weight : null, notes: session.notes || "", read: false
+  }), ...{ts: ts()}}).catch(() => {});
+}
+async function connectTrainer(code){
+  code = (code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (code.length !== 6) return toast("Invite codes are 6 letters and numbers.");
+  try {
+    const d = await Cloud.db.collection("codes").doc(code).get();
+    if (!d.exists) return toast("No trainer has that code. Check it and try again.");
+    const t = d.data();
+    await uref().update({trainerId: t.trainerId, trainerCode: code, trainerName: t.name || "your trainer"});
+    toast(`Connected to ${t.name || "your trainer"}`); S.sheet = null; S.forceRender = true; render();
+  } catch(e){ toast("Couldn't connect: " + (e.code || "error")); }
+}
+async function disconnectTrainer(){
+  const p = clean(S.profile.program); p.byTrainer = false;
+  await uref().update({trainerId: null, trainerCode: null, trainerName: null, program: p}).catch(() => toast("Couldn't disconnect."));
+  toast("Disconnected from your trainer");
+}
+
+/* ---- Trainer: client context ---- */
+function clientDoc(id){ return (S.clients || []).find(c => c.id === id); }
+function clientProfile(c){ return {program: (c && c.program) || standardProgram(), settings: {...defaultsFor(false).settings, ...((c && c.settings) || {})}}; }
+function openClient(id){
+  closeClient();
+  S.cctx = {uid: id, data: {sessions:[], cardio:[], body:[], dexa:[]}, unsub: []};
+  COLS.forEach(c => S.cctx.unsub.push(uref(id).collection(c).onSnapshot(q => { if (S.cctx && S.cctx.uid === id){ S.cctx.data[c] = q.docs.map(d => d.data()); render(); } }, () => {})));
+  S.view = "client"; S.ctab = S.ctab || "overview"; S.forceRender = true; render(); window.scrollTo(0,0);
+}
+function closeClient(){ if (S.cctx){ S.cctx.unsub.forEach(f => { try { f(); } catch(e){} }); S.cctx = null; } }
+function withCtx(fn){
+  if (!S.cctx) return fn();
+  const d = S.data, p = S.profile; S.data = S.cctx.data; S.profile = clientProfile(clientDoc(S.cctx.uid));
+  try { return fn(); } finally { S.data = d; S.profile = p; }
+}
+const initials = n => (n || "?").split(/\s+/).map(x => x[0]).join("").slice(0,2).toUpperCase();
+
+/* ---- Trainer views ---- */
+function trainerHeader(){
+  const unread = (S.alerts || []).filter(a => !a.read).length;
+  return `<header class="top"><div class="wrap"><img class="mark lt" src="${MARK_NAVY}" alt=""><img class="mark dk" src="${MARK_WHITE}" alt=""><div class="brand"><b>Primal Strength</b><span>Coach · ${(S.clients||[]).length} client${(S.clients||[]).length===1?"":"s"}${unread ? ` · ${unread} new` : ""}</span></div></div></header>`;
+}
+function trainerNav(){
+  const unread = (S.alerts || []).filter(a => !a.read).length;
+  const t = [["clients","Clients",I.body],["alerts","Alerts" + (unread ? ` (${unread})` : ""),I.note],["account","Account",I.gear]];
+  const cur = S.view === "client" || S.view === "builder" ? "clients" : S.view;
+  return `<nav class="tabs" aria-label="Sections"><div class="wrap" style="grid-template-columns:repeat(3,1fr)">${t.map(([k,l,ic]) => `<button data-act="ttab" data-v="${k}" class="${cur===k?"on":""}">${ic}${l}</button>`).join("")}</div></nav>`;
+}
+function lastAlertFor(id){ return (S.alerts || []).find(a => a.clientId === id); }
+function viewClients(){
+  const code = Cloud.me.inviteCode;
+  let out = `<div><span class="eyebrow">Coach</span><h1>Clients</h1></div>
+  <section class="card"><div class="row between"><div><span class="eyebrow">Your invite code</span><div style="font-family:var(--f-display);font-size:32px;letter-spacing:.12em" class="num">${esc(code || "······")}</div></div>${code ? `<button class="btn" data-act="copy-code" data-v="${esc(code)}">Copy</button>` : `<button class="btn" data-act="new-code">Create code</button>`}</div>
+  <span class="small muted">Clients install Primal Strength, create an account, then enter this code under Settings → Trainer.</span></section>`;
+  const cl = S.clients || [];
+  if (!cl.length) return out + `<div class="empty">No clients yet. Share your invite code to connect your first client.</div>`;
+  out += cl.map(c => {
+    const la = lastAlertFor(c.id); const unread = (S.alerts || []).filter(a => a.clientId === c.id && !a.read).length;
+    const prog = c.program && c.program.byTrainer ? esc(c.program.name || "Program") : "No program from you yet";
+    return `<button class="wcard" data-act="open-client" data-id="${c.id}"><div class="dayblock" style="font-size:22px">${esc(initials(c.name))}</div><div style="min-width:0;flex:1"><b style="font-size:18px;display:block">${esc(c.name || c.email)}</b><span class="muted small">${prog} · ${la ? `last workout ${shortDate(la.date)}` : "no workouts logged yet"}</span>${unread ? `<div style="margin-top:6px"><span class="pill blue">${unread} new</span></div>` : ""}</div></button>`;
+  }).join("");
+  return out;
+}
+function viewAlerts(){
+  const al = S.alerts || [];
+  let out = `<div class="row between"><div><span class="eyebrow">Completed workouts</span><h1>Alerts</h1></div>${al.some(a => !a.read) ? `<button class="btn" data-act="alerts-read">Mark all read</button>` : ""}</div>`;
+  if (!al.length) return out + `<div class="empty">When a client saves a workout, it appears here.</div>`;
+  return out + al.map(a => `<button class="wcard" data-act="open-alert" data-id="${a.id}" style="${a.read ? "" : "border-color:var(--accent)"}"><div class="dayblock sm">${esc(a.day || "·")}</div><div style="min-width:0;flex:1"><b style="display:block">${esc(a.clientName)} finished ${esc(a.title)}</b><span class="muted small">${a.date ? shortDate(a.date) : ""} · week ${a.week || "–"} · ${a.sets || 0} sets · ${a.durationMin || "–"} min${a.backPain != null ? ` · back ${a.backPain}/10` : ""}${a.weight ? ` · ${fmt(a.weight)} kg` : ""}</span>${a.notes ? `<div class="small">“${esc(a.notes)}”</div>` : ""}</div>${a.read ? "" : `<span class="pill blue">New</span>`}</button>`).join("");
+}
+function viewTrainerAccount(){
+  return `<div><span class="eyebrow">Account</span><h1>${esc(Cloud.me.name || "Coach")}</h1></div>
+  <section class="card"><span class="muted small">Signed in as ${esc(Cloud.user.email)} · Trainer account</span>
+  <div class="row"><span>Invite code</span><b class="num" style="font-size:20px;letter-spacing:.1em">${esc(Cloud.me.inviteCode || "–")}</b>${Cloud.me.inviteCode ? `<button class="btn" data-act="copy-code" data-v="${esc(Cloud.me.inviteCode)}">Copy</button>` : `<button class="btn" data-act="new-code">Create code</button>`}</div>
+  <button class="btn block" data-act="signout">Sign out</button></section>`;
+}
+function viewClient(){
+  const c = clientDoc(S.cctx.uid); if (!c) return `<div class="empty">This client is no longer connected to you.</div><button class="btn" data-act="ttab" data-v="clients">Back to clients</button>`;
+  const tabs = [["overview","Overview"],["program","Program"],["progress","Progress"],["history","History"]];
+  let out = `<div class="row" style="flex-wrap:nowrap"><button class="iconbtn" data-act="ttab" data-v="clients" aria-label="Back">${I.back}</button><div style="min-width:0"><span class="eyebrow">Client</span><h1 style="font-size:26px">${esc(c.name || c.email)}</h1></div></div>
+  <div class="chips">${tabs.map(([k,l]) => `<button class="chip ${S.ctab===k?"on":""}" data-act="ctab" data-v="${k}">${l}</button>`).join("")}</div>`;
+  if (S.ctab === "program") return out + withCtx(clientProgramView);
+  if (S.ctab === "progress") return out + withCtx(viewProgress);
+  if (S.ctab === "history") return out + withCtx(clientHistory);
+  return out + withCtx(clientOverview);
+}
+function clientOverview(){
+  const w = weekOf(today()), st = weekStats(Math.max(1, w)); const lw = latestBody("weight"), lwa = latestBody("waist");
+  const last = sessionsSorted()[0];
+  let out = `<section class="grid3"><div class="stat"><b class="num">${w < 1 ? "–" : w}</b><span>Week of ${blk().weeks}</span></div><div class="stat"><b class="num">${st.sessions.length}/${prog().days.length}</b><span>Workouts this week</span></div><div class="stat"><b class="num">${st.cardio}</b><span>Cardio min${st.plan ? ` / ${st.plan}` : ""}</span></div>
+  <div class="stat"><b class="num">${lw ? fmt(lw.weight) : "–"}</b><span>Weight kg${lw ? " · " + shortDate(lw.date) : ""}</span></div><div class="stat"><b class="num">${lwa ? fmt(lwa.waist) : "–"}</b><span>Waist cm</span></div><div class="stat"><b class="num">${st.pain != null ? fmt(st.pain) : "–"}</b><span>Back pain avg</span></div></section>`;
+  out += `<section class="card"><h3>Recent workouts</h3>${clientHistoryList(6)}</section>`;
+  if (last) out += `<p class="small muted" style="margin:0">Last workout ${shortDate(last.date)}.</p>`;
+  return out;
+}
+function clientHistoryList(n){
+  const hist = sessionsSorted().slice(0, n);
+  return hist.length ? hist.map(s => `<button class="histitem" data-act="viewsession" data-id="${s.id}"><div class="dayblock sm">${esc(s.day)}</div><div style="flex:1;min-width:0"><b>${esc(s.title)}</b><div class="muted small">${shortDate(s.date)} · week ${s.week} · ${s.durationMin || "–"} min${s.backPain != null ? ` · back ${s.backPain}/10` : ""}</div></div></button>`).join("") : `<div class="empty">No workouts logged yet.</div>`;
+}
+function clientHistory(){ return `<section class="card"><h3>All workouts</h3>${clientHistoryList(200)}</section>`; }
+function clientProgramView(){
+  const p = prog(); const mine = p.byTrainer;
+  let out = `<section class="card"><div class="row between"><div><span class="eyebrow">${mine ? "Set by you" : "Client's own program"}</span><h2>${esc(p.name || "Program")}</h2></div></div>
+  <span class="muted small">${blk().weeks} weeks${(blk().deload||[]).length ? ` · deload week ${blk().deload.join(", ")}` : ""} · starts ${shortDate(startDate())}${p.cardioWeekly ? ` · ${p.cardioWeekly} cardio min/week` : ""}</span>
+  <div class="grid2"><button class="btn blue" data-act="b-edit">${mine ? "Edit program" : "Edit this program"}</button><button class="btn" data-act="b-new">New program</button></div></section>`;
+  p.days.forEach(d => {
+    out += `<section class="card" style="padding-block:10px"><div class="row" style="flex-wrap:nowrap"><div class="dayblock sm">${esc(d.id)}</div><div><b>${esc(d.title)}</b><div class="muted small">${DOW[d.dow]} · ${d.ex.length} exercises</div></div></div>
+    ${d.ex.map((e,i) => `<div class="small" style="border-top:1px solid var(--line);padding-top:6px"><b>${esc(e.n)}</b> <span class="muted">${esc(targetText(e, i, Math.max(1, weekOf(today()))))}${e.rest ? ` · ${fmtRest(+e.rest)} rest` : ""}${rirFor(e, Math.max(1, weekOf(today()))) != null ? ` · RIR ${rirFor(e, Math.max(1, weekOf(today())))}` : ""}</span></div>`).join("")}</section>`;
+  });
+  return out;
+}
+
+/* ---- Program builder ---- */
+const blankProgram = () => ({name:"New program", byTrainer:true, startDate: mondayOf(addDays(today(), 7)), cardioWeekly: 0, notes: [],
+  block:{weeks:8, deload:[], extra:[], builtin:false},
+  days:[{id:"A", title:"Day A", dow:1, equip:[], ex:[newBEx()]}]});
+const newBEx = () => ({n:"Goblet squat", sets:3, reps:"8–10", kg:null, kgInc:null, rest:90, rir:2, type:"load", cue:""});
+function startBuilder(program){
+  const p = clean(program);
+  p.block = {...DEFAULT_BLOCK, ...(p.block || {})}; p.byTrainer = true;
+  if (!p.startDate) p.startDate = (clientDoc(S.cctx.uid) && clientDoc(S.cctx.uid).settings && clientDoc(S.cctx.uid).settings.startDate) || mondayOf(today());
+  if (p.cardioWeekly == null) p.cardioWeekly = p.block.builtin ? 170 : 0;
+  S.builder = {clientId: S.cctx.uid, p};
+  S.view = "builder"; S.forceRender = true; render(); window.scrollTo(0,0);
+}
+function viewBuilder(){
+  const B = S.builder, p = B.p, c = clientDoc(B.clientId) || {};
+  const numIn = (path, v, label, extra="") => `<label class="f">${label}<input inputmode="decimal" data-bp="${path}" value="${v == null ? "" : esc(v)}" ${extra}></label>`;
+  let out = `<div class="logbar"><div class="wrap"><button class="iconbtn" data-act="b-cancel" aria-label="Back">${I.back}</button><div class="title"><b>${esc(p.name || "Program")}</b><span>for ${esc(c.name || c.email || "client")}</span></div><button class="savebtn" data-act="b-save">Save</button></div></div>
+  <main style="padding-bottom:calc(40px + env(safe-area-inset-bottom,0px))"><div class="wrap">
+  <section class="card"><h3>Program</h3>
+  <label class="f">Name<input data-bp="name" value="${esc(p.name)}"></label>
+  <div class="grid2"><label class="f">Start date (week 1 Monday)<input type="date" data-bp="startDate" value="${esc(p.startDate)}"></label>
+  ${numIn("block.weeks", p.block.weeks, "Block length (weeks)")}
+  <label class="f">Deload weeks<input data-bp="block.deloadText" value="${esc((p.block.deload||[]).join(", "))}" placeholder="e.g. 4, 8"></label>
+  ${numIn("cardioWeekly", p.cardioWeekly, "Cardio target (min/week)")}</div>
+  <label class="f">Coaching notes (one per line)<textarea data-bp="notesText">${esc((p.notes||[]).join("\n"))}</textarea></label>
+  <span class="small muted">Deload weeks drop every exercise to 2 sets at about 85% of the target weight.</span></section>`;
+  p.days.forEach((d, di) => {
+    out += `<section class="card"><div class="row between"><div class="row"><div class="dayblock sm">${String.fromCharCode(65+di)}</div><b>Day ${String.fromCharCode(65+di)}</b></div>${p.days.length > 1 ? `<button class="btn ghost danger" data-act="b-rmday" data-d="${di}">Remove day</button>` : ""}</div>
+    <div class="grid2"><label class="f">Title<input data-bp="days.${di}.title" value="${esc(d.title)}"></label>
+    <label class="f">Weekday<select data-bp="days.${di}.dow">${[1,2,3,4,5,6,0].map(k => `<option value="${k}" ${+d.dow===k?"selected":""}>${["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][k]}</option>`).join("")}</select></label></div>`;
+    d.ex.forEach((e, ei) => {
+      const inLib = !!LIBMAP[e.n];
+      out += `<div style="border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--sunk)">
+      <div class="row between"><b class="small">${ei+1}. ${esc(e.n)}</b><div class="row" style="gap:4px"><button class="btn ghost" data-act="b-up" data-d="${di}" data-e="${ei}" aria-label="Move up" ${ei===0?"disabled":""}>↑</button><button class="btn ghost" data-act="b-down" data-d="${di}" data-e="${ei}" aria-label="Move down" ${ei===d.ex.length-1?"disabled":""}>↓</button><button class="btn ghost danger" data-act="b-rmex" data-d="${di}" data-e="${ei}">Remove</button></div></div>
+      <label class="f">Exercise<select data-bp="days.${di}.ex.${ei}.n" data-exsel="1">${inLib ? "" : `<option value="${esc(e.n)}" selected>${esc(e.n)} (custom)</option>`}${libOptions("", e.n, libCat(e.n))}</select></label>
+      <div class="grid3">${numIn(`days.${di}.ex.${ei}.sets`, e.sets, "Sets")}<label class="f">${e.type==="carry"?"Metres":e.type==="time"?"Seconds":"Reps"}<input data-bp="days.${di}.ex.${ei}.reps" value="${esc(e.reps)}" placeholder="8–10"></label>${numIn(`days.${di}.ex.${ei}.kg`, e.kg, "Target kg", 'placeholder="–"')}
+      ${numIn(`days.${di}.ex.${ei}.kgInc`, e.kgInc, "+kg each week", 'placeholder="0"')}${numIn(`days.${di}.ex.${ei}.rest`, e.rest, "Rest (sec)")}${e.type==="load" ? numIn(`days.${di}.ex.${ei}.rir`, e.rir, "Reps in reserve", 'placeholder="–"') : "<span></span>"}</div>
+      <label class="f">Coaching cue<input data-bp="days.${di}.ex.${ei}.cue" value="${esc(e.cue || "")}" placeholder="Optional"></label></div>`;
+    });
+    out += `<button class="btn" data-act="b-addex" data-d="${di}">${I.plus.replace("<svg",'<svg width="18" height="18"')} Add exercise</button></section>`;
+  });
+  out += `<button class="btn block" data-act="b-addday">${I.plus.replace("<svg",'<svg width="18" height="18"')} Add a training day</button>
+  <button class="btn primary block" data-act="b-save">Save and send to client</button></div></main>`;
+  return out;
+}
+function setPath(obj, path, v){
+  const ks = path.split("."); let o = obj;
+  for (let i = 0; i < ks.length - 1; i++) o = o[isNaN(ks[i]) ? ks[i] : +ks[i]];
+  o[ks[ks.length-1]] = v;
+}
+async function saveBuilder(){
+  const p = clean(S.builder.p);
+  const weeks = Math.round(+p.block.weeks);
+  if (!(weeks >= 1 && weeks <= 52)) return toast("Block length must be 1 to 52 weeks.");
+  const dl = p.block.deloadText != null ? String(p.block.deloadText).split(/[^0-9]+/).filter(Boolean).map(Number) : (p.block.deload || []);
+  if (dl.some(x => x < 1 || x > weeks)) return toast(`Deload weeks must be between 1 and ${weeks}.`);
+  p.block = {weeks, deload:[...new Set(dl)].sort((a,b)=>a-b), extra:(p.block.extra||[]).filter(x => x <= weeks), builtin:false};
+  if (p.notesText != null){ p.notes = String(p.notesText).split("\n").map(x => x.trim()).filter(Boolean); delete p.notesText; }
+  if (!p.days.length) return toast("Add at least one training day.");
+  for (const [i, d] of p.days.entries()){
+    d.id = String.fromCharCode(65 + i); d.dow = +d.dow; d.title = (d.title || "").trim() || `Day ${d.id}`;
+    if (!d.ex.length) return toast(`Day ${d.id} has no exercises.`);
+    for (const e of d.ex){
+      e.sets = Math.max(1, Math.round(+e.sets || 0)); if (!e.sets) return toast(`Set a number of sets for ${e.n}.`);
+      e.rest = Math.max(0, Math.round(+e.rest || 0));
+      e.kg = e.kg === "" || e.kg == null || isNaN(+e.kg) ? null : +e.kg;
+      e.kgInc = e.kgInc === "" || e.kgInc == null || isNaN(+e.kgInc) ? null : +e.kgInc;
+      e.rir = e.rir === "" || e.rir == null || isNaN(+e.rir) ? null : +e.rir;
+      e.reps = String(e.reps || "").trim() || "8";
+      if (e.side) e.side.extra = e.side.extra || null;
+    }
+  }
+  p.startDate = mondayOf(p.startDate || today()); p.cardioWeekly = Math.max(0, Math.round(+p.cardioWeekly || 0)); p.byTrainer = true;
+  uref(S.builder.clientId).update({program: p, programUpdatedAt: ts()}).catch(e => toast("Couldn't save the program: " + (e.code || "error")));
+  toast("Program saved — your client sees it next time the app syncs");
+  S.view = "client"; S.ctab = "program"; S.builder = null; S.forceRender = true; render(); window.scrollTo(0,0);
+}
+
+/* ---- Auth sheet ---- */
+function authSheet(){
+  const up = S.sheet.mode === "up";
+  return `<h2>${up ? "Create your account" : "Sign in"}</h2>
+  <div class="chips"><button class="chip ${up?"":"on"}" data-act="auth-mode" data-v="in">Sign in</button><button class="chip ${up?"on":""}" data-act="auth-mode" data-v="up">Create account</button></div>
+  ${up ? `<label class="f">Your name<input id="a-name" autocomplete="name"></label>` : ""}
+  <label class="f">Email<input id="a-email" type="email" autocomplete="email" inputmode="email"></label>
+  <label class="f">Password${up ? " (6+ characters)" : ""}<input id="a-pass" type="password" autocomplete="${up ? "new-password" : "current-password"}"></label>
+  ${up ? `<div><div class="small muted" style="font-weight:600;margin-bottom:6px">I am a</div><div class="grid2"><button type="button" class="btn ${S.sheet.role!=="trainer"?"blue":""}" data-act="auth-role" data-v="client">Client / athlete</button><button type="button" class="btn ${S.sheet.role==="trainer"?"blue":""}" data-act="auth-role" data-v="trainer">Trainer</button></div>
+  <span class="small muted">${S.sheet.role === "trainer" ? "Trainers build programs for clients and see their progress." : "Your log on this phone moves into your account, so it's safe if you lose the phone."}</span></div>` : ""}
+  <button class="btn primary block" data-act="auth-go">${up ? "Create account" : "Sign in"}</button>
+  ${up ? "" : `<button class="btn ghost" data-act="auth-reset">Forgot password?</button>`}
+  <button class="btn block" data-act="sheet-close">Cancel</button>`;
+}
+async function authGo(){
+  const email = val("a-email"), pass = (document.getElementById("a-pass") || {}).value || "";
+  if (!email || !pass) return toast("Enter your email and password.");
+  const btn = document.querySelector('[data-act="auth-go"]'); if (btn){ btn.disabled = true; btn.textContent = "Please wait…"; }
+  try {
+    if (S.sheet.mode === "up"){
+      const name = val("a-name"); if (!name){ if (btn){ btn.disabled = false; btn.textContent = "Create account"; } return toast("Enter your name."); }
+      Cloud.pending = {role: S.sheet.role === "trainer" ? "trainer" : "client", name};
+      await firebase.auth().createUserWithEmailAndPassword(email, pass);
+    } else await firebase.auth().signInWithEmailAndPassword(email, pass);
+    S.sheet = null; S.forceRender = true; render();
+  } catch(e){
+    Cloud.pending = null;
+    const m = {"auth/email-already-in-use":"That email already has an account — sign in instead.","auth/invalid-email":"That email address isn't valid.","auth/weak-password":"Use at least 6 characters for the password.","auth/invalid-credential":"Wrong email or password.","auth/wrong-password":"Wrong email or password.","auth/user-not-found":"No account with that email.","auth/network-request-failed":"No internet connection.","auth/too-many-requests":"Too many attempts. Wait a few minutes and try again."}[e.code];
+    toast(m || "Couldn't sign in: " + (e.code || e.message));
+    if (btn){ btn.disabled = false; btn.textContent = S.sheet && S.sheet.mode === "up" ? "Create account" : "Sign in"; }
+  }
+}
+function accountSection(){
+  if (!cloudOK()) return `<span class="muted small">Accounts, trainer connections and online sync are available in the Primal Strength Android app.</span>`;
+  if (!Cloud.user) return `<span class="muted small">Create an account to keep your log safe online, use it on more than one device, and connect with a trainer.</span><div class="grid2"><button class="btn blue" data-act="auth" data-v="up">Create account</button><button class="btn" data-act="auth" data-v="in">Sign in</button></div>`;
+  const me = Cloud.me || {};
+  return `<span class="muted small">Signed in as ${esc(Cloud.user.email)}. Your log syncs to your account.</span>
+  <h3>Trainer</h3>${me.trainerId ? `<span class="small">Connected to <b>${esc(me.trainerName || "your trainer")}</b>. They can see your workouts and set your program.</span><button class="btn danger block" data-act="ask-disconnect">Disconnect from trainer</button>` : `<label class="f">Trainer's invite code<input id="t-code" autocapitalize="characters" placeholder="6 letters and numbers"></label><button class="btn blue block" data-act="connect-trainer">Connect</button>`}
+  <button class="btn block" data-act="signout">Sign out</button>`;
+}
+
 /* ============ Boot ============ */
 async function boot(){
   render();
@@ -1352,6 +1795,7 @@ async function boot(){
   }
   try { const d = JSON.parse(localStorage.getItem("sl-draft") || "null"); if (d && d.exercises) S.draft = d; } catch(e){}
   S.ready = true; S.forceRender = true; render();
+  cloudInit();
   if (Store.mode === "memory") toast("This browser is blocking storage. Save a backup before closing.");
 }
 nativeSetup();

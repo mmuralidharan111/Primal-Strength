@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   build:
@@ -26,8 +28,21 @@ jobs:
       - name: Check Android SDK
         run: echo "ANDROID_HOME=$ANDROID_HOME" && ls "$ANDROID_HOME/platforms"
 
-      - name: Install Capacitor
+      - name: Install Capacitor, Firebase and test tools
         run: npm install
+
+      - name: Bundle Firebase into the app
+        run: |
+          mkdir -p www/vendor
+          cp node_modules/firebase/firebase-app-compat.js node_modules/firebase/firebase-auth-compat.js node_modules/firebase/firebase-firestore-compat.js www/vendor/
+
+      - name: Smoke test (client and trainer flows)
+        run: node test/smoke.js
+
+      - name: Package the web version for GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: www
 
       - name: Create Android project
         run: npx cap add android
@@ -97,3 +112,15 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: Primal Strength build ${{ github.run_number }}
           files: PrimalStrength-*.apk
+
+  web:
+    needs: build
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish the web version
+        id: deployment
+        uses: actions/deploy-pages@v4

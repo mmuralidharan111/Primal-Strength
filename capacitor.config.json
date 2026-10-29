@@ -1,0 +1,6 @@
+{
+  "appId": "com.strengthlog.app",
+  "appName": "Strength Log",
+  "webDir": "www",
+  "android": { "backgroundColor": "#0F1215" }
+}

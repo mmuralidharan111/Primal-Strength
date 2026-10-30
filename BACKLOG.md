@@ -14,6 +14,7 @@ Requested features, not yet built.
   - Optional: gym owners set the gym's city for shared local landmarks and city-wide leaderboards.
 - **Edit profile**: Settings → Edit profile for name, date of birth (replaces age), sex, height, weight, goal, experience, days per week, equipment, injury areas and health notes. Saves without changing the program; a new weight is also logged as a body check-in; available to clients with a trainer too. The trainer sees the updated answers and gets an alert if goal or injuries change; self-coached users are offered a rebuilt starter plan. Units follow the location setting (cm or ft/in, kg or lb).
 - **Database rules tests**: run the security rules against Google's official Firebase emulator in CI, covering each role (client, trainer, buddy, gym owner, stranger).
+- **Squad → Troop**: rename the "Squad" tab and every user-facing "Squad/squads" label to "Troop/troops" (client tab, trainer tab, trainer client groups, challenge text, toasts). Use the Troop mark (three gorilla heads, centre one gold) from the rename-options design canvas as the tab icon and on the Troop screen header. Internal code and database names stay as they are, so nothing breaks.
 
 ## Later
 - Firebase App Check: switch on together with Play Store readiness (Android check only works for apps installed from the Play Store).

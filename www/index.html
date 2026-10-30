@@ -2553,7 +2553,8 @@ function fitToEvent(p, dateStr){
   else if (A >= W){ base = Math.min(A - W, 12); weeks = W + base; start = addDays(evMon, -(weeks - 1) * 7); status = A - W > 12 ? "later" : "ok"; }
   else { weeks = A; start = cand; status = A >= min ? "short" : "tooShort"; }
   const Tn = Math.min(T, weeks), peak = weeks - Tn;
-  const deload = [...new Set([...mid.map(d => d + base).filter(d => d <= peak - 1), ...Array.from({length: Tn}, (_, i) => peak + 1 + i)])].sort((x, y) => x - y);
+  const baseDl = []; for (let i = 4; i <= base; i += 4) baseDl.push(i);
+  const deload = [...new Set([...baseDl, ...mid.map(d => d + base).filter(d => d <= peak - 1), ...Array.from({length: Tn}, (_, i) => peak + 1 + i)])].sort((x, y) => x - y);
   Object.assign(b, {weeks, deload, base, peak, builtin:false}); delete b.deloadText;
   p.startDate = start; p.event = {...(p.event || {}), date: dateStr}; p.fitted = status;
   const name = (p.event && p.event.name) || "your event", wk = n => `${n} week${n === 1 ? "" : "s"}`;

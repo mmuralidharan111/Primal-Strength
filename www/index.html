@@ -679,14 +679,23 @@ const S = {
   view:"today", sub:null, data:{sessions:[],cardio:[],body:[],dexa:[]}, profile:null,
   draft:null, timer:null, sheet:null, ui:{lift:null, metric:"top", autofill:false}, ready:false
 };
+const emptyProgram = () => ({name: "", empty: true, days: [], block: {weeks: 0, deload: [], extra: [], builtin: false}, cardioWeekly: 0, notes: []});
 function defaultsFor(personal){
   return {
-    program: personal ? personalProgram() : standardProgram(),
+    program: emptyProgram(),
     settings: { startDate: mondayOf(today()), zoneLow: personal ? 93 : null, zoneHigh: personal ? 103 : null, backNormal: personal ? 2 : null, trackBack: personal, dexaWeeks: 12, lastBackup: null },
     created: today()
   };
 }
-const prog = () => S.profile.program;
+const EMPTY_PROG = emptyProgram();
+// Older versions handed every new user the standard 3-day program by default. Treat that untouched default as "no program yet".
+function isPlaceholderProgram(p){
+  if (!p || !p.days || !p.days.length) return true;
+  return (p.kind === "standard" || p.kind === "personal") && !p.byTrainer && !p.starter
+    && !(S.profile.settings && S.profile.settings.programChosen) && !(S.data && S.data.sessions && S.data.sessions.length);
+}
+const prog = () => isPlaceholderProgram(S.profile.program) ? EMPTY_PROG : S.profile.program;
+const hasProgram = () => prog().days.length > 0;
 const set_ = () => S.profile.settings;
 const startDate = () => prog().startDate || set_().startDate;
 function weekOf(dateStr){ return Math.floor(daysBetween(startDate(), dateStr) / 7) + 1; }
@@ -866,7 +875,7 @@ function render(){
 }
 function header(){
   const w = weekOf(today()), ph = phaseOf(w);
-  const wk = w < 1 ? `Starts ${shortDate(startDate())}` : w > blk().weeks ? "Block complete" : `Week ${w} of ${blk().weeks} · ${ph.name}`;
+  const wk = !hasProgram() ? "No program yet" : w < 1 ? `Starts ${shortDate(startDate())}` : w > blk().weeks ? "Block complete" : `Week ${w} of ${blk().weeks} · ${ph.name}`;
   return `<header class="top"><div class="wrap"><img class="mark lt" src="${MARK_NAVY}" alt=""><img class="mark dk" src="${MARK_WHITE}" alt=""><div class="brand"><b>Primal Strength</b><span>${esc(wk)}</span></div>
   ${S.draft && S.view !== "log" ? `<button class="btn blue" data-act="resume">Resume workout</button>` : ""}
   <button class="iconbtn" data-act="settings" aria-label="Settings">${I.gear}</button></div></header>`;
@@ -898,6 +907,7 @@ function viewToday(){
   const lb = set_().lastBackup;
   if (S.data.sessions.length && (!lb || daysBetween(lb, t) >= 7)) out += `<div class="banner info"><div><b>Back up your log.</b> It lives only on this device. ${lb ? `Last backup ${shortDate(lb)}.` : "No backup yet."} <button class="btn ghost" data-act="backup">Save backup</button></div></div>`;
 
+  if (!hasProgram()){ out += getStartedCard(); return out + todayStatsBlock(); }
   // hero
   const isLiftDay = prog().days.some(d => d.dow === dow);
   const nd = nw.next ? dayById(nw.next) : null;
@@ -919,21 +929,40 @@ function viewToday(){
   }
   out += `</div><div class="meter" aria-label="Cardio progress"><i style="width:${Math.min(100, st.plan ? st.cardio/st.plan*100 : 0)}%"></i></div></section>`;
 
-  // stats
+  out += todayStatsBlock();
+  if (prog().notes && prog().notes.length) out += `<section class="card"><span class="eyebrow">Program notes</span>${prog().notes.map(n => `<p class="small" style="margin:0">${esc(n)}</p>`).join("")}</section>`;
+  return out;
+}
+function todayStatsBlock(){
+  let out = "";
   const lw = latestBody("weight"), lwa = latestBody("waist");
   const firstWaist = [...S.data.body].filter(b => b.waist).sort((a,b)=>a.date.localeCompare(b.date))[0];
   out += `<section class="grid3"><div class="stat"><b class="num">${lw ? fmt(lw.weight) : "–"}</b><span>Weight kg</span></div>
   <div class="stat"><b class="num">${lwa ? fmt(lwa.waist) : "–"}</b><span>Waist cm${firstWaist && lwa && firstWaist.id !== lwa.id ? ` (${(lwa.waist-firstWaist.waist>0?"+":"")}${fmt(lwa.waist-firstWaist.waist)})` : ""}</span></div>
   <div class="stat"><b class="num">${S.data.sessions.length}</b><span>Workouts logged</span></div></section>`;
-  if (isCloudClient() && !Cloud.me.trainerId) out += `<section class="card"><div class="row between" style="flex-wrap:nowrap"><div><b>Working with a trainer?</b><div class="small muted">Enter their invite code to get your program from them.</div></div><button class="btn blue" data-act="settings">Add code</button></div></section>`;
-  if (prog().notes && prog().notes.length) out += `<section class="card"><span class="eyebrow">Program notes</span>${prog().notes.map(n => `<p class="small" style="margin:0">${esc(n)}</p>`).join("")}</section>`;
+  if (hasProgram() && isCloudClient() && !Cloud.me.trainerId) out += `<section class="card"><div class="row between" style="flex-wrap:nowrap"><div><b>Working with a trainer?</b><div class="small muted">Enter their invite code to get your program from them.</div></div><button class="btn blue" data-act="settings">Add code</button></div></section>`;
   return out;
+}
+function getStartedCard(){
+  const canTrainer = isCloudClient(), personal = !trainerManaged();
+  return `<section class="card" style="gap:14px;border-color:var(--accent)">
+  <div><span class="eyebrow">Get started</span><h2>Let's set up your training</h2><p class="small muted" style="margin:4px 0 0">You don't have a program yet. Choose how you'd like to start.</p></div>
+  <div style="display:flex;flex-direction:column;gap:10px;border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--sunk)">
+    <div class="row" style="flex-wrap:nowrap;align-items:flex-start;gap:12px"><div class="dayblock sm" style="background:var(--accent);color:#fff">1</div><div><b>Start with the coach questionnaire</b><div class="small muted">2 minutes. Get a personal 4-week starter block for your goal, schedule, equipment and any injuries.</div></div></div>
+    <button class="btn primary block" data-act="ob-retake">Answer the questionnaire</button>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:10px;border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--sunk)">
+    <div class="row" style="flex-wrap:nowrap;align-items:flex-start;gap:12px"><div class="dayblock sm" style="background:var(--accent);color:#fff">2</div><div><b>Start with a trainer</b><div class="small muted">${canTrainer ? "Enter your trainer's 6-character invite code. They'll build your program and follow your progress." : "Create an account in the Primal Strength app, then enter your trainer's invite code."}</div></div></div>
+    ${canTrainer ? `<div class="row" style="flex-wrap:nowrap"><input id="e-tcode" placeholder="Invite code" autocapitalize="characters" style="flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:16px;background:var(--surface);color:var(--ink)"><button class="btn blue" data-act="connect-trainer-e">Connect</button></div>` : ""}
+  </div>
+  ${personal ? `<button class="btn ghost" data-act="selftpl" style="align-self:center">Or browse ready-made programs</button>` : ""}
+  </section>`;
 }
 
 /* ---- Workouts list + overview ---- */
 function viewWorkouts(){
   const w = Math.max(1, weekOf(today())); const nw = nextWorkout();
-  let out = `<div><span class="eyebrow">Week ${w} · ${phaseOf(w).name}</span><h1>Workouts</h1>${trainerManaged() ? `<span class="muted small">${esc(prog().name || "Program")} · set by ${esc(Cloud.me.trainerName || "your trainer")}</span>` : ""}</div>`;
+  let out = !hasProgram() ? `<div><h1>Workouts</h1></div>` + getStartedCard() : `<div><span class="eyebrow">Week ${w} · ${phaseOf(w).name}</span><h1>Workouts</h1>${trainerManaged() ? `<span class="muted small">${esc(prog().name || "Program")} · set by ${esc(Cloud.me.trainerName || "your trainer")}</span>` : ""}</div>`;
   prog().days.forEach(d => {
     const done = nw.remaining.includes(d.id) ? "" : `<span class="pill good">Done this week</span>`;
     out += `<button class="wcard" data-act="openday" data-d="${d.id}"><div class="dayblock">${d.id}</div><div style="min-width:0;flex:1"><b style="font-size:18px;display:block">${esc(d.title)}</b><span class="muted small">${DOW[d.dow]} · est. ${estMinutes(d,w)} min · ${d.ex.length} exercises</span><div style="margin-top:6px">${nw.next===d.id ? `<span class="pill blue">Up next</span>` : done}</div></div></button>`;
@@ -1187,6 +1216,11 @@ function sheetHTML(){
   if (!S.sheet) return "";
   const k = S.sheet.kind; let body = "";
   if (k === "auth"){ body = authSheet(); }
+  else if (k === "selftpl"){
+    body = `<h2>Ready-made programs</h2><span class="muted small">General programs, not tailored to you. For a personal plan, use the questionnaire or work with a trainer.</span>
+    ${TEMPLATES.map(t => `<button class="wcard" data-act="selftpl-pick" data-v="${t.key}" style="flex-direction:column;align-items:flex-start;gap:4px"><b>${esc(t.name)}</b><span class="small muted">${t.days.length} days a week · ${t.weeks} weeks · ${esc(t.goal)}</span><span class="small">${esc(t.desc)}</span></button>`).join("")}
+    <button class="btn block" data-act="sheet-close">Cancel</button>`;
+  }
   else if (k === "celebrate"){ body = celebrateHTML(S.sheet.c); }
   else if (k === "chal"){ body = chalSheet(); }
   else if (k === "info"){ body = `<h2>${esc(S.sheet.title)}</h2><p style="margin:0">${esc(S.sheet.text)}</p><button class="btn primary block" data-act="sheet-close">OK</button>`; }
@@ -1267,8 +1301,8 @@ function sheetHTML(){
     <div class="row between"><span>Track back pain</span><button class="toggle ${s.trackBack?"on":""}" data-act="s-back" aria-pressed="${s.trackBack}" aria-label="Track back pain"></button></div>
     <button class="btn primary block" data-act="settings-save">Save settings</button>
     <hr style="border:0;border-top:1px solid var(--line);width:100%">
-    ${trainerManaged() ? `<h3>Program</h3><span class="muted small">${esc(prog().name || "Your program")} is set by ${esc(Cloud.me.trainerName || "your trainer")}. You can still swap an exercise for a single workout.</span><hr style="border:0;border-top:1px solid var(--line);width:100%">` : `    <h3>Program</h3><span class="muted small">Current: \${prog().kind === "personal" ? "back-friendly with extra right-side core sets" : "standard 3-day block"}. Switching keeps your logged workouts.</span>
-    <button class="btn blue block" data-act="ob-retake">Get a starter plan from the coach questionnaire</button>
+    ${trainerManaged() ? `<h3>Program</h3><span class="muted small">${esc(prog().name || "Your program")} is set by ${esc(Cloud.me.trainerName || "your trainer")}. You can still swap an exercise for a single workout.</span><hr style="border:0;border-top:1px solid var(--line);width:100%">` : `    <h3>Program</h3><span class="muted small">Current: ${!hasProgram() ? "none yet" : prog().starter ? "starter block from the coach questionnaire" : prog().kind === "personal" ? "back-friendly with extra right-side core sets" : prog().kind === "standard" ? "standard 3-day block" : esc(prog().name || "custom program")}. Switching keeps your logged workouts.</span>
+    <button class="btn blue block" data-act="ob-retake">Get a starter plan from the coach questionnaire</button><button class="btn block" data-act="selftpl">Browse ready-made programs</button>
     <div class="grid2"><button class="btn" data-act="ask-prog" data-v="standard">Standard</button><button class="btn" data-act="ask-prog" data-v="personal">Back-friendly + right side</button></div>
     <hr style="border:0;border-top:1px solid var(--line);width:100%">
 `}
@@ -1399,6 +1433,15 @@ app.addEventListener("click", async ev => {
   const t = ev.target.closest("[data-act]"); if (!t) return;
   const a = t.dataset.act;
   if (a === "scrim"){ if (ev.target === t) closeSheet(); return; }
+  if (a === "connect-trainer-e") return connectTrainer(val("e-tcode"));
+  if (a === "selftpl") return openSheet({kind:"selftpl"});
+  if (a === "selftpl-pick"){
+    const p = templateProgram(t.dataset.v); p.byTrainer = false; const d = parse(today()).getDay();
+    p.startDate = d >= 1 && d <= 3 ? mondayOf(today()) : mondayOf(addDays(today(), 7));
+    S.profile.program = p; S.profile.settings.programChosen = true; S.profile.settings.startDate = p.startDate; S.profile.settings.intakeDone = true;
+    await persistProfile(); S.sheet = p.event ? {kind:"info", title:"Training for a race?", text:`Set your race date under Settings → Event and the ${p.name} plan will be timed to peak on race day.`} : null;
+    S.view = "workouts"; S.forceRender = true; render(); return toast(`${p.name} is now your program`);
+  }
   if (a === "ptab"){ S.ui.ptab = t.dataset.v; S.forceRender = true; return render(); }
   if (a === "board-toggle"){ S.profile.settings.showOnBoard = !set_().showOnBoard; await persistProfile(); scheduleSync(); S.forceRender = true; render(); return toast(set_().showOnBoard ? "You're on the weekly board" : "You're hidden from the weekly board"); }
   if (a === "chal-join") return joinChallenge(t.dataset.id, t.dataset.v === "1");
@@ -1461,7 +1504,7 @@ app.addEventListener("click", async ev => {
   if (a === "note-edit"){ S.noteEdit = t.dataset.id; S.forceRender = true; render(); window.scrollTo(0,0); return; }
   if (a === "note-cancel"){ S.noteEdit = null; S.forceRender = true; return render(); }
   if (a === "note-del"){ const id = t.dataset.id; S.sheet = {kind:"confirm", title:"Delete this note?", text:"This can't be undone.", yes:"Delete note", danger:true, run: () => notesRef().doc(id).delete().catch(() => toast("Couldn't delete the note."))}; S.forceRender = true; return render(); }
-  if (a === "b-edit") return withCtx(() => startBuilder(prog()));
+  if (a === "b-edit") return withCtx(() => hasProgram() ? startBuilder(prog()) : openSheet({kind:"btpl"}));
   if (a === "b-new") return openSheet({kind:"btpl"});
   if (a === "b-tpl"){
     const v = t.dataset.v; S.sheet = null;
@@ -1574,7 +1617,7 @@ app.addEventListener("click", async ev => {
     s.zoneLow = numOrNull(val("s-zl")); s.zoneHigh = numOrNull(val("s-zh")); s.dexaWeeks = numOrNull(val("s-dexa")) || 12; s.backNormal = numOrNull(val("s-bn")); s.trackBack = !!S.sheet.back;
     await persistProfile(); S.sheet = null; S.forceRender = true; render(); return toast(sd && sd !== s.startDate ? `Saved — block starts Monday ${shortDate(s.startDate)}` : "Settings saved");
   }
-  if (a === "ask-prog"){ const v = t.dataset.v; S.sheet = {kind:"confirm", title: v === "personal" ? "Switch to back-friendly + right side?" : "Switch to the standard program?", text: v === "personal" ? "Adds an extra set on the weaker side for carries, side planks and Pallof presses, plus back-pain tracking and back rules." : "Equal sets on both sides and general coaching notes. Your logged workouts stay.", yes:"Switch program", run: async () => { S.profile.program = v === "personal" ? personalProgram() : standardProgram(); if (v === "personal") S.profile.settings.trackBack = true; await persistProfile(); toast("Program updated"); }}; S.forceRender = true; return render(); }
+  if (a === "ask-prog"){ const v = t.dataset.v; S.sheet = {kind:"confirm", title: v === "personal" ? "Switch to back-friendly + right side?" : "Switch to the standard program?", text: v === "personal" ? "Adds an extra set on the weaker side for carries, side planks and Pallof presses, plus back-pain tracking and back rules." : "Equal sets on both sides and general coaching notes. Your logged workouts stay.", yes:"Switch program", run: async () => { S.profile.program = v === "personal" ? personalProgram() : standardProgram(); S.profile.settings.programChosen = true; if (v === "personal") S.profile.settings.trackBack = true; await persistProfile(); toast("Program updated"); }}; S.forceRender = true; return render(); }
   if (a === "export-json") return exportJSON("export");
   if (a === "export-csv") return exportCSV();
   if (a === "backup") return exportJSON("backup");
@@ -1713,7 +1756,7 @@ async function onAuth(u){
     if (d.role === "trainer"){
       if (Cloud.attached !== "trainer"){ Cloud.attached = "trainer"; attachTrainer(); S.view = "clients"; }
     } else {
-      S.profile = {program: d.program || standardProgram(), settings: {...defaultsFor(false).settings, ...(d.settings || {})}, created: ""};
+      S.profile = {program: d.program || emptyProgram(), settings: {...defaultsFor(false).settings, ...(d.settings || {})}, created: ""};
       if (Cloud.attached !== "client"){ Cloud.attached = "client"; attachClient(); if (!["today","workouts","cardio","body","progress","squad","log","onboard"].includes(S.view)) S.view = "today"; }
       else { socialTrainerSync(); scheduleSync(); }
     }
@@ -1806,7 +1849,7 @@ async function disconnectTrainer(){
 
 /* ---- Trainer: client context ---- */
 function clientDoc(id){ return (S.clients || []).find(c => c.id === id); }
-function clientProfile(c){ return {program: (c && c.program) || standardProgram(), settings: {...defaultsFor(false).settings, ...((c && c.settings) || {})}}; }
+function clientProfile(c){ return {program: (c && c.program) || emptyProgram(), settings: {...defaultsFor(false).settings, ...((c && c.settings) || {})}}; }
 function openClient(id){
   closeClient();
   S.cctx = {uid: id, data: {sessions:[], cardio:[], body:[], dexa:[]}, unsub: []};
@@ -1922,6 +1965,7 @@ function clientHistoryList(n){
 function clientHistory(){ return `<section class="card"><h3>All workouts</h3>${clientHistoryList(200)}</section>`; }
 function clientProgramView(){
   const p = prog(); const mine = p.byTrainer;
+  if (!hasProgram()) return `<section class="card"><span class="eyebrow">Program</span><h2>No program yet</h2><p class="small muted" style="margin:0">Build this client's first program from a template or from scratch.</p><button class="btn blue block" data-act="b-new">Create a program</button></section>`;
   let out = `<section class="card"><div class="row between"><div><span class="eyebrow">${mine ? "Set by you" : "Client's own program"}</span><h2>${esc(p.name || "Program")}</h2></div></div>
   <span class="muted small">${blk().weeks} weeks${(blk().deload||[]).length ? ` · deload week ${blk().deload.join(", ")}` : ""} · starts ${shortDate(startDate())}${p.cardioWeekly ? ` · ${p.cardioWeekly} cardio min/week` : ""}</span>
   <div class="grid2"><button class="btn blue" data-act="b-edit">${mine ? "Edit program" : "Edit this program"}</button><button class="btn" data-act="b-new">New program</button></div></section>`;
@@ -2243,7 +2287,7 @@ function viewOnboard(){
     <p class="small muted" style="margin:0">It takes about 2 minutes. A starter block is a safe first step; a trainer can then build your full program.</p>
     ${cloudOK() ? "" : `<label class="f">Your first name<input id="ob-name" value="${esc(set_().name || "")}" autocomplete="given-name"></label>`}
     <button class="btn primary block" data-act="ob-next">Let's start</button>
-    <button class="btn block" data-act="ob-skip">Skip — I'll set up my own program</button>
+    <button class="btn block" data-act="ob-skip">Skip for now</button>
     ${isCloudClient() ? `<button class="btn ghost" data-act="ob-havetrainer">I have a trainer's invite code</button>` : ""}`;
   } else if (step === "goal"){
     body = `<h2>What's your main goal?</h2>${choice("goal", GOALS)}${a.goal === "event" ? `<h3>Which event?</h3>${choice("event", EVENTS)}<label class="f">Event date (optional)<input type="date" id="ob-evdate" value="${esc(a.eventDate || "")}" min="${today()}"></label><span class="small muted">With a date, the plan is timed so you peak on race day.</span>` : ""}${nav("Next", a.goal && (a.goal !== "event" || a.event))}`;
@@ -2460,7 +2504,7 @@ function gameStats(){
   const n = S.data.sessions.length;
   const has = {first: n >= 1, w10: n >= 10, w25: n >= 25, w50: n >= 50, w100: n >= 100, fullweek: led.fullWeeks >= 1,
     streak4: streak.best >= 4, streak12: streak.best >= 12, pb1: pb.events.length >= 1, pb25: pb.events.length >= 25,
-    big3: famPB("squat") && famPB("bench") && famPB("deadlift"), block: wNow > b.weeks && inBlock >= 0.75 * prog().days.length * b.weeks,
+    big3: famPB("squat") && famPB("bench") && famPB("deadlift"), block: hasProgram() && b.weeks > 0 && wNow > b.weeks && inBlock >= 0.75 * prog().days.length * b.weeks,
     checkin4: ckBest >= 4, dexa2: S.data.dexa.filter(d => d.date).length >= 2, t10: tonnage >= 10, t100: tonnage >= 100,
     km5: longest >= 5, km10: longest >= 10, km21: longest >= 21.1, km42: longest >= 42.2, run100: totalKm >= 100, rank2: rank.idx >= 2, rank4: rank.idx >= 4};
   return {pb, led, xp: led.total, rank, streak, weekPts, tonnage, totalKm, longest, rings, badges: new Set(Object.keys(has).filter(k => has[k])),

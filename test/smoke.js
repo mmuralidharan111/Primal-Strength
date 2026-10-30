@@ -164,7 +164,14 @@ async function load(fb){
   await A.click('[data-act="confirm-yes"]', "confirm start over"); await sleep(300);
   check(A.text().includes("I'm your Primal Strength coach"), "after start over the coach questionnaire runs again");
   await A.click('[data-act="ob-skip"]', "skip questionnaire");
-  await A.click('[data-act="tab"][data-v="workouts"]'); check(A.text().includes("Finished workouts appear here"), "workout history is empty after start over");
+  await A.click('[data-act="tab"][data-v="today"]');
+  check(A.text().includes("Let's set up your training") && !A.$('[data-act="openday"]'), "no default program: Today shows the get-started choices");
+  check(!!A.$('[data-act="ob-retake"]') && !!A.$('[data-act="selftpl"]'), "questionnaire and ready-made options offered");
+  await A.click('[data-act="tab"][data-v="workouts"]'); check(A.text().includes("Finished workouts appear here") && A.text().includes("Let's set up your training"), "workouts tab empty after start over");
+  await A.click('[data-act="settings"]'); check(A.text().includes("Current: none yet") && !A.text().includes("${"), "settings shows no program and no raw code");
+  await A.click('[data-act="selftpl"]', "browse ready-made programs"); await A.click('[data-act="selftpl-pick"][data-v="10k"]', "pick 10K program"); await sleep(200);
+  check(A.text().includes("Intervals + core") && !A.text().includes("Let's set up your training"), "ready-made program applied");
+  if (A.$(".scrim")) await A.click('[data-act="sheet-close"]');
   A.w.close();
 
   /* ===== 2. Trainer + client with accounts ===== */
@@ -272,6 +279,7 @@ async function load(fb){
   await B.type("#a-name", "Ben Thomas"); await B.type("#a-email", "ben@test.in"); await B.type("#a-pass", "secret3");
   await B.click('[data-act="auth-go"]', "create buddy account"); await sleep(600);
   await B.click('[data-act="ob-skip"]', "buddy skips questionnaire"); await sleep(200);
+  check(B.text().includes("Let's set up your training") && !!B.$("#e-tcode"), "new account without a program sees questionnaire and trainer-code options");
   await B.click('[data-act="tab"][data-v="squad"]'); await sleep(300);
   await B.type("#buddy-code", ashaCode); await B.click('[data-act="buddy-add"]', "add buddy by code"); await sleep(500);
   check((fb._docs.get("public/u_asha").buddies || []).includes("u_ben") && (fb._docs.get("public/u_ben").buddies || []).includes("u_asha"), "buddies linked both ways");

@@ -22,8 +22,10 @@ function makeFirebase(){
   const isDirectChild = (p, col) => p.startsWith(col + "/") && !p.slice(col.length + 1).includes("/");
   function notify(){ for (const l of listeners) fire(l); }
   function fire(l){
+    try {
     if (l.kind === "doc"){ const d = docs.get(l.path); l.cb(snapDoc(l.path, d)); }
     else l.cb(snapQuery(l));
+    } catch(e){ listeners.delete(l); if (!/activeElement|document|window/.test(String(e))) errors.push(`[${step}] listener error: ${e}`); }
   }
   function snapDoc(p, d){ return {id: p.split("/").pop(), exists: d !== undefined, data: () => d && JSON.parse(JSON.stringify(d))}; }
   function runQuery(q){

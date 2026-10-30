@@ -44,7 +44,7 @@ service cloud.firestore {
 
     // Trainer invite codes
     match /codes/{code} {
-      allow read: if signedIn();
+      allow get: if signedIn();   // look up one code; listing all codes is not allowed
       allow create: if signedIn() && request.resource.data.trainerId == request.auth.uid
         && userData(request.auth.uid).role == 'trainer';
       allow update, delete: if signedIn() && resource.data.trainerId == request.auth.uid;
@@ -57,7 +57,7 @@ service cloud.firestore {
       allow update, delete: if isMe(gid);
     }
     match /gymcodes/{code} {
-      allow read: if signedIn();
+      allow get: if signedIn();   // look up one code; listing all codes is not allowed
       allow create, update: if signedIn() && request.resource.data.gymId == request.auth.uid;
       allow delete: if signedIn() && resource.data.gymId == request.auth.uid;
     }
@@ -96,7 +96,7 @@ service cloud.firestore {
 
     // Buddy codes
     match /buddycodes/{code} {
-      allow read: if signedIn();
+      allow get: if signedIn();   // look up one code; listing all codes is not allowed
       allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
       allow update, delete: if signedIn() && resource.data.uid == request.auth.uid;
     }

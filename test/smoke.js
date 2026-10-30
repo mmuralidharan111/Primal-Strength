@@ -172,6 +172,33 @@ async function load(fb){
   await A.click('[data-act="selftpl"]', "browse ready-made programs"); await A.click('[data-act="selftpl-pick"][data-v="10k"]', "pick 10K program"); await sleep(200);
   check(A.text().includes("Intervals + core") && !A.text().includes("Let's set up your training"), "ready-made program applied");
   if (A.$(".scrim")) await A.click('[data-act="sheet-close"]');
+
+  step = "dexa-balance";
+  await A.click('[data-act="tab"][data-v="body"]');
+  await A.click('[data-act="dexa-new"]', "add DEXA scan");
+  await A.type("#d-date", "2026-10-01"); await A.type("#d-legL", "8.9"); await A.type("#d-legR", "9.8"); await A.type("#d-trunkL", "10.6"); await A.type("#d-trunkR", "10.4");
+  await A.click('[data-act="dexa-save"]', "save DEXA"); await sleep(200);
+  check(A.text().includes("Left–right balance") && A.text().includes("Legs: left side") && A.text().includes("Trunk: balanced"), "balance card reads the DEXA scan");
+  await A.click('[data-act="tab"][data-v="workouts"]'); await A.click('[data-act="openday"][data-d="B"]', "open 10K strength day");
+  check(A.text().includes("+1 left leg"), "weaker leg gets the extra set");
+  await A.click('[data-act="tab"][data-v="body"]'); await A.click('[data-act="bal-toggle"]', "turn balance work off");
+  await A.click('[data-act="tab"][data-v="workouts"]'); await A.click('[data-act="openday"][data-d="B"]');
+  check(!A.text().includes("+1 left leg"), "balance work can be switched off");
+
+  step = "reports";
+  await A.click('[data-act="tab"][data-v="body"]');
+  await A.click('[data-act="rep-new"]', "add report");
+  await A.type("#rp-date", "2026-06-01"); await A.type("#rp-hba1c", "6.1"); await A.type("#rp-ldl", "140");
+  await A.click('[data-act="rep-save"]', "save blood report"); await sleep(150);
+  await A.click('[data-act="rep-new"]'); await A.type("#rp-date", "2026-10-01"); await A.type("#rp-hba1c", "5.7");
+  await A.click('[data-act="rep-addrow"]', "add custom result row"); await A.type("#rp-cn-0", "Homocysteine"); await A.type("#rp-cv-0", "11"); await A.type("#rp-cu-0", "µmol/L");
+  await A.click('[data-act="rep-save"]'); await sleep(150);
+  check(A.text().includes("Health reports") && A.text().includes("HbA1c") && A.text().includes("Homocysteine"), "reports listed with preset and custom results");
+  check(!!A.$("#app svg.chart"), "report trend chart drawn");
+  const ty = A.$("#rp-type"); check(!ty, "report sheet closed after save");
+  await A.click('[data-act="rep-new"]'); const rtSel = A.$("#rp-type"); rtSel.value = "vo2"; rtSel.dispatchEvent(new A.w.Event("change", {bubbles: true})); await sleep(100);
+  check(!!A.$("#rp-vo2"), "switching type shows VO2 max fields");
+  await A.click('[data-act="sheet-close"]');
   A.w.close();
 
   /* ===== 2. Trainer + client with accounts ===== */
@@ -289,6 +316,67 @@ async function load(fb){
   await C.click('[data-act="tab"][data-v="today"]'); await sleep(200);
   check(C.text().includes("high-fived"), "client sees the high-five");
   B.w.close();
+
+  step = "squads-custom-challenge";
+  await T.click('[data-act="ttab"][data-v="tsquad"]');
+  await T.click('[data-act="sq-new"]', "new squad"); await T.type("#sq-name", "6 am crew");
+  const cb = T.$('[data-sqm="u_asha"]'); cb.checked = true; await T.click('[data-act="sq-save"]', "save squad"); await sleep(300);
+  check([...fb._docs.entries()].some(([k, v]) => k.startsWith("trainers/u_coach/squads/") && v.members.includes("u_asha")), "squad saved");
+  await T.click('[data-act="chal-new"]');
+  const tt = T.$('[data-chf="title"]'); tt.value = "Mix it up"; tt.dispatchEvent(new T.w.Event("input", {bubbles: true}));
+  const ms = T.$('[data-chf="metric"]'); ms.value = "mix"; ms.dispatchEvent(new T.w.Event("change", {bubbles: true})); await sleep(100);
+  check(!!T.$('[data-chmix="0"]'), "custom mix rows shown");
+  await T.click('[data-act="ch-preset"][data-v="thisweek"]', "this-week preset");
+  const rp = T.$('[data-chf="repeat"]'); rp.value = "week"; rp.dispatchEvent(new T.w.Event("change", {bubbles: true}));
+  await T.click('[data-act="ch-who"][data-v="squads"]', "limit to squads");
+  const sq = T.$("[data-chsq]"); sq.checked = true; sq.dispatchEvent(new T.w.Event("change", {bubbles: true}));
+  const tg = T.$('[data-chf="target"]'); tg.value = "10"; tg.dispatchEvent(new T.w.Event("input", {bubbles: true}));
+  await T.click('[data-act="chal-save"]', "save custom challenge"); await sleep(300);
+  const mixDoc = [...fb._docs.entries()].find(([k, v]) => /^challenges\/[^/]+$/.test(k) && v.title === "Mix it up");
+  check(mixDoc && mixDoc[1].metric === "mix" && mixDoc[1].mix.length === 2 && mixDoc[1].members.includes("u_asha") && mixDoc[1].repeat === "week" && mixDoc[1].target === 10, "custom mix challenge saved with squad, repeat and target");
+  await fb.firestore().collection("challenges").doc("old1").set({trainerId: "u_coach", title: "Weekly sets", metric: "sets", start: "2026-01-05", end: "2026-01-11", repeat: "week", members: null});
+  await sleep(600);
+  const rolled = [...fb._docs.entries()].filter(([k, v]) => k.startsWith("challenges/old1_"));
+  check(rolled.length === 1 && rolled[0][1].end >= new Date().toISOString().slice(0, 10) && fb._docs.get("challenges/old1").next === rolled[0][0].split("/")[1], "repeating challenge rolled forward to the current week");
+  await C.click('[data-act="tab"][data-v="squad"]'); await sleep(200);
+  check(C.text().includes("Mix it up") && C.text().includes("Target"), "client in squad sees custom challenge with target");
+
+  step = "health-share";
+  await C.click('[data-act="tab"][data-v="body"]'); await C.click('[data-act="rep-new"]');
+  await C.type("#rp-hba1c", "5.4"); C.$("#rp-share").checked = true;
+  await C.click('[data-act="rep-save"]', "client saves shared report"); await sleep(300);
+  await C.click('[data-act="rep-new"]'); await C.type("#rp-ldl", "99"); await C.click('[data-act="rep-save"]', "client saves private report"); await sleep(300);
+  const reps = [...fb._docs.entries()].filter(([k]) => k.startsWith("users/u_asha/reports/"));
+  check(reps.length === 2 && reps.filter(([, v]) => v.shared).length === 1, "one shared and one private report saved");
+  await T.click('[data-act="ttab"][data-v="clients"]'); await T.click('[data-act="open-client"]'); await T.click('[data-act="ctab"][data-v="health"]', "trainer Health tab"); await sleep(300);
+  check(T.text().includes("HbA1c") && !T.text().includes("LDL"), "trainer sees only the shared report");
+
+  step = "gym-screen";
+  await T.click('[data-act="ttab"][data-v="clients"]'); await T.click('[data-act="gympick"]', "open gym screen picker");
+  await T.click('[data-act="gpick"][data-id="u_asha"]', "pick client"); await T.click('[data-act="gstart"]', "start gym screen"); await sleep(400);
+  check(T.text().includes("Gym screen") && !!T.$('[data-gin="reps"][data-u="u_asha"]'), "gym screen shows the client's column");
+  await T.click('[data-act="gtick"][data-u="u_asha"][data-x="0"][data-s="0"]', "tick a set on the big screen");
+  await T.click('[data-act="gsave"][data-u="u_asha"]', "save workout from big screen"); await sleep(300);
+  check([...fb._docs.entries()].some(([k, v]) => k.startsWith("users/u_asha/sessions/") && v.loggedOn === "gym screen"), "big-screen workout saved to the client");
+  check(T.text().includes("Saved for Asha"), "column confirms the save");
+  await T.click('[data-act="gexit"]', "exit gym screen");
+
+  step = "gym-owner";
+  let O = await load(makeFirebase());
+  await O.click('[data-act="auth-role"][data-v="owner"]', "pick gym owner role");
+  await O.type("#a-name", "Gita Owner"); await O.type("#a-email", "gita@test.in"); await O.type("#a-pass", "secret4"); await O.type("#a-gym", "Primal Gym HSR");
+  await O.click('[data-act="auth-go"]', "create owner account"); await sleep(800);
+  const gcode = (fb._docs.get("users/u_gita") || {}).gymCode;
+  check(fb._docs.get("gyms/u_gita") && fb._docs.get("gyms/u_gita").name === "Primal Gym HSR" && !!gcode, "gym and gym code created");
+  check(O.text().includes(gcode) && O.text().includes("No trainers yet"), "owner dashboard shows the gym code");
+  await T.click('[data-act="ttab"][data-v="account"]'); await T.type("#gym-code", gcode); await T.click('[data-act="gym-join"]', "trainer joins gym"); await sleep(500);
+  check(fb._docs.get("users/u_coach").gymId === "u_gita", "trainer linked to gym");
+  await sleep(300);
+  check(O.text().includes("Coach Ravi") && O.text().includes("Trainers"), "owner sees the trainer");
+  await O.click('[data-act="otrainer"]', "open trainer detail"); await sleep(200);
+  check(O.text().includes("Asha") && O.text().includes("Active"), "owner sees client summary and status");
+  check(!O.text().includes("5.4") && !O.text().includes("HbA1c"), "owner sees no health data");
+  O.w.close();
 
   step = "trainer-sees-alert";
   await sleep(300);

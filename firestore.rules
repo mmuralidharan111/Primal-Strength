@@ -5,27 +5,40 @@ service cloud.firestore {
     function isMe(uid) { return signedIn() && request.auth.uid == uid; }
     function userData(uid) { return get(/databases/$(database)/documents/users/$(uid)).data; }
     function isTrainerOf(uid) { return signedIn() && userData(uid).get('trainerId', null) == request.auth.uid; }
+    // A gym's id is its owner's user id, so "owns gym X" is simply X == request.auth.uid
+    function ownsGymOfTrainer(tid) { return signedIn() && tid != null && userData(tid).get('gymId', null) == request.auth.uid; }
 
     // A person's profile, settings and program
     match /users/{uid} {
-      allow read: if isMe(uid) || (signedIn() && resource.data.get('trainerId', null) == request.auth.uid);
+      allow read: if isMe(uid)
+        || (signedIn() && resource.data.get('trainerId', null) == request.auth.uid)
+        || (signedIn() && resource.data.get('gymId', null) == request.auth.uid);   // gym owner reads their trainers
       allow create: if isMe(uid)
-        && request.resource.data.role in ['client', 'trainer']
-        && request.resource.data.get('trainerId', null) == null;
-      // The person themselves: can't change role; can only link to a trainer through that trainer's invite code
+        && request.resource.data.role in ['client', 'trainer', 'owner']
+        && request.resource.data.get('trainerId', null) == null
+        && request.resource.data.get('gymId', null) == null;
+      // The person themselves: can't change role; trainer and gym links only through a valid code
       allow update: if isMe(uid)
         && request.resource.data.role == resource.data.role
         && (request.resource.data.get('trainerId', null) == resource.data.get('trainerId', null)
             || request.resource.data.get('trainerId', null) == null
-            || get(/databases/$(database)/documents/codes/$(request.resource.data.trainerCode)).data.trainerId == request.resource.data.trainerId);
+            || get(/databases/$(database)/documents/codes/$(request.resource.data.trainerCode)).data.trainerId == request.resource.data.trainerId)
+        && (request.resource.data.get('gymId', null) == resource.data.get('gymId', null)
+            || request.resource.data.get('gymId', null) == null
+            || (resource.data.role == 'owner' && request.resource.data.gymId == uid)
+            || (resource.data.role == 'trainer'
+                && get(/databases/$(database)/documents/gymcodes/$(request.resource.data.gymCode)).data.gymId == request.resource.data.gymId));
       // Their trainer: may only change the program
       allow update: if signedIn() && resource.data.get('trainerId', null) == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['program', 'programUpdatedAt']);
 
-      // Workouts, cardio, check-ins and DEXA scans
+      // Workouts, cardio, check-ins, DEXA scans and health reports
       match /{col}/{doc} {
-        allow read: if isMe(uid) || isTrainerOf(uid);
-        allow write: if isMe(uid) && col in ['sessions', 'cardio', 'body', 'dexa'];
+        allow read: if isMe(uid)
+          || (isTrainerOf(uid) && (col != 'reports' || resource.data.get('shared', false) == true));
+        allow write: if isMe(uid) && col in ['sessions', 'cardio', 'body', 'dexa', 'reports'];
+        // Trainer logging a client's workout on the gym screen
+        allow create, update: if col == 'sessions' && isTrainerOf(uid);
       }
     }
 
@@ -37,18 +50,30 @@ service cloud.firestore {
       allow update, delete: if signedIn() && resource.data.trainerId == request.auth.uid;
     }
 
-    // Public summary for leaderboards and buddies: name, streak, rank, points, weekly counts, last workout, recent PBs.
-    // Never body weight, measurements, pain, notes or scans.
+    // Gyms (id = owner's user id) and gym codes
+    match /gyms/{gid} {
+      allow read: if isMe(gid) || (signedIn() && userData(request.auth.uid).get('gymId', null) == gid);
+      allow create: if isMe(gid) && request.resource.data.ownerId == gid && userData(gid).role == 'owner';
+      allow update, delete: if isMe(gid);
+    }
+    match /gymcodes/{code} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && request.resource.data.gymId == request.auth.uid;
+      allow delete: if signedIn() && resource.data.gymId == request.auth.uid;
+    }
+
+    // Public summary for leaderboards, buddies and gym owners: name, streak, rank, points, workout counts,
+    // last workout, recent PBs, program summary. Never body weight, measurements, pain, notes, scans or reports.
     match /public/{uid} {
       allow read: if signedIn() && (isMe(uid)
         || resource.data.get('trainerId', null) == request.auth.uid
         || request.auth.uid in resource.data.get('buddies', [])
         || (resource.data.get('showOnBoard', false) == true
             && resource.data.get('trainerId', null) != null
-            && resource.data.get('trainerId', null) == userData(request.auth.uid).get('trainerId', null)));
+            && resource.data.get('trainerId', null) == userData(request.auth.uid).get('trainerId', null))
+        || ownsGymOfTrainer(resource.data.get('trainerId', null)));
       allow create: if isMe(uid) && request.resource.data.buddies.size() == 0
         && request.resource.data.get('trainerId', null) == userData(uid).get('trainerId', null);
-      // Owner: any change, but trainer link must match their account and max 20 buddies
       allow update: if isMe(uid) && request.resource.data.buddies.size() <= 20
         && request.resource.data.get('trainerId', null) == userData(uid).get('trainerId', null);
       // Someone else: may only add themselves (with this person's buddy code) or remove themselves
@@ -79,7 +104,8 @@ service cloud.firestore {
     // Coach challenges and their leaderboards
     match /challenges/{cid} {
       allow read: if signedIn() && (resource.data.trainerId == request.auth.uid
-        || resource.data.trainerId == userData(request.auth.uid).get('trainerId', null));
+        || resource.data.trainerId == userData(request.auth.uid).get('trainerId', null)
+        || ownsGymOfTrainer(resource.data.trainerId));
       allow create: if signedIn() && request.resource.data.trainerId == request.auth.uid
         && userData(request.auth.uid).role == 'trainer';
       allow update, delete: if signedIn() && resource.data.trainerId == request.auth.uid;
@@ -87,10 +113,17 @@ service cloud.firestore {
       match /entries/{eid} {
         function chal() { return get(/databases/$(database)/documents/challenges/$(cid)).data; }
         allow read: if signedIn() && (chal().trainerId == request.auth.uid
-          || chal().trainerId == userData(request.auth.uid).get('trainerId', null));
-        allow create, update: if isMe(eid) && chal().trainerId == userData(eid).get('trainerId', null);
+          || chal().trainerId == userData(request.auth.uid).get('trainerId', null)
+          || ownsGymOfTrainer(chal().trainerId));
+        allow create, update: if isMe(eid) && chal().trainerId == userData(eid).get('trainerId', null)
+          && (chal().get('members', null) == null || eid in chal().members);
         allow delete: if isMe(eid) || (signedIn() && chal().trainerId == request.auth.uid);
       }
+    }
+
+    // A trainer's squads (client groups)
+    match /trainers/{tid}/squads/{sid} {
+      allow read, write: if isMe(tid);
     }
 
     // A trainer's private notes on their clients

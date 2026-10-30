@@ -659,6 +659,10 @@ const Store = {
   async delFile(id){ if (this.mode === "idb") return this.req(this.tx("files","readwrite").delete(id)); },
   async clearRecords(){
     if (this.mode === "idb"){ await this.req(this.tx("records","readwrite").clear()); }
+  },
+  async clearAll(){
+    if (this.mode === "idb"){ await this.req(this.tx("records","readwrite").clear()); await this.req(this.tx("files","readwrite").clear()); }
+    try { localStorage.removeItem("sl-data"); localStorage.removeItem("sl-draft"); } catch(e){}
   }
 };
 const uid = p => p + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
@@ -1253,6 +1257,7 @@ function sheetHTML(){
     <button class="btn blue block" data-act="export-json">Export for Claude review (.json)</button>
     <button class="btn block" data-act="export-csv">Export sets as spreadsheet (.csv)</button>
     <button class="btn block" data-act="backup">Save full backup</button>
+    ${isTrainer() ? "" : `<button class="btn danger block" data-act="ask-reset">Start over: delete all my data</button>`}
     <label class="f">Restore from a backup file<input type="file" id="restore-file" accept="application/json,.json"></label>
     <button class="btn block" data-act="sheet-close">Close</button>`;
   } else if (k === "text"){
@@ -1370,6 +1375,10 @@ app.addEventListener("click", async ev => {
   const t = ev.target.closest("[data-act]"); if (!t) return;
   const a = t.dataset.act;
   if (a === "scrim"){ if (ev.target === t) closeSheet(); return; }
+  if (a === "ask-reset"){
+    S.sheet = {kind:"confirm", title:"Start over as a new user?", text:`This permanently deletes every workout, cardio session, check-in, DEXA scan and report${isCloudClient() ? " in your account and" : ""} on this phone, resets your program and settings${isCloudClient() && Cloud.me.trainerId ? ", and disconnects you from your trainer" : ""}. You keep your login${isCloudClient() ? " and name" : ""}. Save a backup first if you might want any of it.`, yes:"Delete everything and start over", danger:true, run: () => resetAccount()};
+    S.forceRender = true; return render();
+  }
   if (a === "ob-retake"){ S.sheet = null; S.obOffered = true; return startOnboarding(); }
   if (a === "ob-pick"){ const k = t.dataset.k, v = t.dataset.v; S.ob.a[k] = (k === "days" || k === "mins") ? +v : v; if (k === "goal" && v !== "event") delete S.ob.a.event; S.forceRender = true; return rerenderLogKeepScroll(); }
   if (a === "ob-pain"){ const p = S.ob.a.pain, v = t.dataset.v; obCollect(); S.ob.a.pain = p.includes(v) ? p.filter(x => x !== v) : [...p, v]; return rerenderLogKeepScroll(); }
@@ -2255,6 +2264,28 @@ function viewWelcome(){
 }
 function viewSplash(){
   return `<main><div class="wrap" style="align-items:center;padding-top:30vh"><img src="${MARK_NAVY}" alt="" class="mark lt" style="height:90px"><img src="${MARK_WHITE}" alt="" class="mark dk" style="height:90px"><p class="muted">Opening Primal Strength…</p></div></main>`;
+}
+
+/* ============ Start over ============ */
+async function resetAccount(){
+  toast("Deleting your data…");
+  try {
+    if (isCloudClient()){
+      for (const c of COLS){
+        const q = await uref().collection(c).get();
+        await Promise.all(q.docs.map(d => uref().collection(c).doc(d.id).delete()));
+      }
+      const fresh = defaultsFor(false);
+      await uref().update({program: clean(fresh.program), settings: clean(fresh.settings), trainerId: null, trainerCode: null, trainerName: null});
+    }
+    await Store.clearAll();
+    clearDraft(); S.timer = null;
+    S.data = {sessions:[], cardio:[], body:[], dexa:[]};
+    S.profile = defaultsFor(false);
+    if (!isCloudClient()) await Store.saveProfile(S.profile);
+    S.ob = null; S.obOffered = false; S.view = "today"; S.sub = null;
+    toast("Done — you're starting fresh");
+  } catch(e){ console.warn(e); toast("Couldn't finish deleting: " + (e.code || e.message || "error") + ". Try again."); }
 }
 
 /* ============ Boot ============ */

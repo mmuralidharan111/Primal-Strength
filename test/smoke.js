@@ -143,6 +143,12 @@ async function load(fb){
   check(A.text().includes("History"), "back on workouts after save");
   await A.click('[data-act="tab"][data-v="progress"]'); check(A.text().includes("Lifts"), "progress renders after a workout");
   await A.click('[data-act="settings"]', "open settings"); check(A.text().includes("Android app"), "settings explains accounts need the Android app");
+  step = "start-over";
+  await A.click('[data-act="ask-reset"]', "start over button");
+  await A.click('[data-act="confirm-yes"]', "confirm start over"); await sleep(300);
+  check(A.text().includes("I'm your Primal Strength coach"), "after start over the coach questionnaire runs again");
+  await A.click('[data-act="ob-skip"]', "skip questionnaire");
+  await A.click('[data-act="tab"][data-v="workouts"]'); check(A.text().includes("Finished workouts appear here"), "workout history is empty after start over");
   A.w.close();
 
   /* ===== 2. Trainer + client with accounts ===== */

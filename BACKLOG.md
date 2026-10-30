@@ -7,20 +7,20 @@ Requested features, not yet built.
 ## Next build (agreed)
 - **Account deletion**: "Delete my account" in Settings removes the login and all data (workouts, check-ins, DEXA, reports, public summary, buddy links, codes, challenge entries), with a confirmation step. Also a web page explaining how to request deletion. Keep the existing "Start over" option, which wipes data but keeps the login.
 - **Privacy policy**: a page on the website (and linked from sign-up and Settings) covering what is collected, including health data, who can see it (trainer, buddies, gym owner summaries), storage in Firebase, sharing being off by default, deletion, and contact details. Written with India's DPDP Act in mind.
-- **Firebase App Check**: only the real app and website can talk to the database (Play Integrity on Android, reCAPTCHA on the web), switched to enforcement after a monitoring period.
-
-## Later
-- Play Store readiness: signed release bundle (.aab) with an upload key and Play App Signing, target Android 16 (API 36), decide the final app ID, store listing assets, Data safety and health declarations, 12-tester / 14-day closed test.
-- Location-aware milestones and comparisons:
+- **Health report files on all devices**: report files (PDFs, photos of blood work, scans) uploaded to Firebase Storage so they appear on every device the person signs in on. The trainer can see a file only when that report is shared. Needs Firebase's pay-as-you-go Blaze plan (free allowance covers small use; a budget alert will be set).
+- **Location-aware units and milestones**:
   - Ask for the user's city at sign-up / in Settings, with an option to fill it from the phone's location (city level only; never store precise coordinates).
   - Localise milestone comparisons (e.g. London to Brighton instead of Bangalore to Mysore); fall back to universal comparisons when no local set exists.
   - Localise event suggestions/templates and units (km/miles, kg/lb) by country.
   - Optional: gym owners set the gym's city for shared local landmarks and city-wide leaderboards.
+
+## Later
+- Firebase App Check: switch on together with Play Store readiness (Android check only works for apps installed from the Play Store).
+- Play Store readiness: signed release bundle (.aab) with an upload key and Play App Signing, target Android 16 (API 36), decide the final app ID, store listing assets, Data safety and health declarations, 12-tester / 14-day closed test.
 - AI coaching (Cloud Functions + Claude API): post-workout feedback, weekly review, trainer suggestions. Needs Anthropic API key and Firebase Blaze plan.
 - iPhone TestFlight build (needs Apple Developer Program).
 
 ## Ideas (not yet requested)
-- Report files synced across devices and viewable by trainers (needs Firebase Storage on the Blaze plan).
 - Push notifications for trainer alerts and buddy high-fives (needs Firebase Cloud Messaging).
 - Database-rules tests against the official Firebase emulator.
 - Email verification at sign-up.

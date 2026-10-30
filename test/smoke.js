@@ -266,7 +266,7 @@ async function load(fb){
   step = "challenge";
   await T.click('[data-act="ttab"][data-v="tsquad"]', "trainer Squad tab");
   await T.click('[data-act="chal-new"]', "new challenge");
-  await T.type("#ch-title", "November blitz"); T.$("#ch-metric").value = "sessions";
+  const ct = T.$('[data-chf="title"]'); ct.value = "November blitz"; ct.dispatchEvent(new T.w.Event("input", {bubbles: true}));
   await T.click('[data-act="chal-save"]', "create challenge"); await sleep(300);
   check(T.text().includes("November blitz"), "challenge listed for trainer");
   await C.click('[data-act="tab"][data-v="squad"]', "client Squad tab"); await sleep(300);

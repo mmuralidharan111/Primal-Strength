@@ -25,6 +25,12 @@ Requested features, not yet built.
 - Ties into the gym big-screen view (gym-wide leaderboards and challenges).
 - Open questions: what owners may see of client data (summary only vs full); trainers moving between gyms; billing per gym.
 
+## 5. Custom coach challenges and squads
+- **Custom challenges:** besides the five built-in rankings (workouts, cardio minutes, running km, points, strength score gain), let a trainer build a challenge from any available metric, e.g. sets completed, tonnes lifted, check-ins, PBs set, full weeks closed, a specific exercise (heaviest squat, most push-ups, fastest 1 km), or a weighted mix of several metrics.
+- **Squads / client groups:** trainers create named groups of clients (e.g. "6 am crew", "Hyrox team") and run a challenge for one group, several, or all clients.
+- **Custom periods:** quick presets (this week, this month, 4 weeks, block length) plus any start and end date, and optional recurring challenges (e.g. a new monthly challenge that auto-starts each month). Note: any start and end date can already be picked today; presets and recurrence are the new parts.
+- Optional targets ("everyone who hits 12 workouts gets a badge") alongside rankings.
+
 ## Later
 - AI coaching (Cloud Functions + Claude API): post-workout feedback, weekly review, trainer suggestions. Needs Anthropic API key and Firebase Blaze plan.
 - iPhone TestFlight build (needs Apple Developer Program).

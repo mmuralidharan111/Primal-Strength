@@ -7,7 +7,6 @@ Requested features, not yet built.
 ## Next build (agreed)
 - **Account deletion**: "Delete my account" in Settings removes the login and all data (workouts, check-ins, DEXA, reports, public summary, buddy links, codes, challenge entries), with a confirmation step. Also a web page explaining how to request deletion. Keep the existing "Start over" option, which wipes data but keeps the login.
 - **Privacy policy**: a page on the website (and linked from sign-up and Settings) covering what is collected, including health data, who can see it (trainer, buddies, gym owner summaries), storage in Firebase, sharing being off by default, deletion, and contact details. Written with India's DPDP Act in mind.
-- **Health report files on all devices**: report files (PDFs, photos of blood work, scans) uploaded to Firebase Storage so they appear on every device the person signs in on. The trainer can see a file only when that report is shared. Needs Firebase's pay-as-you-go Blaze plan (free allowance covers small use; a budget alert will be set).
 - **Location-aware units and milestones**:
   - Ask for the user's city at sign-up / in Settings, with an option to fill it from the phone's location (city level only; never store precise coordinates).
   - Localise milestone comparisons (e.g. London to Brighton instead of Bangalore to Mysore); fall back to universal comparisons when no local set exists.
@@ -23,6 +22,7 @@ Requested features, not yet built.
 - iPhone TestFlight build (needs Apple Developer Program).
 
 ## Ideas (not yet requested)
+- Health report files on all devices: files uploaded to Firebase Storage so they appear on every signed-in device; trainer sees a file only when the report is shared. Needs Firebase's Blaze plan.
 - Push notifications for trainer alerts and buddy high-fives (needs Firebase Cloud Messaging).
 - Email verification at sign-up.
 

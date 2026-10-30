@@ -13,6 +13,8 @@ Requested features, not yet built.
   - Localise milestone comparisons (e.g. London to Brighton instead of Bangalore to Mysore); fall back to universal comparisons when no local set exists.
   - Localise event suggestions/templates and units (km/miles, kg/lb) by country.
   - Optional: gym owners set the gym's city for shared local landmarks and city-wide leaderboards.
+- **Edit profile**: Settings → Edit profile for name, date of birth (replaces age), sex, height, weight, goal, experience, days per week, equipment, injury areas and health notes. Saves without changing the program; a new weight is also logged as a body check-in; available to clients with a trainer too. The trainer sees the updated answers and gets an alert if goal or injuries change; self-coached users are offered a rebuilt starter plan. Units follow the location setting (cm or ft/in, kg or lb).
+- **Database rules tests**: run the security rules against Google's official Firebase emulator in CI, covering each role (client, trainer, buddy, gym owner, stranger).
 
 ## Later
 - Firebase App Check: switch on together with Play Store readiness (Android check only works for apps installed from the Play Store).
@@ -22,7 +24,6 @@ Requested features, not yet built.
 
 ## Ideas (not yet requested)
 - Push notifications for trainer alerts and buddy high-fives (needs Firebase Cloud Messaging).
-- Database-rules tests against the official Firebase emulator.
 - Email verification at sign-up.
 
 ## Built (October 2026)

@@ -2,6 +2,12 @@
 
 Requested features, not yet built.
 
+## 1. Location-aware milestones and comparisons
+- Ask for the user's city at sign-up / in Settings, with an option to fill it from the phone's location (city level only; never store precise coordinates).
+- Use it to localise milestone comparisons, e.g. a London user sees "London to Brighton" instead of "Bangalore to Mysore"; fall back to universal comparisons (marathons, mountains climbed, Great Wall lengths) when no local set exists.
+- Localise event suggestions and templates where relevant (nearby races, local Hyrox events) and units (km/miles, kg/lb) by country.
+- Optional: gym owners set the gym's city so a whole gym shares local landmarks and city-wide leaderboards.
+
 ## Later
 - AI coaching (Cloud Functions + Claude API): post-workout feedback, weekly review, trainer suggestions. Needs Anthropic API key and Firebase Blaze plan.
 - iPhone TestFlight build (needs Apple Developer Program).

@@ -3113,8 +3113,10 @@ function nextPeriod(c){
 }
 async function rollChallenges(){
   if (!isTrainer()) return;
+  Social.rolling = Social.rolling || new Set();
   for (const c of Social.challenges){
-    if (!c.repeat || c.next || c.end >= today()) continue;
+    if (!c.repeat || c.next || c.end >= today() || Social.rolling.has(c.id)) continue;
+    Social.rolling.add(c.id);
     let cur = c, guard = 0, created = null;
     while (cur.end < today() && guard++ < 60){
       const [start, end] = nextPeriod(cur);

@@ -18,7 +18,13 @@ Requested features, not yet built.
 - Remove the hard-coded "extra right-side set" from the back-friendly program.
 - Instead, derive any left/right emphasis from the latest DEXA scan's trunk and limb lean-mass differences, and switch it off when the gap closes.
 
+## 4. Master gym and owner dashboard
+- A "gym" account that trainers link to (e.g. with a gym invite code), so one gym can have many trainers and their clients.
+- Gym owner / manager role with a dashboard: per-trainer client counts, active vs inactive clients, workouts logged per week, average client streaks and adherence, PBs set, challenge participation, and client retention.
+- Drill down from a trainer to their clients' programs and progress.
+- Ties into the gym big-screen view (gym-wide leaderboards and challenges).
+- Open questions: what owners may see of client data (summary only vs full); trainers moving between gyms; billing per gym.
+
 ## Later
 - AI coaching (Cloud Functions + Claude API): post-workout feedback, weekly review, trainer suggestions. Needs Anthropic API key and Firebase Blaze plan.
-- Gamification — ideas under discussion.
 - iPhone TestFlight build (needs Apple Developer Program).

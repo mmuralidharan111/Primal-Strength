@@ -37,6 +37,62 @@ service cloud.firestore {
       allow update, delete: if signedIn() && resource.data.trainerId == request.auth.uid;
     }
 
+    // Public summary for leaderboards and buddies: name, streak, rank, points, weekly counts, last workout, recent PBs.
+    // Never body weight, measurements, pain, notes or scans.
+    match /public/{uid} {
+      allow read: if signedIn() && (isMe(uid)
+        || resource.data.get('trainerId', null) == request.auth.uid
+        || request.auth.uid in resource.data.get('buddies', [])
+        || (resource.data.get('showOnBoard', false) == true
+            && resource.data.get('trainerId', null) != null
+            && resource.data.get('trainerId', null) == userData(request.auth.uid).get('trainerId', null)));
+      allow create: if isMe(uid) && request.resource.data.buddies.size() == 0
+        && request.resource.data.get('trainerId', null) == userData(uid).get('trainerId', null);
+      // Owner: any change, but trainer link must match their account and max 20 buddies
+      allow update: if isMe(uid) && request.resource.data.buddies.size() <= 20
+        && request.resource.data.get('trainerId', null) == userData(uid).get('trainerId', null);
+      // Someone else: may only add themselves (with this person's buddy code) or remove themselves
+      allow update: if signedIn() && !isMe(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['buddies', 'joinCode'])
+        && request.resource.data.buddies.size() <= 20
+        && ((request.resource.data.buddies.removeAll(resource.data.buddies).hasOnly([request.auth.uid])
+             && request.resource.data.buddies.size() == resource.data.buddies.size() + 1
+             && get(/databases/$(database)/documents/buddycodes/$(request.resource.data.joinCode)).data.uid == uid)
+          || (resource.data.buddies.removeAll(request.resource.data.buddies).hasOnly([request.auth.uid])
+             && request.resource.data.buddies.size() == resource.data.buddies.size() - 1));
+    }
+
+    // High-fives from buddies
+    match /public/{uid}/fives/{fid} {
+      allow read, delete: if isMe(uid);
+      allow create: if signedIn() && request.resource.data.from == request.auth.uid
+        && request.auth.uid in get(/databases/$(database)/documents/public/$(uid)).data.get('buddies', []);
+    }
+
+    // Buddy codes
+    match /buddycodes/{code} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // Coach challenges and their leaderboards
+    match /challenges/{cid} {
+      allow read: if signedIn() && (resource.data.trainerId == request.auth.uid
+        || resource.data.trainerId == userData(request.auth.uid).get('trainerId', null));
+      allow create: if signedIn() && request.resource.data.trainerId == request.auth.uid
+        && userData(request.auth.uid).role == 'trainer';
+      allow update, delete: if signedIn() && resource.data.trainerId == request.auth.uid;
+
+      match /entries/{eid} {
+        function chal() { return get(/databases/$(database)/documents/challenges/$(cid)).data; }
+        allow read: if signedIn() && (chal().trainerId == request.auth.uid
+          || chal().trainerId == userData(request.auth.uid).get('trainerId', null));
+        allow create, update: if isMe(eid) && chal().trainerId == userData(eid).get('trainerId', null);
+        allow delete: if isMe(eid) || (signedIn() && chal().trainerId == request.auth.uid);
+      }
+    }
+
     // A trainer's private notes on their clients
     match /trainers/{tid}/notes/{nid} {
       allow read, delete: if isMe(tid);

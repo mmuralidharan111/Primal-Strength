@@ -51,7 +51,16 @@ function makeFirebase(){
       id: p.split("/").pop(), path: p,
       get: async () => snapDoc(p, docs.get(p)),
       set: async d => { docs.set(p, resolveTs(d)); notify(); },
-      update: async d => { if (!docs.has(p)) throw {code: "not-found"}; docs.set(p, {...docs.get(p), ...resolveTs(d)}); notify(); },
+      update: async d => {
+        if (!docs.has(p)) throw {code: "not-found"};
+        const cur = {...docs.get(p)};
+        for (const [k, v] of Object.entries(d)){
+          if (v && v.__au) cur[k] = [...new Set([...(cur[k] || []), ...v.__au])];
+          else if (v && v.__ar) cur[k] = (cur[k] || []).filter(x => !v.__ar.includes(x));
+          else cur[k] = resolveTs({x: v}).x;
+        }
+        docs.set(p, cur); notify();
+      },
       delete: async () => { docs.delete(p); notify(); },
       onSnapshot: (cb) => { const l = {kind: "doc", path: p, cb}; listeners.add(l); setTimeout(() => fire(l), 0); return () => listeners.delete(l); },
       collection: c => query(p + "/" + c)
@@ -72,7 +81,7 @@ function makeFirebase(){
     signOut: async () => { user = null; emit(); },
     sendPasswordResetEmail: async () => {}
   };
-  const firestoreFn = () => db; firestoreFn.FieldValue = {serverTimestamp: () => SERVER_TS};
+  const firestoreFn = () => db; firestoreFn.FieldValue = {serverTimestamp: () => SERVER_TS, arrayUnion: (...v) => ({__au: v}), arrayRemove: (...v) => ({__ar: v})};
   return {initializeApp: () => {}, firestore: firestoreFn, auth: () => auth, _docs: docs};
 }
 
@@ -140,7 +149,14 @@ async function load(fb){
   await A.click('[data-act="swap-apply"]', "apply swap");
   check(A.text().includes("Machine chest press"), "swapped exercise shown");
   await A.click('[data-act="finish"]', "save workout");
+  check(A.text().includes("points") && A.text().includes("Workout complete"), "celebration shows points after a workout");
+  await A.click('[data-act="sheet-close"]', "close celebration");
   check(A.text().includes("History"), "back on workouts after save");
+  await A.click('[data-act="tab"][data-v="today"]'); check(A.text().includes("Workouts") && A.text().includes("Check-in") && A.text().includes("pts"), "rings, rank and points on Today");
+  await A.click('[data-act="tab"][data-v="progress"]'); await A.click('[data-act="ptab"][data-v="trophies"]', "trophies tab");
+  check(A.text().includes("Primal rank") && A.text().includes("Badges") && A.text().includes("First workout") && A.text().includes("Strength score"), "trophies show rank, badges and strength score");
+  await A.click('[data-act="ptab"][data-v="stats"]');
+  await A.click('[data-act="tab"][data-v="squad"]'); check(A.text().includes("need an account"), "Squad explains accounts are needed offline");
   await A.click('[data-act="tab"][data-v="progress"]'); check(A.text().includes("Lifts"), "progress renders after a workout");
   await A.click('[data-act="settings"]', "open settings"); check(A.text().includes("Android app"), "settings explains accounts need the Android app");
   step = "start-over";
@@ -204,10 +220,27 @@ async function load(fb){
   await T.click('[data-act="ctab"][data-v="program"]'); await T.click('[data-act="b-new"]');
   for (const k of ["hyrox","marathon","half","10k","crossfit","upperlower","ppl","fatloss"]) check(!!T.$(`[data-act="b-tpl"][data-v="tpl:${k}"]`), `template ${k} offered`);
   await T.click('[data-act="b-tpl"][data-v="tpl:half"]', "pick half-marathon template");
-  check(T.$$ ? true : true, "builder open");
+  const ev = new Date(Date.now() + 33 * 86400000), evStr = `${ev.getFullYear()}-${String(ev.getMonth()+1).padStart(2,"0")}-${String(ev.getDate()).padStart(2,"0")}`;
+  await T.type('[data-bp="event.name"]', "Bengaluru Half"); await T.type('[data-bp="event.date"]', evStr);
+  await T.click('[data-act="b-evfit"]', "fit block to event date");
+  check(T.text().includes("isn't enough time") && T.text().includes("real coach"), "short timeline warns and recommends a coach");
   await T.click('[data-act="b-save"]', "save template program"); await sleep(400);
   const hp = fb._docs.get("users/u_asha").program;
-  check(hp && hp.block.weeks === 12 && hp.days.length === 4 && hp.days[3].ex[0].n === "Long run" && hp.days[3].ex[0].repsInc === 1, "half-marathon program saved with progression");
+  check(hp && hp.block.weeks >= 4 && hp.block.weeks <= 6 && hp.event && hp.event.date === evStr && hp.block.peak === hp.block.weeks - 1, "half-marathon program compressed to the event date with a taper");
+  check(hp && hp.days.length === 4 && hp.days[3].ex[0].n === "Long run" && hp.days[3].ex[0].repsInc === 1, "half-marathon days and progression kept");
+
+  step = "challenge";
+  await T.click('[data-act="ttab"][data-v="tsquad"]', "trainer Squad tab");
+  await T.click('[data-act="chal-new"]', "new challenge");
+  await T.type("#ch-title", "November blitz"); T.$("#ch-metric").value = "sessions";
+  await T.click('[data-act="chal-save"]', "create challenge"); await sleep(300);
+  check(T.text().includes("November blitz"), "challenge listed for trainer");
+  await C.click('[data-act="tab"][data-v="squad"]', "client Squad tab"); await sleep(300);
+  check(C.text().includes("November blitz"), "client sees the challenge");
+  await C.click('[data-act="chal-join"]', "join challenge"); await sleep(300);
+  check([...fb._docs.keys()].some(k => /^challenges\/[^/]+\/entries\/u_asha$/.test(k)), "client entry created on join");
+  await C.click('[data-act="board-toggle"]', "show me on weekly board"); await sleep(200);
+  check(fb._docs.get("users/u_asha").settings.showOnBoard === true, "weekly board opt-in saved");
 
   step = "client-follows-program";
   await sleep(300);
@@ -222,6 +255,32 @@ async function load(fb){
   await C.click('[data-act="finish"]', "client saves workout"); await sleep(400);
   const alerts = [...fb._docs.keys()].filter(k => k.startsWith("trainers/u_coach/alerts/"));
   check(alerts.length === 1, "trainer alert created");
+
+  await C.click('[data-act="sheet-close"]', "close celebration");
+  await sleep(3200);
+  const entryKey = [...fb._docs.keys()].find(k => /^challenges\/[^/]+\/entries\/u_asha$/.test(k));
+  check(entryKey && fb._docs.get(entryKey).value === 1, "challenge score updates after a workout");
+  check(fb._docs.get("public/u_asha") && fb._docs.get("public/u_asha").weekSessions === 1 && fb._docs.get("public/u_asha").showOnBoard === true, "public summary synced");
+  check(!("weight" in (fb._docs.get("public/u_asha") || {})) && !JSON.stringify(fb._docs.get("public/u_asha") || {}).includes("backPain"), "public summary has no body weight or pain");
+  await T.click('[data-act="ttab"][data-v="tsquad"]'); await sleep(200);
+  check(T.text().includes("Asha") && T.text().includes("🥇"), "trainer leaderboard shows the client");
+
+  step = "buddies";
+  const ashaCode = fb._docs.get("users/u_asha").buddyCode;
+  check(!!ashaCode, "buddy code created");
+  let B = await load(makeFirebase());
+  await B.type("#a-name", "Ben Thomas"); await B.type("#a-email", "ben@test.in"); await B.type("#a-pass", "secret3");
+  await B.click('[data-act="auth-go"]', "create buddy account"); await sleep(600);
+  await B.click('[data-act="ob-skip"]', "buddy skips questionnaire"); await sleep(200);
+  await B.click('[data-act="tab"][data-v="squad"]'); await sleep(300);
+  await B.type("#buddy-code", ashaCode); await B.click('[data-act="buddy-add"]', "add buddy by code"); await sleep(500);
+  check((fb._docs.get("public/u_asha").buddies || []).includes("u_ben") && (fb._docs.get("public/u_ben").buddies || []).includes("u_asha"), "buddies linked both ways");
+  check(B.text().includes("Asha") && B.text().includes("Buddy board"), "buddy card and board shown");
+  await B.click('[data-act="five"]', "send high-five"); await sleep(300);
+  check([...fb._docs.keys()].some(k => k.startsWith("public/u_asha/fives/")), "high-five delivered");
+  await C.click('[data-act="tab"][data-v="today"]'); await sleep(200);
+  check(C.text().includes("high-fived"), "client sees the high-five");
+  B.w.close();
 
   step = "trainer-sees-alert";
   await sleep(300);

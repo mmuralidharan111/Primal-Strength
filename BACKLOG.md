@@ -21,6 +21,10 @@ Requested features, not yet built.
 - **Easier exercise swaps**: fewer taps to swap; tap the exercise name (not only the small swap icon) to open swaps; show the best 3–5 alternatives first, matched to the same muscles and the user's equipment and injuries; choose "just today" or "always" in the same step.
 - **Change the weight, reps adjust automatically**: if a weight isn't available, the user types the weight they have and the app recalculates the target reps for the same effort (from estimated 1-rep max, e.g. Epley), within sensible limits (e.g. 3–20 reps); if the weight is too light or heavy to stay in range it suggests adding or removing a set instead.
 - **Detailed cardio prescriptions**: cardio days spell out the settings, e.g. treadmill speed (km/h) and incline (%), time per block, intervals (work/rest), heart-rate zone or effort level; bike resistance and cadence; rower pace per 500 m and stroke rate. Shown in the workout and editable by trainers in the program builder; units follow the location setting.
+- **Health-data consent**: clear consent at sign-up linked to the privacy notice, plus a separate opt-in before health data is recorded (health reports, DEXA, health-screening answers, pain tracking). Consent can be withdrawn in Settings; consent date and version stored.
+- **Age check**: date of birth at sign-up; under-18s need a parent's or guardian's consent (parent email confirmation) before the account is active, per India's DPDP Act.
+- **Not-medical-advice note**: short disclaimer on health reports, trends and health-screening flags, and in the privacy policy/terms; the screening flags already advise seeing a doctor.
+- **Email verification**: new users confirm their email address (Firebase verification email) before full access; resend link; existing users prompted once.
 
 ## Later
 - Firebase App Check: switch on together with Play Store readiness (Android check only works for apps installed from the Play Store).
@@ -29,9 +33,9 @@ Requested features, not yet built.
 - iPhone TestFlight build (needs Apple Developer Program).
 
 ## Ideas (not yet requested)
+- Privacy documents: terms for gyms using the app, a data-breach response plan (72-hour reporting), a data-retention rule for inactive accounts.
 - Health report files on all devices: files uploaded to Firebase Storage so they appear on every signed-in device; trainer sees a file only when the report is shared. Needs Firebase's Blaze plan.
 - Push notifications for trainer alerts and buddy high-fives (needs Firebase Cloud Messaging).
-- Email verification at sign-up.
 
 ## Built (October 2026)
 - Gym big-screen view: up to 6 clients side by side, log sets on the touch screen, saves to each client.

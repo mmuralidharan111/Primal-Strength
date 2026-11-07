@@ -1,0 +1,21 @@
+name: Rules check (test branches)
+
+on:
+  push:
+    branches: [ 'test/**' ]
+
+jobs:
+  rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm install
+      - name: Database rules tests (official Firestore emulator)
+        run: npx --yes firebase-tools@13 emulators:exec --only firestore --project demo-primal "node test/rules.test.js"

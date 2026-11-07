@@ -31,6 +31,8 @@ service cloud.firestore {
       // Their trainer: may only change the program
       allow update: if signedIn() && resource.data.get('trainerId', null) == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['program', 'programUpdatedAt']);
+      // Deleting your own account
+      allow delete: if isMe(uid);
 
       // Workouts, cardio, check-ins, DEXA scans and health reports
       match /{col}/{doc} {
@@ -76,6 +78,7 @@ service cloud.firestore {
         && request.resource.data.get('trainerId', null) == userData(uid).get('trainerId', null);
       allow update: if isMe(uid) && request.resource.data.buddies.size() <= 20
         && request.resource.data.get('trainerId', null) == userData(uid).get('trainerId', null);
+      allow delete: if isMe(uid);
       // Someone else: may only add themselves (with this person's buddy code) or remove themselves
       allow update: if signedIn() && !isMe(uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['buddies', 'joinCode'])
@@ -135,6 +138,8 @@ service cloud.firestore {
     // Workout-completed alerts for a trainer
     match /trainers/{tid}/alerts/{aid} {
       allow read, update, delete: if isMe(tid);
+      // A client can see and remove the alerts about their own workouts (used when deleting their account)
+      allow read, delete: if signedIn() && resource.data.clientId == request.auth.uid;
       allow create: if signedIn() && request.resource.data.clientId == request.auth.uid
         && userData(request.auth.uid).get('trainerId', null) == tid;
     }

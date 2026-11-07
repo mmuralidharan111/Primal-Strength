@@ -39,6 +39,9 @@ jobs:
       - name: Smoke test (client and trainer flows)
         run: node test/smoke.js
 
+      - name: Database rules tests (official Firestore emulator)
+        run: npx --yes firebase-tools@13 emulators:exec --only firestore --project demo-primal "node test/rules.test.js"
+
       - name: Package the web version for GitHub Pages
         uses: actions/upload-pages-artifact@v3
         with:

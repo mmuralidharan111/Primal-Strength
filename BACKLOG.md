@@ -12,15 +12,7 @@ Requested features, not yet built.
   - Localise milestone comparisons (e.g. London to Brighton instead of Bangalore to Mysore); fall back to universal comparisons when no local set exists.
   - Localise event suggestions/templates and units (km/miles, kg/lb) by country.
   - Optional: gym owners set the gym's city for shared local landmarks and city-wide leaderboards.
-- **Edit profile**: Settings → Edit profile for name, date of birth (replaces age), sex, height, weight, goal, experience, days per week, equipment, injury areas and health notes. Saves without changing the program; a new weight is also logged as a body check-in; available to clients with a trainer too. The trainer sees the updated answers and gets an alert if goal or injuries change; self-coached users are offered a rebuilt starter plan. Units follow the location setting (cm or ft/in, kg or lb).
 - **Database rules tests**: run the security rules against Google's official Firebase emulator in CI, covering each role (client, trainer, buddy, gym owner, stranger).
-- **Squad → Troop**: rename the "Squad" tab and every user-facing "Squad/squads" label to "Troop/troops" (client tab, trainer tab, trainer client groups, challenge text, toasts). Use the Troop mark (three gorilla heads, centre one gold) from the rename-options design canvas as the tab icon and on the Troop screen header. Internal code and database names stay as they are, so nothing breaks.
-- **Keep the screen on**: while the app is open and in front, the phone screen doesn't switch off (screen wake lock on Android and the web; released when the app goes to the background). Setting to turn it off for anyone who prefers the normal behaviour.
-- **Loud beep when rest ends**: when the rest timer between sets runs out, play a loud beep (plus vibration) so the user knows to start the next set, even with the phone on a bench. Works with the screen on and in the background where Android allows. No "done" button needed on the timer.
-- **Open on the program and rewards**: once a user has a program, the app opens on a home screen with their program (today's or next workout) and the rings, streak and rewards. New users without a program keep the current welcome/set-up screen.
-- **Easier exercise swaps**: fewer taps to swap; tap the exercise name (not only the small swap icon) to open swaps; show the best 3–5 alternatives first, matched to the same muscles and the user's equipment and injuries; choose "just today" or "always" in the same step.
-- **Change the weight, reps adjust automatically**: if a weight isn't available, the user types the weight they have and the app recalculates the target reps for the same effort (from estimated 1-rep max, e.g. Epley), within sensible limits (e.g. 3–20 reps); if the weight is too light or heavy to stay in range it suggests adding or removing a set instead.
-- **Detailed cardio prescriptions**: cardio days spell out the settings, e.g. treadmill speed (km/h) and incline (%), time per block, intervals (work/rest), heart-rate zone or effort level; bike resistance and cadence; rower pace per 500 m and stroke rate. Shown in the workout and editable by trainers in the program builder; units follow the location setting.
 - **Health-data consent**: clear consent at sign-up linked to the privacy notice, plus a separate opt-in before health data is recorded (health reports, DEXA, health-screening answers, pain tracking). Consent can be withdrawn in Settings; consent date and version stored.
 - **Age check**: date of birth at sign-up; under-18s need a parent's or guardian's consent (parent email confirmation) before the account is active, per India's DPDP Act.
 - **Not-medical-advice note**: short disclaimer on health reports, trends and health-screening flags, and in the privacy policy/terms; the screening flags already advise seeing a doctor.
@@ -36,6 +28,16 @@ Requested features, not yet built.
 - Privacy documents: terms for gyms using the app, a data-breach response plan (72-hour reporting), a data-retention rule for inactive accounts.
 - Health report files on all devices: files uploaded to Firebase Storage so they appear on every signed-in device; trainer sees a file only when the report is shared. Needs Firebase's Blaze plan.
 - Push notifications for trainer alerts and buddy high-fives (needs Firebase Cloud Messaging).
+
+## Built (November 2026, build 26)
+- Whole program viewable week by week (Workouts tab week picker; Today offers next week's workouts once this week is done).
+- Today opens on your program (next workout, this week's list) and the rings, streak, rank and trophies.
+- All cardio counts toward the weekly target, including cardio inside workouts; speed and incline logged for walks and runs; cardio settings (speed, incline, weekly incline increase, effort) in programs and the trainer builder.
+- Screen stays on while the app is open; loud beep when rest ends, timer clears itself (no Done button).
+- Swap suggestions by muscles worked and equipment, with equipment filter and one-tap swap for today or from now on.
+- Change the weight and the target reps recalculate for the same effort.
+- Edit profile in Settings; trainer alerted when goal, schedule, equipment or injuries change.
+- Squad renamed Troop with the three-gorilla mark.
 
 ## Built (October 2026)
 - Gym big-screen view: up to 6 clients side by side, log sets on the touch screen, saves to each client.

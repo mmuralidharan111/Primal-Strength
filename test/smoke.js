@@ -119,8 +119,7 @@ async function load(fb){
 // The privacy screen every new user sees before anything else
 async function agree(X, {dob = "1985-04-12", health = true, staff = false} = {}){
   check(X.text().includes("Your privacy"), "privacy and consent screen shown");
-  if (staff){ X.$("#cg-adult").checked = true; }
-  else { await X.type("#cg-dob", dob); if (health) X.$("#cg-health").checked = true; }
+  if (!staff){ if (dob) await X.type("#cg-dob", dob); if (health) X.$("#cg-health").checked = true; }
   X.$("#cg-agree").checked = true;
   await X.click('[data-act="cg-go"]', "agree and continue"); await sleep(300);
 }
@@ -137,10 +136,7 @@ async function verifyEmail(X, fb, email){
   let A = await load(null);
   step = "consent";
   check(!A.$('[data-act="tab"]') && !A.text().includes("I'm your Primal Strength coach"), "nothing opens before the privacy screen");
-  A.$("#cg-agree").checked = false; await A.type("#cg-dob", "2010-05-01"); await A.click('[data-act="cg-go"]', "under-18 tries to continue"); await sleep(200);
-  check(A.text().includes("18 or over") && !A.$('[data-act="tab"]'), "under-18 is stopped");
-  await A.click('[data-act="cg-redo"]', "go back from the age stop");
-  await A.type("#cg-dob", "1981-03-02"); await A.click('[data-act="cg-go"]'); await sleep(100);
+  await A.click('[data-act="cg-go"]'); await sleep(100);
   check(A.text().includes("Your privacy"), "can't continue without agreeing to the policy");
   await agree(A);
   step = "onboarding";
@@ -347,7 +343,8 @@ async function verifyEmail(X, fb, email){
   await B.type("#a-name", "Ben Thomas"); await B.type("#a-email", "ben@test.in"); await B.type("#a-pass", "secret3");
   await B.click('[data-act="auth-go"]', "create buddy account"); await sleep(600);
   fb.verify("ben@test.in"); await B.click('[data-act="verify-check"]'); await sleep(200);
-  await agree(B, {health: false});
+  await agree(B, {health: false, dob: ""});
+  check(!!fb._docs.get("users/u_ben").consent, "date of birth is optional");
   await B.click('[data-act="ob-skip"]', "buddy skips questionnaire"); await sleep(200);
   check(B.text().includes("Let's set up your training") && !!B.$("#e-tcode"), "new account without a program sees questionnaire and trainer-code options");
   await B.click('[data-act="tab"][data-v="squad"]'); await sleep(300);

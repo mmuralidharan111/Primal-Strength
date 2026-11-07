@@ -14,7 +14,7 @@ Requested features, not yet built.
   - Cloud route: the Google Health API replaced the Fitbit Web API (switched off 2 Nov 2026); every scope is "Restricted" and needs Google's privacy and security review, and Google paused onboarding of new projects in October. Garmin, Oura, Whoop and Strava have their own APIs (Garmin needs business approval). Cloud routes need a server (Firebase Cloud Functions on the Blaze plan).
   - Ultrahuman Ring: writes sleep, heart rate, HRV, resting heart rate, SpO2, skin temperature, steps and workouts to Health Connect and Apple Health, so the Health Connect route covers it. A direct link is also possible through Ultrahuman's Partnership API (OAuth; base https://partner.ultrahuman.com/api/partners/v1, daily metrics endpoint; no workouts) but needs Partnership API access from Ultrahuman and a small server to hold the client secret and poll hourly.
   - Only with the user's health-data consent; privacy policy updated to name each connected service.
-- Parental consent for under-18s (verifiable, needs email sending: Firebase Blaze plan + Cloud Function). Until then the app is 18+ only.
+- Age verification: 18+ check at sign-up, and verifiable parental consent for under-18s under India's DPDP Act (needs email sending: Firebase Blaze plan + Cloud Function). Removed from the app for now; date of birth is asked but optional.
 - Location-aware event suggestions (nearby races) and gym city for city-wide leaderboards.
 - Firebase App Check: switch on together with Play Store readiness (Android check only works for apps installed from the Play Store).
 - Play Store readiness: signed release bundle (.aab) with an upload key and Play App Signing, target Android 16 (API 36), decide the final app ID, store listing assets, Data safety and health declarations, 12-tester / 14-day closed test.
@@ -27,7 +27,7 @@ Requested features, not yet built.
 - Push notifications for trainer alerts and buddy high-fives (needs Firebase Cloud Messaging).
 
 ## Built (November 2026, privacy release)
-- Privacy and consent screen before anything else: privacy policy agreement, date of birth (18+ only), country and city; separate optional health-data consent.
+- Privacy and consent screen before anything else: privacy policy agreement, date of birth (optional), country and city; separate optional health-data consent.
 - Health data switch in Settings → Privacy; switching off deletes DEXA scans, reports, screening answers and pain scores and hides those features.
 - Email verification for new accounts (accounts from 7 Nov 2026); older accounts see a reminder in Settings.
 - Delete my account (password confirm) removes login, all records, public summary, buddy links, challenge entries; trainer is told and their notes are removed. Web page: delete-account.html.

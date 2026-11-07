@@ -1335,8 +1335,6 @@ const checkRow = (id, text, on) => `<label class="row small" style="flex-wrap:no
 function viewConsent(){
   const staff = isStaff(), C = S.cg || (S.cg = {}), c0 = consentRec() || {};
   const shell = inner => `<main style="padding-bottom:calc(30px + env(safe-area-inset-bottom,0px))"><div class="wrap" style="max-width:520px"><img src="${MARK_NAVY}" alt="" class="mark lt" style="height:64px;align-self:flex-start"><img src="${MARK_WHITE}" alt="" class="mark dk" style="height:64px;align-self:flex-start">${inner}</div></main>`;
-  if (C.under) return shell(`<h1>Sorry, you need to be 18 or over</h1><p style="margin:0">Primal Strength is for adults for now. We haven't saved your details.</p>
-    <button class="btn block" data-act="cg-redo">I entered the wrong date</button>${cloudOK() && Cloud.user ? `<button class="btn ghost" data-act="signout">Sign out</button>` : ""}`);
   const it = (S.profile && set_().intake) || {}, dob = C.dob || it.dob || c0.dob || "";
   const L = (S.profile && set_().loc) || guessLoc();
   return shell(`<div><span class="eyebrow">Before you start</span><h1>Your privacy</h1></div>
@@ -1346,7 +1344,7 @@ function viewConsent(){
   ${staff ? "" : `<p class="small" style="margin:0">A trainer you connect to sees your training. A gym owner sees summaries only. Buddies and boards see highlights, only if you join them.</p>`}
   <p class="small" style="margin:0">No ads, no tracking, and your data is never sold.</p>
   <a class="small" href="${PRIVACY_URL}" target="_blank" rel="noopener">Read the full privacy policy</a></section>
-  ${staff ? checkRow("cg-adult", "I'm 18 or over.", false) : `<label class="f">Date of birth<input type="date" id="cg-dob" value="${esc(dob)}" max="${today()}"></label><span class="small muted">Primal Strength is for adults 18 and over.</span>
+  ${staff ? "" : `<label class="f">Date of birth (optional)<input type="date" id="cg-dob" value="${esc(dob)}" max="${today()}"></label><span class="small muted">Helps set safe training targets. You can add it later in your profile.</span>
   <div class="grid2"><label class="f">Country<select id="cg-country">${countryOptions(L.country)}</select></label><label class="f">City (optional)<input id="cg-city" value="${esc(L.city || "")}" autocomplete="address-level2"></label></div>
   <button class="btn ghost" data-act="locate" style="align-self:flex-start">Use my location to fill in my city</button>
   <span class="small muted">Sets your units (kg or lb, km or miles) and local milestones. Only your city and country are saved.</span>`}
@@ -1359,17 +1357,12 @@ function viewConsent(){
 async function consentGo(){
   const staff = isStaff();
   let dob = null;
-  if (staff){ if (!cbx("cg-adult")) return toast("Primal Strength is for adults 18 and over."); }
-  else {
-    dob = val("cg-dob"); if (!dob) return toast("Enter your date of birth.");
-    const age = ageFromDob(dob); if (age == null) return toast("Check your date of birth.");
-    if (age < 18){ S.cg = {under: true}; S.forceRender = true; render(); window.scrollTo(0, 0); return; }
-  }
+  if (!staff){ dob = val("cg-dob") || null; if (dob && ageFromDob(dob) == null) return toast("Check your date of birth, or leave it blank."); }
   if (!cbx("cg-agree")) return toast("Tick the box to agree to the privacy policy.");
-  const rec = clean({v: CONSENT_V, policy: POLICY_V, at: new Date().toISOString(), adult: true, health: staff ? null : cbx("cg-health")});
+  const rec = clean({v: CONSENT_V, policy: POLICY_V, at: new Date().toISOString(), health: staff ? null : cbx("cg-health")});
   if (!staff){
     setLoc(val("cg-country"), val("cg-city"));
-    const it = {...(set_().intake || {}), dob, age: ageFromDob(dob)};
+    const it = {...(set_().intake || {})}; if (dob){ it.dob = dob; it.age = ageFromDob(dob); }
     S.profile.settings.intake = clean(it);
     S.profile.settings.consent = rec;
     if (!rec.health){ S.profile.settings.trackBack = false; }
@@ -1408,7 +1401,7 @@ async function eraseHealthData(){
 }
 async function setHealthConsent(on){
   if (!on) await eraseHealthData();
-  const rec = clean({...(consentRec() || {v: CONSENT_V, policy: POLICY_V, adult: true}), health: on, healthAt: new Date().toISOString()});
+  const rec = clean({...(consentRec() || {v: CONSENT_V, policy: POLICY_V}), health: on, healthAt: new Date().toISOString()});
   S.profile.settings.consent = rec; await persistProfile();
   if (cloudOK() && Cloud.user){ Cloud.me.consent = rec; await uref().update({consent: rec}).catch(() => toast("Couldn't sync — check your connection.")); }
   S.forceRender = true; render(); toast(on ? "Health data switched on" : "Health data switched off and deleted");
@@ -2095,7 +2088,6 @@ app.addEventListener("click", async ev => {
   if (a === "cg-go") return consentGo();
   if (a === "locate") return locateMe();
   if (a === "units"){ const [k, v] = t.dataset.v.split(":"); S.profile.settings.units = {...U(), [k]: v}; S.profile.settings.unitsManual = true; await persistProfile(); S.forceRender = true; render(); return toast("Units updated"); }
-  if (a === "cg-redo"){ S.cg = {}; S.forceRender = true; return render(); }
   if (a === "verify-check") return verifyCheck();
   if (a === "verify-resend") return verifyResend();
   if (a === "health-toggle"){

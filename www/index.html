@@ -474,7 +474,7 @@ const strengthType = t => !["cardio","run","dist"].includes(t);
 function swapSuggestions(def, current, eq){
   const cat = libCat(def.n), mus = musclesOf(def.n), alts = def.alts || [];
   const pain = new Set(((S.profile && set_().intake) || {}).pain || []);
-  const backCare = pain.has("back") || (S.profile && set_().trackBack);
+  const backCare = pain.has("back") || (S.profile && trackPain());
   const cardioish = !strengthType(def.type);
   return LIB.filter(c => c.n !== current && (eq ? equipClass(c.n) === eq : true) && (cardioish ? !strengthType(c.type) : strengthType(c.type)) && !(backCare && c.back))
     .map(c => {
@@ -633,7 +633,8 @@ function targetReps(ex, w){
 }
 function targetText(ex, idx, w){
   const r = targetReps(ex, w);
-  const unit = ex.type === "carry" ? " m" : ex.type === "time" ? " s" : ex.type === "run" ? (/km|mi/i.test(r) ? "" : " km") : ex.type === "dist" ? (/\bm\b|km/i.test(r) ? "" : " m") : ex.type === "cardio" ? (/min/i.test(r) ? "" : " min") : "";
+  let r2 = r; if (ex.type === "run" && isMi()) r2 = r.replace(/\d+(?:\.\d+)?/g, n => fmt(+n / MIK, 1)).replace(/km/g, "mi");
+  const unit = ex.type === "carry" ? " m" : ex.type === "time" ? " s" : ex.type === "run" ? (/km|mi/i.test(r2) ? "" : " " + dUnit()) : ex.type === "dist" ? (/\bm\b|km/i.test(r) ? "" : " m") : ex.type === "cardio" ? (/min/i.test(r) ? "" : " min") : "";
   let sets, n = setLabels(ex, idx, w).length;
   const sd = sideFor(ex);
   if (sd){
@@ -643,7 +644,7 @@ function targetText(ex, idx, w){
   } else sets = n === 1 ? "" : `${n} sets × `;
   const kg = targetKg(ex, w);
   const crx = ["cardio","run","dist"].includes(ex.type) ? cardioRxText(ex, w) : "";
-  return `${sets}${r}${unit}${ex.each && !sd ? " each" : ""}${kg != null ? ` @ ${fmt(kg)} kg` : ""}${crx ? " · " + crx : ""}`;
+  return `${sets}${r2}${unit}${ex.each && !sd ? " each" : ""}${kg != null ? ` @ ${fmt(loadOut(kg))} ${wUnit()}` : ""}${crx ? " · " + crx : ""}`;
 }
 function targetKg(ex, w){
   if (["run","dist","cardio","bw"].includes(ex.type)) return null;
@@ -681,7 +682,7 @@ function targetIncline(e, w){
 }
 function cardioRxText(e, w){
   const r = cardioRx(e), inc = targetIncline(e, w), bits = [];
-  if (r.speed != null && r.speed !== "") bits.push(`${r.speed} km/h`);
+  if (r.speed != null && r.speed !== "") bits.push(`${spText(r.speed)} ${spUnit()}`);
   if (inc != null) bits.push(`${fmt(inc)}% incline`);
   if (r.effort) bits.push(r.effort);
   return bits.join(" · ");
@@ -817,7 +818,7 @@ function loadHint(ex, prev){
   if (done.every(t => +t.reps >= top)){
     const kg = Math.max(...done.map(t => +t.kg));
     const inc = ex.main && /zercher/i.test(ex.n) ? 2.5 : (ex.main || /thrust|leg press|deadlift/i.test(ex.n)) ? 5 : 2.5;
-    return `You hit ${top} reps on every set last time. Try ${+(kg + inc).toFixed(1)} kg.`;
+    return `You hit ${top} reps on every set last time. Try ${isLb() ? fmt(Math.round((kg + inc) / LBK / 5) * 5) + " lb" : +(kg + inc).toFixed(1) + " kg"}.`;
   }
   return null;
 }
@@ -934,12 +935,14 @@ function render(){
   if (S.view !== "log" && ae && ae.matches && ae.matches("main input, main textarea, main select") && !S.forceRender){ pendingRender = true; return; }
   S.forceRender = false; pendingRender = false;
   let html = "";
-  if (needsOnboarding() && !S.ob && S.view !== "log" && !S.obOffered){
+  if (needsOnboarding() && !needsConsent() && !needsVerify() && !S.ob && S.view !== "log" && !S.obOffered){
     S.obOffered = true; const prev = set_().intake || {};
     S.ob = {step: 0, a: {pain: [], health: {}, lifts: {}, days: 3, mins: 60, ...clean(prev)}}; S.view = "onboard";
   }
   if (cloudOK() && (!Cloud.authKnown || (Cloud.user && !Cloud.me))) html = viewSplash();
   else if (cloudOK() && !Cloud.user) html = viewWelcome();
+  else if (needsVerify()) html = viewVerify();
+  else if (needsConsent()) html = viewConsent();
   else if (S.view === "onboard" && S.ob && !isTrainer()) html = viewOnboard();
   else if (isOwner()){
     if (!["owner","otrainer","oaccount"].includes(S.view)) S.view = "owner";
@@ -983,13 +986,13 @@ function viewToday(){
   const G = gameStats();
   let out = `<div><span class="eyebrow">${DOW[dow]} · ${shortDate(t)}</span><h1>${greeting()}${nm ? ", " + esc(nm) : ""}</h1>${prog().starter ? `<span class="muted small">You're on your starter block. A trainer can build your full program.</span>` : ""}</div>`;
   // safety flag first
-  if (set_().trackBack){
+  if (trackPain()){
     const last = sessionsSorted()[0];
     if (last && last.backPain != null && set_().backNormal != null && +last.backPain >= +set_().backNormal + 2)
       out += `<div class="banner bad"><div><b>Back flag.</b> Last session's back pain was ${last.backPain}/10, 2+ above your normal of ${set_().backNormal}. Cut lower-body loads by 20% this week and use goblet squats.</div></div>`;
   }
   const banners = [];
-  if (ds.state === "overdue") banners.push(`<div class="banner warn"><div><b>DEXA scan overdue.</b> Your last scan was ${shortDate(ds.last)}; the next was due ${shortDate(ds.next)}. <button class="btn ghost" data-act="tab" data-v="body">Add scan</button></div></div>`);
+  if (!healthOK()){} else if (ds.state === "overdue") banners.push(`<div class="banner warn"><div><b>DEXA scan overdue.</b> Your last scan was ${shortDate(ds.last)}; the next was due ${shortDate(ds.next)}. <button class="btn ghost" data-act="tab" data-v="body">Add scan</button></div></div>`);
   else if (ds.state === "soon") banners.push(`<div class="banner warn"><div><b>DEXA due in ${ds.left} days</b> (${shortDate(ds.next)}). Book the same machine as last time.</div></div>`);
   else if (ds.state === "none") banners.push(`<div class="banner info"><div><b>Add your last DEXA scan</b> so the app can remind you when the next one is due. <button class="btn ghost" data-act="tab" data-v="body">Add scan</button></div></div>`);
   const lb = set_().lastBackup;
@@ -1043,8 +1046,8 @@ function todayStatsBlock(){
   let out = "";
   const lw = latestBody("weight"), lwa = latestBody("waist");
   const firstWaist = [...S.data.body].filter(b => b.waist).sort((a,b)=>a.date.localeCompare(b.date))[0];
-  out += `<section class="grid3"><div class="stat"><b class="num">${lw ? fmt(lw.weight) : "–"}</b><span>Weight kg</span></div>
-  <div class="stat"><b class="num">${lwa ? fmt(lwa.waist) : "–"}</b><span>Waist cm${firstWaist && lwa && firstWaist.id !== lwa.id ? ` (${(lwa.waist-firstWaist.waist>0?"+":"")}${fmt(lwa.waist-firstWaist.waist)})` : ""}</span></div>
+  out += `<section class="grid3"><div class="stat"><b class="num">${lw ? fmt(wOut(lw.weight)) : "–"}</b><span>Weight ${wUnit()}</span></div>
+  <div class="stat"><b class="num">${lwa ? fmt(lenOut(lwa.waist)) : "–"}</b><span>Waist ${lenUnit()}${firstWaist && lwa && firstWaist.id !== lwa.id ? ` (${(lwa.waist-firstWaist.waist>0?"+":"")}${fmt(lenOut(lwa.waist-firstWaist.waist))})` : ""}</span></div>
   <div class="stat"><b class="num">${S.data.sessions.length}</b><span>Workouts logged</span></div></section>`;
   if (hasProgram() && isCloudClient() && !Cloud.me.trainerId) out += `<section class="card"><div class="row between" style="flex-wrap:nowrap"><div><b>Working with a trainer?</b><div class="small muted">Enter their invite code to get your program from them.</div></div><button class="btn blue" data-act="settings">Add code</button></div></section>`;
   return out;
@@ -1141,11 +1144,11 @@ function viewLog(){
   <button class="savebtn" data-act="finish">Save</button></div></div>
   <main style="padding-bottom:calc(140px + env(safe-area-inset-bottom,0px))"><div class="wrap">
   <div class="row between"><span>Auto-fill from last time</span><button class="toggle ${S.ui.autofill?"on":""}" data-act="autofill" aria-pressed="${S.ui.autofill}" aria-label="Auto-fill from last time"></button></div>`;
-  if (prog().notes && prog().kind === "personal" && D.pre && set_().trackBack && D.pre.backPain != null && set_().backNormal != null && +D.pre.backPain >= +set_().backNormal + 2)
+  if (prog().notes && prog().kind === "personal" && D.pre && trackPain() && D.pre.backPain != null && set_().backNormal != null && +D.pre.backPain >= +set_().backNormal + 2)
     out += `<div class="banner bad"><div><b>Back is up today (${D.pre.backPain}/10).</b> Use goblet squats and take 20% off lower-body loads.</div></div>`;
   let lastGroup = null;
   D.exercises.forEach((x, xi) => {
-    const e = exDef(x); const cols = COL[x.type] || COL.load;
+    const e = exDef(x); const cols = colsFor(x.type);
     if (e.group && e.group !== lastGroup) out += `<div class="group-head" style="margin-inline:0;border-radius:10px">${esc(e.group)}</div>`;
     lastGroup = e.group || null;
     const prev = previousFor(x.performedAs, D.id);
@@ -1163,23 +1166,23 @@ function viewLog(){
     <div class="sets"><span class="h">Set</span><span class="h">Previous</span><span class="h">${cols[0]}</span><span class="h">${cols[1]}</span><span></span>`;
     x.sets.forEach((s, si) => {
       const R0 = setRef(x, e, w, si, prev), p = R0.p;
-      const pText = p ? `${p.reps || "–"} × ${p.kg ? p.kg + " kg" : "–"}` : "–";
+      const pText = p ? setText(x.type, p) : "–";
       const lbl = s.label;
       out += `<span class="lbl num" title="${sd && sd.names[s.label[0]] ? esc(sd.names[s.label[0]]) : ""}">${esc(lbl)}</span><span class="prev num">${esc(pText)}</span>
-      <input inputmode="numeric" data-in="reps" data-x="${xi}" data-s="${si}" value="${esc(s.reps)}" placeholder="${esc(String(R0.repsPh))}" aria-label="${cols[0]} set ${esc(lbl)}" id="r-${xi}-${si}">
-      <input inputmode="decimal" data-in="kg" data-x="${xi}" data-s="${si}" value="${esc(s.kg)}" placeholder="${esc(String(R0.kgPh))}" ${x.type==="bw"?"disabled":""} aria-label="Kg set ${esc(lbl)}" id="k-${xi}-${si}">
+      <input inputmode="numeric" data-in="reps" data-x="${xi}" data-s="${si}" value="${esc(fieldShow(x.type, "reps", s.reps))}" placeholder="${esc(String(fieldShow(x.type, "reps", R0.repsPh)))}" aria-label="${cols[0]} set ${esc(lbl)}" id="r-${xi}-${si}">
+      <input inputmode="decimal" data-in="kg" data-x="${xi}" data-s="${si}" value="${esc(fieldShow(x.type, "kg", s.kg))}" placeholder="${esc(String(fieldShow(x.type, "kg", R0.kgPh)))}" ${x.type==="bw"?"disabled":""} aria-label="${cols[1]} set ${esc(lbl)}" id="k-${xi}-${si}">
       <button class="tick ${s.done?"on":""}" data-act="tick" data-x="${xi}" data-s="${si}" aria-label="Mark set ${esc(lbl)} done" aria-pressed="${s.done}">${I.check}</button>`;
     });
     if (CARDIO_TYPES.includes(x.type)){
       const rx = cardioRx(e), inc = targetIncline(e, w);
-      out += `</div><div class="grid2"><label class="f">Speed km/h<input inputmode="decimal" data-xin="speed" data-x="${xi}" value="${esc(x.speed || "")}" placeholder="${esc(rx.speed != null ? String(rx.speed) : "")}"></label><label class="f">Incline %<input inputmode="decimal" data-xin="incline" data-x="${xi}" value="${esc(x.incline || "")}" placeholder="${inc != null ? esc(fmt(inc)) : ""}"></label>`;
+      out += `</div><div class="grid2"><label class="f">Speed ${spUnit()}<input inputmode="decimal" data-xin="speed" data-x="${xi}" value="${esc(showSp(x.speed || ""))}" placeholder="${esc(rx.speed != null ? spText(rx.speed) : "")}"></label><label class="f">Incline %<input inputmode="decimal" data-xin="incline" data-x="${xi}" value="${esc(x.incline || "")}" placeholder="${inc != null ? esc(fmt(inc)) : ""}"></label>`;
     }
     out += `</div>${x.type === "load" ? `<div class="hint" id="adj-${xi}" ${adjNote(x, e, w, prev) ? "" : "hidden"}>${esc(adjNote(x, e, w, prev))}</div>` : ""}${sd ? `<div class="cue">${sd.order.map(k => `${k} = ${esc(sd.names[k])}`).join(" · ")}</div>` : ""}
     <div class="row"><button class="btn ghost" data-act="addset" data-x="${xi}">${I.plus.replace("<svg",'<svg width="20" height="20"')} Add new set</button>${x.sets.length > 1 ? `<button class="btn ghost" data-act="rmset" data-x="${xi}" style="color:var(--muted)">Remove last</button>` : ""}</div>
     ${x.note ? `<div class="cue">Note: ${esc(x.note)}</div>` : ""}</section>`;
   });
   out += `<section class="card"><h3>Finish</h3>
-  ${set_().trackBack ? `<div><div class="small muted" style="font-weight:600;margin-bottom:6px">Back pain now (0–10)</div><div class="seg">${[...Array(11)].map((_,i)=>`<button data-act="pain" data-v="${i}" class="${D.backPain===i?"on":""}">${i}</button>`).join("")}</div></div>` : ""}
+  ${trackPain() ? `<div><div class="small muted" style="font-weight:600;margin-bottom:6px">Back pain now (0–10)</div><div class="seg">${[...Array(11)].map((_,i)=>`<button data-act="pain" data-v="${i}" class="${D.backPain===i?"on":""}">${i}</button>`).join("")}</div></div>` : ""}
   <label class="f">Workout notes<textarea id="lognotes" data-in="notes">${esc(D.notes)}</textarea></label>
   <button class="btn primary block" data-act="finish">Save workout</button>
   <button class="btn danger block" data-act="discard">Discard workout</button></section></div></main>`;
@@ -1190,7 +1193,7 @@ function viewLog(){
 function setRef(x, e, w, si, prev){
   const s = x.sets[si];
   const p = prev ? (prev.sets.find(t => t.label === s.label && t.done) || null) : null;
-  const tk = targetKg(e, w), tr = repTop(targetReps(e, w));
+  const tk0 = targetKg(e, w), tk = tk0 != null && isLb() ? loadOut(tk0) * LBK : tk0, tr = repTop(targetReps(e, w));
   const refKg = p && +p.kg > 0 ? +p.kg : tk, refReps = p && +p.reps > 0 ? +p.reps : tr;
   let kgIn = null;
   for (let j = si; j >= 0; j--){ const v = x.sets[j].kg; if (v !== "" && v != null && +v > 0){ kgIn = +v; break; } }
@@ -1207,7 +1210,7 @@ function adjNote(x, e, w, prev){
   for (let si = 0; si < x.sets.length; si++){
     if (x.sets[si].done) continue;
     const a = setRef(x, e, w, si, prev).adj; if (!a) continue;
-    let msg = `At ${fmt(a.kg)} kg, aim for about ${a.reps} reps a set: the same effort as ${a.refReps} × ${fmt(a.refKg)} kg.`;
+    let msg = `At ${W(a.kg)}, aim for about ${a.reps} reps a set: the same effort as ${a.refReps} × ${W(a.refKg)}.`;
     if (a.reps > 20) msg += " That's light for this exercise: add a set, or lower the weight slowly.";
     if (a.reps < 3) msg += " That's very heavy for this exercise: go lighter if you can.";
     return msg;
@@ -1219,10 +1222,248 @@ function refreshAdj(xi){
   const e = exDef(x), w = S.draft.week, prev = previousFor(x.performedAs, S.draft.id);
   x.sets.forEach((s, si) => {
     const R0 = setRef(x, e, w, si, prev), r = document.getElementById(`r-${xi}-${si}`), k = document.getElementById(`k-${xi}-${si}`);
-    if (r) r.placeholder = String(R0.repsPh); if (k && !k.disabled) k.placeholder = String(R0.kgPh);
+    if (r) r.placeholder = String(fieldShow(x.type, "reps", R0.repsPh)); if (k && !k.disabled) k.placeholder = String(fieldShow(x.type, "kg", R0.kgPh));
   });
   const h = document.getElementById("adj-" + xi); if (h){ const m = adjNote(x, e, w, prev); h.textContent = m; h.hidden = !m; }
 }
+
+/* ============ Location and units ============ */
+const COUNTRIES = [["IN","India"],["US","United States"],["GB","United Kingdom"],["AE","United Arab Emirates"],["SG","Singapore"],["AU","Australia"],["CA","Canada"],["NZ","New Zealand"],["IE","Ireland"],["ZA","South Africa"],["DE","Germany"],["FR","France"],["NL","Netherlands"],["ES","Spain"],["IT","Italy"],["SA","Saudi Arabia"],["QA","Qatar"],["OM","Oman"],["KW","Kuwait"],["MY","Malaysia"],["LK","Sri Lanka"],["NP","Nepal"],["BD","Bangladesh"],["JP","Japan"],["HK","Hong Kong"],["PH","Philippines"],["ID","Indonesia"],["TH","Thailand"],["KE","Kenya"],["NG","Nigeria"],["BR","Brazil"],["MX","Mexico"],["XX","Other"]];
+const LB_COUNTRIES = ["US","LR","MM"], MI_COUNTRIES = ["US","GB","LR","MM"];
+const unitsFor = c => ({w: LB_COUNTRIES.includes(c) ? "lb" : "kg", d: MI_COUNTRIES.includes(c) ? "mi" : "km"});
+const TZ_COUNTRY = {"Asia/Kolkata":"IN","Asia/Calcutta":"IN","Europe/London":"GB","Europe/Dublin":"IE","Asia/Dubai":"AE","Asia/Singapore":"SG","Australia/Sydney":"AU","Australia/Melbourne":"AU","Australia/Brisbane":"AU","Australia/Perth":"AU","Pacific/Auckland":"NZ","Africa/Johannesburg":"ZA","Europe/Berlin":"DE","Europe/Paris":"FR","Europe/Amsterdam":"NL","Europe/Madrid":"ES","Europe/Rome":"IT","Asia/Riyadh":"SA","Asia/Qatar":"QA","Asia/Muscat":"OM","Asia/Kuwait":"KW","Asia/Kuala_Lumpur":"MY","Asia/Colombo":"LK","Asia/Kathmandu":"NP","Asia/Dhaka":"BD","Asia/Tokyo":"JP","Asia/Hong_Kong":"HK","Asia/Manila":"PH","Asia/Jakarta":"ID","Asia/Bangkok":"TH","Africa/Nairobi":"KE","Africa/Lagos":"NG","America/Sao_Paulo":"BR","America/Mexico_City":"MX","America/Toronto":"CA","America/Vancouver":"CA"};
+function guessLoc(){
+  let tz = ""; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch(e){}
+  return {country: TZ_COUNTRY[tz] || (/^America\/(New_York|Chicago|Denver|Los_Angeles|Phoenix|Anchorage|Detroit|Indiana)/.test(tz) || tz.startsWith("Pacific/Honolulu") ? "US" : "IN"), city: ""};
+}
+const countryOptions = sel => COUNTRIES.map(([k, l]) => `<option value="${k}" ${k === sel ? "selected" : ""}>${l}</option>`).join("");
+const countryName = c => (COUNTRIES.find(x => x[0] === c) || [, ""])[1];
+function setLoc(country, city){
+  const s = S.profile.settings, c = country || "IN";
+  s.loc = clean({country: c, city: String(city || "").trim() || null});
+  if (!s.unitsManual) s.units = unitsFor(c);
+}
+// Phone location is used once to look up the city; coordinates are never saved.
+async function locateMe(){
+  if (!navigator.geolocation) return toast("Location isn't available on this device. Type your city instead.");
+  toast("Finding your city…");
+  navigator.geolocation.getCurrentPosition(async pos => {
+    try {
+      const {latitude: la, longitude: lo} = pos.coords;
+      const r = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${la.toFixed(3)}&longitude=${lo.toFixed(3)}&localityLanguage=en`);
+      const j = await r.json(); const city = j.city || j.locality || "", cc = (j.countryCode || "").toUpperCase();
+      const cs = document.getElementById(S.sheet && S.sheet.kind === "profile" ? "pf-country" : "cg-country"), ci = document.getElementById(S.sheet && S.sheet.kind === "profile" ? "pf-city" : "cg-city");
+      if (cs) cs.value = COUNTRIES.some(x => x[0] === cc) ? cc : "XX"; if (ci) ci.value = city;
+      toast(city ? `Found ${city}` : "Couldn't find your city. Type it instead.");
+    } catch(e){ toast("Couldn't look up your city. Type it instead."); }
+  }, () => toast("Location permission was declined. Type your city instead."), {enableHighAccuracy: false, timeout: 15000, maximumAge: 600000});
+}
+// Everything is stored in kg, km and cm; these convert for display and input.
+const LBK = 0.45359237, MIK = 1.609344, INC = 2.54;
+const U = () => (!isStaff() && S.profile && S.profile.settings.units) || {w: "kg", d: "km"};
+const isLb = () => U().w === "lb", isMi = () => U().d === "mi";
+const wUnit = () => U().w, dUnit = () => U().d, lenUnit = () => isLb() ? "in" : "cm", spUnit = () => isMi() ? "mph" : "km/h";
+const num = v => v !== "" && v != null && !isNaN(+v);
+const rnd = (v, d = 2) => String(Math.round(v * 10 ** d) / 10 ** d);
+const wOut = kg => num(kg) ? (isLb() ? +kg / LBK : +kg) : null;
+const wIn = v => num(v) ? (isLb() ? rnd(+v * LBK, 4) : String(v)) : v;
+const dOut = km => num(km) ? (isMi() ? +km / MIK : +km) : null;
+const dIn = v => num(v) ? (isMi() ? rnd(+v * MIK, 4) : String(v)) : v;
+const lenOut = cm => num(cm) ? (isLb() ? +cm / INC : +cm) : null;
+const lenIn = v => num(v) ? (isLb() ? +v * INC : +v) : null;
+const loadOut = kg => num(kg) ? (isLb() ? Math.round(+kg / LBK / 2.5) * 2.5 : +kg) : null;   // targets rounded to plates
+const W = (kg, d = 1) => num(kg) ? `${fmt(wOut(kg), d)} ${wUnit()}` : "–";
+const D = (km, d = 1) => num(km) ? `${fmt(dOut(km), d)} ${dUnit()}` : "–";
+const L = (cm, d = 1) => num(cm) ? `${fmt(lenOut(cm), d)} ${lenUnit()}` : "–";
+const showW = v => num(v) ? rnd(wOut(v), 1) : (v ?? "");      // an input's value in the user's unit
+const showD = v => num(v) ? rnd(dOut(v), 2) : (v ?? "");
+const showSp = v => num(v) ? rnd(dOut(v), 1) : (v ?? "");
+// convert the numbers inside a text such as "5–5.5" km/h
+const spText = t => t == null || t === "" ? "" : isMi() ? String(t).replace(/\d+(?:\.\d+)?/g, n => fmt(+n / MIK, 1)) : String(t);
+// set table: which logged field holds a weight or a distance
+const fieldKind = (type, f) => f === "kg" && ["load","carry","time"].includes(type) ? "w" : (f === "kg" && type === "cardio") || (f === "reps" && type === "run") ? "d" : null;
+const fieldShow = (type, f, v) => fieldKind(type, f) === "w" ? showW(v) : fieldKind(type, f) === "d" ? showD(v) : (v ?? "");
+const fieldStore = (type, f, v) => fieldKind(type, f) === "w" ? wIn(v) : fieldKind(type, f) === "d" ? dIn(v) : v;
+const colsFor = type => (COL[type] || COL.load).map(c => c.replace(/^Kg/, isLb() ? "Lb" : "Kg").replace(/^Km$/, isMi() ? "Mi" : "Km"));
+const setText = (type, t) => { const a = fieldKind(type, "reps") === "d" ? D(t.reps, 2) : (t.reps || "–"); const b = fieldKind(type, "kg") === "w" ? (num(t.kg) && +t.kg ? W(t.kg) : "") : fieldKind(type, "kg") === "d" ? (num(t.kg) ? D(t.kg, 2) : "") : (t.kg ? t.kg : ""); return b ? `${a} × ${b}` : `${a}`; };
+
+/* Local milestones: city first, then country, then universal */
+const PLACES = {
+  bengaluru: [[42.2,"a marathon"],[145,"Bengaluru to Mysuru"],[345,"Bengaluru to Chennai"],[560,"Bengaluru to Goa"],[985,"Bengaluru to Mumbai"],[2150,"Bengaluru to Delhi"]],
+  mumbai: [[42.2,"a marathon"],[150,"Mumbai to Pune"],[525,"Mumbai to Ahmedabad"],[590,"Mumbai to Goa"],[985,"Mumbai to Bengaluru"],[1400,"Mumbai to Delhi"]],
+  delhi: [[42.2,"a marathon"],[230,"Delhi to Agra"],[280,"Delhi to Jaipur"],[450,"Delhi to Amritsar"],[1400,"Delhi to Mumbai"],[2150,"Delhi to Bengaluru"]],
+  chennai: [[42.2,"a marathon"],[150,"Chennai to Puducherry"],[345,"Chennai to Bengaluru"],[460,"Chennai to Madurai"],[630,"Chennai to Hyderabad"],[1340,"Chennai to Mumbai"]],
+  hyderabad: [[42.2,"a marathon"],[275,"Hyderabad to Vijayawada"],[570,"Hyderabad to Bengaluru"],[630,"Hyderabad to Chennai"],[710,"Hyderabad to Mumbai"],[1550,"Hyderabad to Delhi"]],
+  pune: [[42.2,"a marathon"],[150,"Pune to Mumbai"],[450,"Pune to Goa"],[840,"Pune to Bengaluru"],[1450,"Pune to Delhi"]],
+  kolkata: [[42.2,"a marathon"],[180,"Kolkata to Digha"],[630,"Kolkata to Darjeeling"],[1500,"Kolkata to Delhi"]],
+  london: [[42.2,"a marathon"],[85,"London to Brighton"],[190,"London to Bristol"],[340,"London to Manchester"],[650,"London to Edinburgh"],[1400,"Land's End to John o' Groats"]],
+  "new york": [[42.2,"a marathon"],[150,"New York to Philadelphia"],[350,"New York to Boston"],[365,"New York to Washington DC"],[1270,"New York to Chicago"],[4500,"coast to coast across the USA"]],
+  dubai: [[42.2,"a marathon"],[140,"Dubai to Abu Dhabi"],[420,"Dubai to Muscat"],[1000,"1,000 km"]],
+  singapore: [[42.2,"a marathon"],[50,"Singapore end to end"],[350,"Singapore to Kuala Lumpur"],[1450,"Singapore to Bangkok"]],
+  sydney: [[42.2,"a marathon"],[290,"Sydney to Canberra"],[880,"Sydney to Melbourne"],[920,"Sydney to Brisbane"]],
+  IN: [[42.2,"a marathon"],[150,"Mumbai to Pune"],[345,"Bengaluru to Chennai"],[1400,"Delhi to Mumbai"],[3600,"Kashmir to Kanyakumari"]],
+  GB: [[42.2,"a marathon"],[85,"London to Brighton"],[340,"London to Manchester"],[650,"London to Edinburgh"],[1400,"Land's End to John o' Groats"]],
+  US: [[42.2,"a marathon"],[350,"New York to Boston"],[615,"Los Angeles to San Francisco"],[1270,"New York to Chicago"],[4500,"coast to coast across the USA"]],
+  AE: [[42.2,"a marathon"],[140,"Dubai to Abu Dhabi"],[420,"Dubai to Muscat"]],
+  AU: [[42.2,"a marathon"],[290,"Sydney to Canberra"],[880,"Sydney to Melbourne"],[3900,"Sydney to Perth"]],
+  _: [[42.2,"a marathon"],[100,"a 100 km ultramarathon"],[446,"the length of the Grand Canyon"],[2300,"the length of the Great Barrier Reef"]]
+};
+const CITY_ALIAS = {bangalore:"bengaluru", bengaluru:"bengaluru", bombay:"mumbai", "new delhi":"delhi", gurgaon:"delhi", gurugram:"delhi", noida:"delhi", madras:"chennai", calcutta:"kolkata", "navi mumbai":"mumbai", thane:"mumbai", secunderabad:"hyderabad", nyc:"new york", "new york city":"new york", brooklyn:"new york", manhattan:"new york"};
+function runPlaces(){
+  const lc = (S.profile && set_().loc) || {}, city = String(lc.city || "").toLowerCase().trim();
+  const key = CITY_ALIAS[city] || city;
+  return PLACES[key] || PLACES[lc.country] || PLACES._;
+}
+
+/* ============ Privacy: consent, age check, email verification, account deletion ============ */
+const CONSENT_V = 1, POLICY_V = "1.0";
+const SITE = "https://mmuralidharan111.github.io/Primal-Strength/";
+const PRIVACY_URL = SITE + "privacy.html", DELETE_URL = SITE + "delete-account.html";
+const VERIFY_FROM = "2026-11-07";      // accounts created from this date must confirm their email first
+const MED_NOTE = "Primal Strength gives general fitness guidance, not medical advice. Check with a doctor before starting a new program, and stop if you feel chest pain, dizziness or unusual breathlessness.";
+const isStaff = () => isTrainer() || isOwner();
+function consentRec(){ if (cloudOK() && Cloud.user) return (Cloud.me && Cloud.me.consent) || null; return (S.profile && set_().consent) || null; }
+function needsConsent(){ if (!S.profile) return false; if (cloudOK() && Cloud.user && !Cloud.me) return false; const c = consentRec(); return !c || (c.v || 0) < CONSENT_V; }
+const healthOK = () => isStaff() || !!(consentRec() && consentRec().health);
+const trackPain = () => !!(S.profile && S.profile.settings.trackBack && healthOK());
+function needsVerify(){
+  if (!(cloudOK() && Cloud.user && Cloud.me) || Cloud.user.emailVerified) return false;
+  return (tsDate(Cloud.me.createdAt) || "9999-12-31") >= VERIFY_FROM;
+}
+const cbx = id => { const el = document.getElementById(id); return !!(el && el.checked); };
+const checkRow = (id, text, on) => `<label class="row small" style="flex-wrap:nowrap;align-items:flex-start;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px"><input type="checkbox" id="${id}" ${on ? "checked" : ""} style="width:22px;height:22px;flex:none;margin:0"><span>${text}</span></label>`;
+function viewConsent(){
+  const staff = isStaff(), C = S.cg || (S.cg = {}), c0 = consentRec() || {};
+  const shell = inner => `<main style="padding-bottom:calc(30px + env(safe-area-inset-bottom,0px))"><div class="wrap" style="max-width:520px"><img src="${MARK_NAVY}" alt="" class="mark lt" style="height:64px;align-self:flex-start"><img src="${MARK_WHITE}" alt="" class="mark dk" style="height:64px;align-self:flex-start">${inner}</div></main>`;
+  if (C.under) return shell(`<h1>Sorry, you need to be 18 or over</h1><p style="margin:0">Primal Strength is for adults for now. We haven't saved your details.</p>
+    <button class="btn block" data-act="cg-redo">I entered the wrong date</button>${cloudOK() && Cloud.user ? `<button class="btn ghost" data-act="signout">Sign out</button>` : ""}`);
+  const it = (S.profile && set_().intake) || {}, dob = C.dob || it.dob || c0.dob || "";
+  const L = (S.profile && set_().loc) || guessLoc();
+  return shell(`<div><span class="eyebrow">Before you start</span><h1>Your privacy</h1></div>
+  ${c0.v ? `<div class="banner info"><div>We've updated our privacy policy. Please review it and agree to continue.</div></div>` : ""}
+  <section class="card"><h3>What the app keeps and who sees it</h3>
+  <p class="small" style="margin:0">${staff ? "Your account details, and the data your clients share with you through the app." : `Your profile and training log, saved ${cloudOK() && Cloud.user ? "to your account (Google Firebase) and " : ""}on this phone.`}</p>
+  ${staff ? "" : `<p class="small" style="margin:0">A trainer you connect to sees your training. A gym owner sees summaries only. Buddies and boards see highlights, only if you join them.</p>`}
+  <p class="small" style="margin:0">No ads, no tracking, and your data is never sold.</p>
+  <a class="small" href="${PRIVACY_URL}" target="_blank" rel="noopener">Read the full privacy policy</a></section>
+  ${staff ? checkRow("cg-adult", "I'm 18 or over.", false) : `<label class="f">Date of birth<input type="date" id="cg-dob" value="${esc(dob)}" max="${today()}"></label><span class="small muted">Primal Strength is for adults 18 and over.</span>
+  <div class="grid2"><label class="f">Country<select id="cg-country">${countryOptions(L.country)}</select></label><label class="f">City (optional)<input id="cg-city" value="${esc(L.city || "")}" autocomplete="address-level2"></label></div>
+  <button class="btn ghost" data-act="locate" style="align-self:flex-start">Use my location to fill in my city</button>
+  <span class="small muted">Sets your units (kg or lb, km or miles) and local milestones. Only your city and country are saved.</span>`}
+  ${checkRow("cg-agree", `I've read the privacy policy and agree to Primal Strength using my personal data to run my account${staff ? "" : " and my training"}.`, false)}
+  ${staff ? "" : checkRow("cg-health", `<b>Optional:</b> also store my health information — DEXA scans, health reports, health-screening answers and pain or injury details — so my training can take them into account. I can change this any time in Settings.`, c0.health)}
+  <div class="banner info"><div><b>Not medical advice.</b> ${esc(MED_NOTE)}</div></div>
+  <button class="btn primary block" data-act="cg-go">Agree and continue</button>
+  ${cloudOK() && Cloud.user ? `<button class="btn ghost" data-act="signout">Sign out</button>` : ""}`);
+}
+async function consentGo(){
+  const staff = isStaff();
+  let dob = null;
+  if (staff){ if (!cbx("cg-adult")) return toast("Primal Strength is for adults 18 and over."); }
+  else {
+    dob = val("cg-dob"); if (!dob) return toast("Enter your date of birth.");
+    const age = ageFromDob(dob); if (age == null) return toast("Check your date of birth.");
+    if (age < 18){ S.cg = {under: true}; S.forceRender = true; render(); window.scrollTo(0, 0); return; }
+  }
+  if (!cbx("cg-agree")) return toast("Tick the box to agree to the privacy policy.");
+  const rec = clean({v: CONSENT_V, policy: POLICY_V, at: new Date().toISOString(), adult: true, health: staff ? null : cbx("cg-health")});
+  if (!staff){
+    setLoc(val("cg-country"), val("cg-city"));
+    const it = {...(set_().intake || {}), dob, age: ageFromDob(dob)};
+    S.profile.settings.intake = clean(it);
+    S.profile.settings.consent = rec;
+    if (!rec.health){ S.profile.settings.trackBack = false; }
+    await persistProfile();
+  }
+  if (cloudOK() && Cloud.user){ Cloud.me.consent = rec; try { await uref().update({consent: rec}); } catch(e){ return toast("Couldn't save — check your connection and try again."); } }
+  S.cg = null; S.forceRender = true; render(); window.scrollTo(0, 0);
+}
+function viewVerify(){
+  return `<main style="padding-bottom:calc(30px + env(safe-area-inset-bottom,0px))"><div class="wrap" style="max-width:440px">
+  <img src="${MARK_NAVY}" alt="" class="mark lt" style="height:64px;align-self:flex-start"><img src="${MARK_WHITE}" alt="" class="mark dk" style="height:64px;align-self:flex-start">
+  <h1>Confirm your email</h1><p style="margin:0">We've sent a link to <b>${esc(Cloud.user.email)}</b>. Tap it to confirm your address, then come back here.</p>
+  <button class="btn primary block" data-act="verify-check">I've confirmed my email</button>
+  <button class="btn block" data-act="verify-resend">Send the link again</button>
+  <p class="small muted" style="margin:0">Can't find it? Check your spam or promotions folder.</p>
+  <button class="btn ghost" data-act="signout">Use a different account</button></div></main>`;
+}
+async function verifyCheck(){
+  try { await Cloud.user.reload(); } catch(e){}
+  const u = firebase.auth().currentUser || Cloud.user; Cloud.user = u;
+  if (u.emailVerified){ toast("Email confirmed"); S.forceRender = true; render(); }
+  else toast("Not confirmed yet. Tap the link in the email first.");
+}
+async function verifyResend(){
+  try { await (firebase.auth().currentUser || Cloud.user).sendEmailVerification(); toast("Link sent to " + Cloud.user.email); }
+  catch(e){ toast(e && e.code === "auth/too-many-requests" ? "Too many tries. Wait a few minutes, then try again." : "Couldn't send the email. Try again shortly."); }
+}
+async function eraseHealthData(){
+  toast("Deleting your health data…");
+  for (const r of [...S.data.dexa]) await delRec("dexa", r.id);
+  for (const r of [...(S.data.reports || [])]) await delRec("reports", r.id);
+  for (const s of S.data.sessions.filter(x => x.backPain != null || (x.pre && x.pre.backPain != null))) await saveRec("sessions", {...s, backPain: null, pre: s.pre ? {...s.pre, backPain: null} : s.pre}).catch(() => {});
+  for (const b of S.data.body.filter(x => x.backPain != null)) await saveRec("body", {...b, backPain: null}).catch(() => {});
+  const it = {...(set_().intake || {})}; it.health = {}; it.pain = []; it.other = "";
+  Object.assign(S.profile.settings, {intake: clean(it), trackBack: false, backNormal: null});
+}
+async function setHealthConsent(on){
+  if (!on) await eraseHealthData();
+  const rec = clean({...(consentRec() || {v: CONSENT_V, policy: POLICY_V, adult: true}), health: on, healthAt: new Date().toISOString()});
+  S.profile.settings.consent = rec; await persistProfile();
+  if (cloudOK() && Cloud.user){ Cloud.me.consent = rec; await uref().update({consent: rec}).catch(() => toast("Couldn't sync — check your connection.")); }
+  S.forceRender = true; render(); toast(on ? "Health data switched on" : "Health data switched off and deleted");
+}
+async function deleteAccount(pass){
+  const u = firebase.auth().currentUser; if (!u) return;
+  try { await u.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(u.email, pass)); }
+  catch(e){ return toast(["auth/wrong-password","auth/invalid-credential","auth/invalid-login-credentials"].includes(e && e.code) ? "Wrong password." : "Couldn't confirm your password: " + ((e && e.code) || "error")); }
+  toast("Deleting your account…");
+  const uid = u.uid, me = {...(Cloud.me || {})}, db = Cloud.db;
+  const del = r => r.delete().catch(() => {});
+  const delAll = async col => { const q = await col.get().catch(() => null); if (q) for (const d of q.docs) await del(col.doc(d.id)); };
+  try {
+    stopListeners();
+    if (me.role === "client"){
+      if (me.trainerId){
+        const al = db.collection("trainers").doc(me.trainerId).collection("alerts");
+        const mine = await al.where("clientId", "==", uid).get().catch(() => null);
+        if (mine) for (const d of mine.docs) await del(al.doc(d.id));
+        await al.add({clientId: uid, clientName: me.name || me.email || "A client", kind: "deleted", title: "deleted their account", date: today(), read: false, ts: ts()}).catch(() => {});
+        const ch = await db.collection("challenges").where("trainerId", "==", me.trainerId).get().catch(() => null);
+        if (ch) for (const d of ch.docs) await del(db.collection("challenges").doc(d.id).collection("entries").doc(uid));
+      }
+      const pub = await db.collection("public").doc(uid).get().catch(() => null);
+      for (const b of ((pub && pub.exists && pub.data().buddies) || [])) await db.collection("public").doc(b).update({buddies: firebase.firestore.FieldValue.arrayRemove(uid)}).catch(() => {});
+      await delAll(db.collection("public").doc(uid).collection("fives"));
+      await del(db.collection("public").doc(uid));
+      if (me.buddyCode) await del(db.collection("buddycodes").doc(me.buddyCode));
+      for (const c of COLS) await delAll(uref(uid).collection(c));
+    }
+    if (me.role === "trainer"){
+      if (me.inviteCode) await del(db.collection("codes").doc(me.inviteCode));
+      for (const c of ["squads","notes","alerts"]) await delAll(db.collection("trainers").doc(uid).collection(c));
+      const ch = await db.collection("challenges").where("trainerId", "==", uid).get().catch(() => null);
+      if (ch) for (const d of ch.docs){ await delAll(db.collection("challenges").doc(d.id).collection("entries")); await del(db.collection("challenges").doc(d.id)); }
+    }
+    if (me.role === "owner"){ if (me.gymCode) await del(db.collection("gymcodes").doc(me.gymCode)); await del(db.collection("gyms").doc(uid)); }
+    await uref(uid).delete();
+    await Store.clearAll(); clearDraft(); S.timer = null;
+    S.data = emptyData(); S.profile = defaultsFor(false); await Store.saveProfile(S.profile).catch(() => {});
+    S.sheet = null; S.ob = null; S.obOffered = false; S.view = "today"; S.sub = null;
+    await u.delete();
+    toast("Your account and data have been deleted");
+  } catch(e){ console.warn(e); toast("Couldn't finish deleting: " + ((e && e.code) || "error") + ". Try again, or email us to finish it."); }
+}
+// A trainer's app tidies up after a client deletes their account: their notes about that client go too.
+async function cleanupDeletedClients(){
+  if (!isTrainer()) return;
+  for (const a of (S.alerts || []).filter(x => x.kind === "deleted" && !x.cleaned)){
+    const notes = await notesRefFor(Cloud.user.uid).where("clientId", "==", a.clientId).get().catch(() => null);
+    if (notes) for (const d of notes.docs) await notesRefFor(Cloud.user.uid).doc(d.id).delete().catch(() => {});
+    await Cloud.db.collection("trainers").doc(Cloud.user.uid).collection("alerts").doc(a.id).update({cleaned: true}).catch(() => {});
+  }
+}
+const notesRefFor = tid => Cloud.db.collection("trainers").doc(tid).collection("notes");
 
 /* ---- Edit profile ---- */
 const ageFromDob = dob => { if (!dob) return null; const b = parse(dob), n = new Date(); let a = n.getFullYear() - b.getFullYear(); if (n.getMonth() < b.getMonth() || (n.getMonth() === b.getMonth() && n.getDate() < b.getDate())) a--; return a >= 0 && a < 120 ? a : null; };
@@ -1234,26 +1475,31 @@ function profileSheet(){
   <label class="f">Name<input id="pf-name" value="${esc(name)}" autocomplete="name"></label>
   <div class="grid2"><label class="f">Date of birth<input type="date" id="pf-dob" value="${esc(it.dob || "")}" max="${today()}"></label>
   <label class="f">Sex${sel("pf-sex", [["","Prefer not to say"],["female","Female"],["male","Male"]], it.sex)}</label>
-  <label class="f">Height cm<input id="pf-height" inputmode="decimal" value="${esc(it.height ?? "")}"></label>
-  <label class="f">Weight kg<input id="pf-weight" inputmode="decimal" value="${esc(lw ? lw.weight : (it.weight ?? ""))}"></label></div>
+  <label class="f">Height ${lenUnit()}<input id="pf-height" inputmode="decimal" value="${it.height ? esc(rnd(lenOut(it.height), 1)) : ""}"></label>
+  <label class="f">Weight ${wUnit()}<input id="pf-weight" inputmode="decimal" value="${esc(showW(lw ? lw.weight : (it.weight ?? "")))}"></label>
+  <label class="f">Country<select id="pf-country">${countryOptions(((set_().loc) || guessLoc()).country)}</select></label>
+  <label class="f">City<input id="pf-city" value="${esc((set_().loc || {}).city || "")}" autocomplete="address-level2"></label></div>
+  <button class="btn ghost" data-act="locate" style="align-self:flex-start">Use my location to fill in my city</button>
+  <span class="small muted">Your city and country set your units and local milestones. Only the city is saved, never your exact location.</span>
   ${!it.dob && it.age ? `<span class="small muted">You gave your age as ${esc(it.age)}. Add your date of birth so it stays up to date.</span>` : ""}
   <label class="f">Main goal${sel("pf-goal", [["","Not set"], ...GOALS.map(g => [g[0], g[1]])], it.goal)}</label>
   <div class="grid2"><label class="f">Experience${sel("pf-exp", [["","Not set"], ...EXPERIENCE.map(g => [g[0], g[1]])], it.experience)}</label>
   <label class="f">Where you train${sel("pf-eq", [["","Not set"], ...EQUIPMENT.map(g => [g[0], g[1]])], it.equipment)}</label>
   <label class="f">Days a week${sel("pf-days", [2,3,4,5,6].map(d => [d, d]), it.days || 3)}</label>
   <label class="f">Minutes per session${sel("pf-mins", [30,45,60,75].map(d => [d, d]), it.mins || 60)}</label></div>
-  <div><div class="small muted" style="font-weight:600;margin-bottom:6px">Pain or past injuries</div><div class="chips" style="flex-wrap:wrap">${PAIN.map(([k, l]) => `<button class="chip ${P.pain.includes(k) ? "on" : ""}" data-act="pf-pain" data-v="${k}" aria-pressed="${P.pain.includes(k)}">${l}</button>`).join("")}</div></div>
-  <label class="f">Anything else your coach should know?<input id="pf-other" value="${esc(it.other || "")}" placeholder="Optional"></label>
+  ${healthOK() ? `<div><div class="small muted" style="font-weight:600;margin-bottom:6px">Pain or past injuries</div><div class="chips" style="flex-wrap:wrap">${PAIN.map(([k, l]) => `<button class="chip ${P.pain.includes(k) ? "on" : ""}" data-act="pf-pain" data-v="${k}" aria-pressed="${P.pain.includes(k)}">${l}</button>`).join("")}</div></div>
+  <label class="f">Anything else your coach should know?<input id="pf-other" value="${esc(it.other || "")}" placeholder="Optional"></label>` : ""}
   <button class="btn primary block" data-act="profile-save">Save profile</button><button class="btn block" data-act="sheet-close">Cancel</button>`;
 }
 async function saveProfileSheet(){
   const old = set_().intake || {}, P = S.sheet.p;
-  const name = val("pf-name"), dob = val("pf-dob") || old.dob || null, weight = numOrNull(val("pf-weight"));
-  const it = {...old, dob, age: ageFromDob(dob) ?? old.age ?? null, sex: val("pf-sex"), height: numOrNull(val("pf-height")), weight: weight ?? old.weight ?? null,
+  const name = val("pf-name"), dob = val("pf-dob") || old.dob || null, weight = num(val("pf-weight")) ? +wIn(val("pf-weight")) : null;
+  const it = {...old, dob, age: ageFromDob(dob) ?? old.age ?? null, sex: val("pf-sex"), height: lenIn(val("pf-height")), weight: weight ?? old.weight ?? null,
     goal: val("pf-goal") || null, experience: val("pf-exp") || null, equipment: val("pf-eq") || null, days: +val("pf-days") || old.days || 3, mins: +val("pf-mins") || old.mins || 60,
-    pain: [...P.pain], other: val("pf-other"), updated: today(), skipped: null};
-  if (it.height != null && (it.height < 100 || it.height > 250)) return toast("Height looks off: enter it in centimetres.");
-  if (weight != null && (weight < 25 || weight > 300)) return toast("Weight looks off: enter it in kilograms.");
+    pain: healthOK() ? [...P.pain] : [], other: healthOK() ? val("pf-other") : "", updated: today(), skipped: null};
+  if (it.height != null && (it.height < 100 || it.height > 250)) return toast(`Height looks off: enter it in ${isLb() ? "inches" : "centimetres"}.`);
+  if (weight != null && (weight < 25 || weight > 300)) return toast(`Weight looks off: enter it in ${isLb() ? "pounds" : "kilograms"}.`);
+  setLoc(val("pf-country"), val("pf-city"));
   const planKeys = ["goal","experience","equipment","days","mins"], changed = planKeys.filter(k => String(old[k] ?? "") !== String(it[k] ?? ""));
   const painChanged = [...(old.pain || [])].sort().join() !== [...it.pain].sort().join();
   S.profile.settings.intake = clean(it);
@@ -1287,14 +1533,14 @@ function viewCardio(){
   <label class="f">Type<select id="c-type">${["Zone 2 incline walk","Easy walk","Post-meal walks","Treadmill run","Outdoor run","Cycling","Rowing","Swimming","Hiking","Sport","4×4 intervals","Other"].map(o => `<option>${o}</option>`).join("")}</select></label>
   <label class="f">Minutes<input id="c-min" inputmode="numeric" placeholder="${cardioPlan(w, parse(today()).getDay())[1] || 30}"></label>
   <label class="f">Avg heart rate<input id="c-hr" inputmode="numeric" placeholder="bpm"></label>
-  <label class="f">Speed km/h<input id="c-speed" inputmode="decimal" placeholder="5.5"></label>
+  <label class="f">Speed ${spUnit()}<input id="c-speed" inputmode="decimal" placeholder="${isMi() ? "3.4" : "5.5"}"></label>
   <label class="f">Incline %<input id="c-inc" inputmode="decimal" placeholder="6"></label></div>
   <label class="f">Notes<input id="c-notes" placeholder="Optional"></label>
   <button class="btn primary block" type="submit">Save cardio</button></form>`;
   const fromW = [];
   S.data.sessions.forEach(ss => ss.exercises.forEach(e => { const m = exCardioMin(e); if (m >= 1) fromW.push({date: ss.date, ts: ss.ts, type: e.performedAs, minutes: Math.round(m), speed: e.speed, incline: e.incline, workout: ss.title, sid: ss.id}); }));
   const rows = [...S.data.cardio, ...fromW].sort(byDateDesc).slice(0, 20);
-  out += `<section class="card"><h3>Recent</h3>${rows.length ? `<div class="tbl"><table><tr><th>Date</th><th>Type</th><th>Min</th><th>km/h</th><th>Incl.</th><th>HR</th><th></th></tr>${rows.map(c => `<tr><td>${shortDate(c.date)}</td><td>${esc(c.type)}${c.workout ? `<div class="small muted">in ${esc(c.workout)}</div>` : ""}</td><td>${c.minutes}</td><td>${c.speed != null && c.speed !== "" ? fmt(c.speed) : "–"}</td><td>${c.incline != null && c.incline !== "" ? fmt(c.incline) + "%" : "–"}</td><td>${c.avgHr ? c.avgHr + " " + zonePill(c.avgHr) : "–"}</td><td>${c.workout ? `<button class="btn ghost" data-act="viewsession" data-id="${c.sid}" aria-label="Open workout">›</button>` : `<button class="btn ghost danger" data-act="del" data-col="cardio" data-id="${c.id}" aria-label="Delete">×</button>`}</td></tr>`).join("")}</table></div>` : `<div class="empty">Your cardio appears here.</div>`}</section>`;
+  out += `<section class="card"><h3>Recent</h3>${rows.length ? `<div class="tbl"><table><tr><th>Date</th><th>Type</th><th>Min</th><th>${spUnit()}</th><th>Incl.</th><th>HR</th><th></th></tr>${rows.map(c => `<tr><td>${shortDate(c.date)}</td><td>${esc(c.type)}${c.workout ? `<div class="small muted">in ${esc(c.workout)}</div>` : ""}</td><td>${c.minutes}</td><td>${num(c.speed) ? fmt(dOut(c.speed)) : "–"}</td><td>${c.incline != null && c.incline !== "" ? fmt(c.incline) + "%" : "–"}</td><td>${c.avgHr ? c.avgHr + " " + zonePill(c.avgHr) : "–"}</td><td>${c.workout ? `<button class="btn ghost" data-act="viewsession" data-id="${c.sid}" aria-label="Open workout">›</button>` : `<button class="btn ghost danger" data-act="del" data-col="cardio" data-id="${c.id}" aria-label="Delete">×</button>`}</td></tr>`).join("")}</table></div>` : `<div class="empty">Your cardio appears here.</div>`}</section>`;
   return out;
 }
 function zonePill(hr){
@@ -1310,15 +1556,16 @@ function viewBody(){
   let out = `<div><span class="eyebrow">Check-ins & scans</span><h1>Body</h1></div>
   <form class="card" id="bodyForm"><h3>Check-in</h3><span class="muted small">Measure waist at the navel, fasted, same time each week.</span>
   <div class="grid2"><label class="f">Date<input type="date" id="b-date" value="${today()}"></label>
-  <label class="f">Weight kg<input id="b-weight" inputmode="decimal" placeholder="${latestBody("weight") ? fmt(latestBody("weight").weight) : ""}"></label>
-  <label class="f">Waist cm<input id="b-waist" inputmode="decimal" placeholder="${latestBody("waist") ? fmt(latestBody("waist").waist) : ""}"></label>
+  <label class="f">Weight ${wUnit()}<input id="b-weight" inputmode="decimal" placeholder="${latestBody("weight") ? fmt(wOut(latestBody("weight").weight)) : ""}"></label>
+  <label class="f">Waist ${lenUnit()}<input id="b-waist" inputmode="decimal" placeholder="${latestBody("waist") ? fmt(lenOut(latestBody("waist").waist)) : ""}"></label>
   <label class="f">Sleep hours<input id="b-sleep" inputmode="decimal"></label>
   <label class="f">Recovery score<input id="b-rec" inputmode="numeric" placeholder="0–100"></label>
-  ${set_().trackBack ? `<label class="f">Back pain 0–10<input id="b-back" inputmode="numeric"></label>` : ""}</div>
+  ${trackPain() ? `<label class="f">Back pain 0–10<input id="b-back" inputmode="numeric"></label>` : ""}</div>
   <button class="btn primary block" type="submit">Save check-in</button></form>`;
   const rows = [...S.data.body].sort(byDateDesc).slice(0, 12);
-  out += `<section class="card"><h3>Recent check-ins</h3>${rows.length ? `<div class="tbl"><table><tr><th>Date</th><th>Kg</th><th>Waist</th><th>Sleep</th><th>Rec.</th>${set_().trackBack?"<th>Back</th>":""}<th></th></tr>${rows.map(b => `<tr><td>${shortDate(b.date)}${b.source==="pre-workout"?` <span class="pill blue">pre-lift</span>`:""}</td><td>${fmt(b.weight)}</td><td>${fmt(b.waist)}</td><td>${fmt(b.sleep)}</td><td>${fmt(b.recovery,0)}</td>${set_().trackBack?`<td>${fmt(b.backPain,0)}</td>`:""}<td><button class="btn ghost danger" data-act="del" data-col="body" data-id="${b.id}" aria-label="Delete">×</button></td></tr>`).join("")}</table></div>` : `<div class="empty">Check-ins and pre-workout weigh-ins appear here.</div>`}</section>`;
+  out += `<section class="card"><h3>Recent check-ins</h3>${rows.length ? `<div class="tbl"><table><tr><th>Date</th><th>${wUnit() === "lb" ? "Lb" : "Kg"}</th><th>Waist</th><th>Sleep</th><th>Rec.</th>${trackPain()?"<th>Back</th>":""}<th></th></tr>${rows.map(b => `<tr><td>${shortDate(b.date)}${b.source==="pre-workout"?` <span class="pill blue">pre-lift</span>`:""}</td><td>${fmt(wOut(b.weight))}</td><td>${fmt(lenOut(b.waist))}</td><td>${fmt(b.sleep)}</td><td>${fmt(b.recovery,0)}</td>${trackPain()?`<td>${fmt(b.backPain,0)}</td>`:""}<td><button class="btn ghost danger" data-act="del" data-col="body" data-id="${b.id}" aria-label="Delete">×</button></td></tr>`).join("")}</table></div>` : `<div class="empty">Check-ins and pre-workout weigh-ins appear here.</div>`}</section>`;
 
+  if (!healthOK()) return out + `<section class="card"><h3>DEXA scans and health reports</h3><p class="small" style="margin:0">You haven't switched on health data, so the app doesn't store DEXA scans, health reports or pain scores.</p><button class="btn block" data-act="settings">Switch it on in Settings → Privacy</button></section>`;
   // DEXA
   out += `<section class="card"><div class="row between"><h3>DEXA scans</h3>${ds.state==="none" ? `<span class="pill warn">No scan yet</span>` : ds.state==="overdue" ? `<span class="pill bad">Overdue</span>` : ds.state==="soon" ? `<span class="pill warn">Due in ${ds.left} d</span>` : `<span class="pill good">Next ${shortDate(ds.next)}</span>`}</div>
   <span class="muted small">Every ${set_().dexaWeeks} weeks (change in Settings). Judge each scan on fat mass, visceral fat, android % and the trunk left–right gap — not body-fat %.</span>
@@ -1349,25 +1596,25 @@ function viewProgress(){
   out += `<section class="card"><h3>Lifts</h3>`;
   if (S.ui.lift){
     out += `<div class="chips">${order.map(n => `<button class="chip ${n===S.ui.lift?"on":""}" data-act="pick-lift" data-v="${esc(n)}">${esc(n)}</button>`).join("")}</div>
-    <div class="chips">${[["top","Top set kg"],["e1rm","Est. 1-rep max"],["vol","Volume"]].map(([k,l]) => `<button class="chip ${S.ui.metric===k?"on":""}" data-act="pick-metric" data-v="${k}">${l}</button>`).join("")}</div>`;
+    <div class="chips">${[["top",`Top set ${wUnit()}`],["e1rm","Est. 1-rep max"],["vol","Volume"]].map(([k,l]) => `<button class="chip ${S.ui.metric===k?"on":""}" data-act="pick-metric" data-v="${k}">${l}</button>`).join("")}</div>`;
     const pts = []; const rowsT = [];
     [...S.data.sessions].sort((a,b)=>a.date.localeCompare(b.date)).forEach(s => s.exercises.filter(e => e.performedAs === S.ui.lift).forEach(e => {
       const t = topSet(e); if (!t) return;
       const vol = e.sets.filter(x=>x.done).reduce((a,x)=>a + (+x.kg||0)*(+x.reps||0), 0);
       const v = S.ui.metric === "top" ? +t.kg : S.ui.metric === "e1rm" ? e1rm(+t.kg, +t.reps) : vol;
-      if (v != null) pts.push({x:s.date, y:+v.toFixed(1)});
-      rowsT.push({date:s.date, top:`${t.kg} kg × ${t.reps}`, vol});
+      if (v != null) pts.push({x:s.date, y:+wOut(v).toFixed(1)});
+      rowsT.push({date:s.date, top:`${W(t.kg)} × ${t.reps}`, vol: wOut(vol)});
     }));
-    out += pts.length > 1 ? lineChart([{pts}], {unit: S.ui.metric === "vol" ? "" : " kg"}) : `<div class="empty">One session so far. The graph appears after the second.</div>`;
-    if (pts.length){ const first = pts[0].y, last = pts[pts.length-1].y; out += `<p class="small" style="margin:0"><b>${last >= first ? "+" : ""}${fmt(last-first)}${S.ui.metric==="vol"?"":" kg"}</b> since ${shortDate(pts[0].x)} across ${pts.length} sessions.</p>`; }
-    out += `<div class="tbl"><table><tr><th>Date</th><th>Top set</th><th>Volume kg</th></tr>${rowsT.slice(-6).reverse().map(r => `<tr><td>${shortDate(r.date)}</td><td>${esc(r.top)}</td><td>${Math.round(r.vol).toLocaleString()}</td></tr>`).join("")}</table></div>`;
+    out += pts.length > 1 ? lineChart([{pts}], {unit: S.ui.metric === "vol" ? "" : " " + wUnit()}) : `<div class="empty">One session so far. The graph appears after the second.</div>`;
+    if (pts.length){ const first = pts[0].y, last = pts[pts.length-1].y; out += `<p class="small" style="margin:0"><b>${last >= first ? "+" : ""}${fmt(last-first)}${S.ui.metric==="vol"?"":" " + wUnit()}</b> since ${shortDate(pts[0].x)} across ${pts.length} sessions.</p>`; }
+    out += `<div class="tbl"><table><tr><th>Date</th><th>Top set</th><th>Volume ${wUnit()}</th></tr>${rowsT.slice(-6).reverse().map(r => `<tr><td>${shortDate(r.date)}</td><td>${esc(r.top)}</td><td>${Math.round(r.vol).toLocaleString()}</td></tr>`).join("")}</table></div>`;
   } else out += `<div class="empty">Log a workout to see lift trends.</div>`;
   out += `</section>`;
   // body weight + waist
-  const bw = S.data.body.filter(b => b.weight).map(b => ({x:b.date, y:+b.weight}));
-  const wa = S.data.body.filter(b => b.waist).map(b => ({x:b.date, y:+b.waist}));
-  out += `<section class="card"><h3>Body weight</h3>${bw.length > 1 ? lineChart([{pts:dedupe(bw)}], {unit:" kg"}) : `<div class="empty">Weigh in before workouts to build this graph.</div>`}</section>`;
-  out += `<section class="card"><h3>Waist</h3><span class="muted small">Target: −1 to −2 cm a month.</span>${wa.length > 1 ? lineChart([{pts:dedupe(wa)}], {unit:" cm"}) : `<div class="empty">Add a weekly waist measurement in Body.</div>`}</section>`;
+  const bw = S.data.body.filter(b => b.weight).map(b => ({x:b.date, y:+wOut(b.weight).toFixed(1)}));
+  const wa = S.data.body.filter(b => b.waist).map(b => ({x:b.date, y:+lenOut(b.waist).toFixed(1)}));
+  out += `<section class="card"><h3>Body weight</h3>${bw.length > 1 ? lineChart([{pts:dedupe(bw)}], {unit:" " + wUnit()}) : `<div class="empty">Weigh in before workouts to build this graph.</div>`}</section>`;
+  out += `<section class="card"><h3>Waist</h3><span class="muted small">Target: ${isLb() ? "about −½ inch" : "−1 to −2 cm"} a month.</span>${wa.length > 1 ? lineChart([{pts:dedupe(wa)}], {unit:" " + lenUnit()}) : `<div class="empty">Add a weekly waist measurement in Body.</div>`}</section>`;
   // cardio weekly
   const cw = weekOf(today());
   const dataWeeks = [...S.data.sessions, ...S.data.cardio, ...S.data.body].map(r => weekOf(r.date));
@@ -1381,13 +1628,13 @@ function viewProgress(){
       const cat = libCat(e.performedAs);
       if (e.type === "run") km += +x.reps || 0; else if (e.type === "dist" && cat === "Running") km += (+x.reps || 0) / 1000;
     })));
-    if (km) anyRun = true; runRows.push({label:wLabel(w), v:Math.round(km*10)/10});
+    if (km) anyRun = true; runRows.push({label:wLabel(w), v:Math.round(dOut(km)*10)/10});
   }
-  if (anyRun) out += `<section class="card"><h3>Running km per week</h3>${barChart(runRows)}</section>`;
+  if (anyRun) out += `<section class="card"><h3>Running ${isMi() ? "miles" : "km"} per week</h3>${barChart(runRows)}</section>`;
   out += `<section class="card"><h3>Cardio minutes per week</h3>${barChart(rows)}<div class="legend"><span><i></i>Logged</span><span><i style="background:var(--ink);height:2px"></i>Plan</span></div></section>`;
   // weekly table
-  const wrows = []; for (let w = firstW; w <= cw; w++){ const st = weekStats(w); const bodyW = S.data.body.filter(b => b.date >= st.start && b.date <= st.end && b.waist).sort(byDateDesc)[0]; wrows.push(`<tr><td>${w >= 1 ? "W" + w : "Before W1"}</td><td>${st.sessions.length}/${prog().days.length}</td><td>${st.cardio}/${st.plan}</td>${set_().trackBack?`<td>${st.pain!=null?fmt(st.pain):"–"}</td>`:""}<td>${bodyW?fmt(bodyW.waist):"–"}</td></tr>`); }
-  out += `<section class="card"><h3>Week by week</h3><div class="tbl"><table><tr><th>Week</th><th>Lifts</th><th>Cardio min</th>${set_().trackBack?"<th>Back avg</th>":""}<th>Waist</th></tr>${wrows.reverse().join("")}</table></div></section>`;
+  const wrows = []; for (let w = firstW; w <= cw; w++){ const st = weekStats(w); const bodyW = S.data.body.filter(b => b.date >= st.start && b.date <= st.end && b.waist).sort(byDateDesc)[0]; wrows.push(`<tr><td>${w >= 1 ? "W" + w : "Before W1"}</td><td>${st.sessions.length}/${prog().days.length}</td><td>${st.cardio}/${st.plan}</td>${trackPain()?`<td>${st.pain!=null?fmt(st.pain):"–"}</td>`:""}<td>${bodyW?fmt(bodyW.waist):"–"}</td></tr>`); }
+  out += `<section class="card"><h3>Week by week</h3><div class="tbl"><table><tr><th>Week</th><th>Lifts</th><th>Cardio min</th>${trackPain()?"<th>Back avg</th>":""}<th>Waist</th></tr>${wrows.reverse().join("")}</table></div></section>`;
   // DEXA trends
   const dx = S.data.dexa.filter(d => d.date).sort((a,b)=>a.date.localeCompare(b.date));
   if (dx.length > 1){
@@ -1402,7 +1649,7 @@ function viewProgress(){
   const prs = {};
   S.data.sessions.forEach(s => s.exercises.forEach(e => { const t = topSet(e); if (t && e.type === "load"){ const v = e1rm(+t.kg, +t.reps) || +t.kg; if (!prs[e.performedAs] || v > prs[e.performedAs].v) prs[e.performedAs] = {v, t, date:s.date}; } }));
   const pk = Object.keys(prs);
-  if (pk.length) out += `<section class="card"><h3>Best sets</h3><div class="tbl"><table><tr><th>Exercise</th><th>Set</th><th>Est. 1RM</th><th>Date</th></tr>${pk.map(n => `<tr><td>${esc(n)}</td><td>${prs[n].t.kg} × ${prs[n].t.reps}</td><td>${fmt(prs[n].v)}</td><td>${shortDate(prs[n].date)}</td></tr>`).join("")}</table></div></section>`;
+  if (pk.length) out += `<section class="card"><h3>Best sets</h3><div class="tbl"><table><tr><th>Exercise</th><th>Set</th><th>Est. 1RM</th><th>Date</th></tr>${pk.map(n => `<tr><td>${esc(n)}</td><td>${W(prs[n].t.kg)} × ${prs[n].t.reps}</td><td>${W(prs[n].v)}</td><td>${shortDate(prs[n].date)}</td></tr>`).join("")}</table></div></section>`;
   if (!isTrainer()) out += `<button class="btn blue block" data-act="export-json">Export for Claude review</button>`;
   return out;
 }
@@ -1487,11 +1734,11 @@ function sheetHTML(){
   else if (k === "precheck"){
     const lw = latestBody("weight"), lwa = latestBody("waist");
     body = `<h2>Before you start</h2><span class="muted small">Weigh in the same way each time — before eating, after the bathroom.</span>
-    <div class="grid2"><label class="f">Body weight kg<input id="p-weight" inputmode="decimal" placeholder="${lw ? fmt(lw.weight) : ""}"></label>
-    <label class="f">Waist cm (optional)<input id="p-waist" inputmode="decimal" placeholder="${lwa ? fmt(lwa.waist) : ""}"></label>
+    <div class="grid2"><label class="f">Body weight ${wUnit()}<input id="p-weight" inputmode="decimal" placeholder="${lw ? fmt(wOut(lw.weight)) : ""}"></label>
+    <label class="f">Waist ${lenUnit()} (optional)<input id="p-waist" inputmode="decimal" placeholder="${lwa ? fmt(lenOut(lwa.waist)) : ""}"></label>
     <label class="f">Sleep last night h<input id="p-sleep" inputmode="decimal"></label>
     <label class="f">Recovery score<input id="p-rec" inputmode="numeric" placeholder="0–100"></label></div>
-    ${set_().trackBack ? `<div><div class="small muted" style="font-weight:600;margin-bottom:6px">Back pain right now (0–10)</div><div class="seg" id="p-back">${[...Array(11)].map((_,i)=>`<button type="button" data-act="p-pain" data-v="${i}" class="${S.sheet.pain===i?"on":""}">${i}</button>`).join("")}</div></div>` : ""}
+    ${trackPain() ? `<div><div class="small muted" style="font-weight:600;margin-bottom:6px">Back pain right now (0–10)</div><div class="seg" id="p-back">${[...Array(11)].map((_,i)=>`<button type="button" data-act="p-pain" data-v="${i}" class="${S.sheet.pain===i?"on":""}">${i}</button>`).join("")}</div></div>` : ""}
     <button class="btn primary block" data-act="precheck-go">Start workout</button><button class="btn block" data-act="precheck-skip">Skip check-in</button>`;
   } else if (k === "swap"){
     const inLog = S.sheet.x != null;
@@ -1530,7 +1777,7 @@ function sheetHTML(){
   } else if (k === "session"){
     const s = (S.cctx ? S.cctx.data : S.data).sessions.find(x => x.id === S.sheet.id); if (!s) return "";
     body = `<h2>${esc(s.title)}</h2><span class="muted small">${shortDate(s.date)} · week ${s.week} · ${s.durationMin||"–"} min${s.backPain!=null?` · back ${s.backPain}/10`:""}</span>
-    ${s.exercises.map(e => `<div><b>${esc(e.performedAs)}</b><div class="muted small num">${e.sets.filter(t=>t.done).map(t => `${esc(t.label)}: ${t.reps||"–"}${t.kg?` × ${t.kg} kg`:""}`).join(" · ") || "Not done"}${e.speed ? ` · ${esc(e.speed)} km/h` : ""}${e.incline ? ` · ${esc(e.incline)}% incline` : ""}</div>${e.note?`<div class="small">${esc(e.note)}</div>`:""}</div>`).join("")}
+    ${s.exercises.map(e => `<div><b>${esc(e.performedAs)}</b><div class="muted small num">${e.sets.filter(t=>t.done).map(t => `${esc(t.label)}: ${esc(setText(e.type, t))}`).join(" · ") || "Not done"}${e.speed ? ` · ${esc(spText(fmt(e.speed)))} ${spUnit()}` : ""}${e.incline ? ` · ${esc(e.incline)}% incline` : ""}</div>${e.note?`<div class="small">${esc(e.note)}</div>`:""}</div>`).join("")}
     ${s.notes ? `<p class="small" style="margin:0">${esc(s.notes)}</p>` : ""}
     ${isTrainer() ? "" : `<button class="btn danger block" data-act="ask-del-session" data-id="${s.id}">Delete workout</button>`}<button class="btn block" data-act="sheet-close">Close</button>`;
   } else if (k === "dexa"){
@@ -1547,6 +1794,11 @@ function sheetHTML(){
     body = `<h2>${esc(S.sheet.name)}</h2>${S.sheet.isImg ? `<img class="thumb" src="${S.sheet.url}" alt="DEXA report">` : `<p class="muted small" style="margin:0">PDF reports can't be previewed inside the app. Save a copy to open it.</p>`}
     <button class="btn blue block" data-act="file-save">Save a copy</button><button class="btn block" data-act="sheet-close">Close</button>`;
   } else if (k === "profile"){ body = profileSheet();
+  } else if (k === "delacct"){
+    body = `<h2>Delete your account?</h2><p style="margin:0">This permanently deletes your login and everything in your account: ${isStaff() ? (isTrainer() ? "your invite code, challenges, client groups, notes and alerts. Your clients keep their own logs." : "your gym and gym code. Your trainers and their clients keep their accounts.") : `all workouts, cardio, check-ins, DEXA scans, health reports, your leaderboard summary, buddy links and challenge entries.${Cloud.me && Cloud.me.trainerId ? " Your trainer is told you've left." : ""}`} It can't be undone.</p>
+    <span class="small muted">Want a copy first? Close this and use Export in Settings.</span>
+    <label class="f">Your password<input id="da-pass" type="password" autocomplete="current-password"></label>
+    <button class="btn danger block" data-act="delacct-go">Delete my account permanently</button><button class="btn block" data-act="sheet-close">Cancel</button>`;
   } else if (k === "settings"){
     const s = set_();
     body = `<h2>Settings</h2>
@@ -1555,10 +1807,11 @@ function sheetHTML(){
     <hr style="border:0;border-top:1px solid var(--line);width:100%">
     ${trainerManaged() ? (prog().event && prog().event.date ? `<span class="small muted">Training for ${esc(prog().event.name || "your event")} on ${shortDate(prog().event.date)} — set by your trainer.</span>` : "") : `<h3>Event</h3><span class="small muted">Training for a race? Set the date and your program is timed to peak on race day.</span><div class="grid2"><label class="f">Event<input id="s-evname" value="${esc((prog().event && prog().event.name) || "")}" placeholder="e.g. Hyrox"></label><label class="f">Date<input type="date" id="s-evdate" value="${esc((prog().event && prog().event.date) || "")}" min="${today()}"></label></div><button class="btn block" data-act="s-evfit">Fit my program to this date</button><hr style="border:0;border-top:1px solid var(--line);width:100%">`}
     ${trainerManaged() ? `<span class="small muted">Your block starts ${shortDate(startDate())} — set by your trainer.</span>` : `<label class="f">Block start (week 1 Monday)<input type="date" id="s-start" value="${esc(s.startDate)}"></label>`}
+    <div><div class="small muted" style="font-weight:600;margin-bottom:6px">Units${set_().loc ? ` · ${esc([set_().loc.city, countryName(set_().loc.country)].filter(Boolean).join(", "))}` : ""}</div><div class="row" style="gap:8px"><div class="seg">${["kg","lb"].map(u => `<button data-act="units" data-v="w:${u}" class="${U().w === u ? "on" : ""}">${u}</button>`).join("")}</div><div class="seg">${["km","mi"].map(u => `<button data-act="units" data-v="d:${u}" class="${U().d === u ? "on" : ""}">${u}</button>`).join("")}</div></div></div>
     <div class="grid2"><label class="f">Zone 2 low bpm<input id="s-zl" inputmode="numeric" value="${s.zoneLow ?? ""}"></label><label class="f">Zone 2 high bpm<input id="s-zh" inputmode="numeric" value="${s.zoneHigh ?? ""}"></label>
     <label class="f">DEXA every (weeks)<input id="s-dexa" inputmode="numeric" value="${s.dexaWeeks}"></label>
     <label class="f">Normal back pain 0–10<input id="s-bn" inputmode="numeric" value="${s.backNormal ?? ""}" placeholder="Leave blank if none"></label></div>
-    <div class="row between"><span>Track back pain</span><button class="toggle ${s.trackBack?"on":""}" data-act="s-back" aria-pressed="${s.trackBack}" aria-label="Track back pain"></button></div>
+    ${healthOK() ? `<div class="row between"><span>Track back pain</span><button class="toggle ${s.trackBack?"on":""}" data-act="s-back" aria-pressed="${s.trackBack}" aria-label="Track back pain"></button></div>` : ""}
     <button class="btn primary block" data-act="settings-save">Save settings</button>
     <hr style="border:0;border-top:1px solid var(--line);width:100%">
     ${trainerManaged() ? `<h3>Program</h3><span class="muted small">${esc(prog().name || "Your program")} is set by ${esc(Cloud.me.trainerName || "your trainer")}. You can still swap an exercise for a single workout.</span><hr style="border:0;border-top:1px solid var(--line);width:100%">` : `    <h3>Program</h3><span class="muted small">Current: ${!hasProgram() ? "none yet" : prog().starter ? "starter block from the coach questionnaire" : prog().kind === "personal" ? "back-friendly" : prog().kind === "standard" ? "standard 3-day block" : esc(prog().name || "custom program")}. Switching keeps your logged workouts.</span>
@@ -1566,11 +1819,16 @@ function sheetHTML(){
     <div class="grid2"><button class="btn" data-act="ask-prog" data-v="standard">Standard</button><button class="btn" data-act="ask-prog" data-v="personal">Back-friendly</button></div>
     <hr style="border:0;border-top:1px solid var(--line);width:100%">
 `}
+    <h3>Privacy</h3>
+    ${isStaff() ? "" : `<div class="row between" style="flex-wrap:nowrap;gap:12px"><span><b>Health data</b><span class="small muted" style="display:block">DEXA scans, health reports, health-screening answers and pain or injury details.${healthOK() ? "" : " Off: these features are hidden."}</span></span><button class="toggle ${healthOK() ? "on" : ""}" data-act="health-toggle" aria-pressed="${healthOK()}" aria-label="Store health data"></button></div>`}
+    <span class="small muted">${consentRec() && consentRec().at ? `You agreed to the privacy policy (v${esc(consentRec().policy || "1.0")}) on ${shortDate(consentRec().at.slice(0, 10))}. ` : ""}<a href="${PRIVACY_URL}" target="_blank" rel="noopener">Privacy policy</a> · <a href="${DELETE_URL}" target="_blank" rel="noopener">How deletion works</a></span>
+    ${cloudOK() && Cloud.user ? `<button class="btn danger block" data-act="ask-delete-account">Delete my account</button>` : ""}
+    <hr style="border:0;border-top:1px solid var(--line);width:100%">
     <h3>Your data</h3><span class="muted small">${isCloudClient() ? "Your log is saved to your account and on this phone, so it keeps working without signal" : "Everything is saved on this device only"}${isCloudClient() ? "" : Store.mode === "idb" ? "" : Store.mode === "local" ? " (basic storage — report uploads are off)" : " — and this browser is blocking storage, so it will be lost when you close the app. Save a backup."}. Back up weekly; a backup also lets you move to a new phone.</span>
     <button class="btn blue block" data-act="export-json">Export for Claude review (.json)</button>
     <button class="btn block" data-act="export-csv">Export sets as spreadsheet (.csv)</button>
     <button class="btn block" data-act="backup">Save full backup</button>
-    ${isTrainer() ? "" : `<button class="btn danger block" data-act="ask-reset">Start over: delete all my data</button>`}
+    ${isTrainer() ? "" : `<button class="btn block" data-act="ask-reset">Start over: delete my log but keep my account</button>`}
     <label class="f">Restore from a backup file<input type="file" id="restore-file" accept="application/json,.json"></label>
     <button class="btn block" data-act="sheet-close">Close</button>`;
   } else if (k === "text"){
@@ -1761,7 +2019,7 @@ app.addEventListener("click", async ev => {
   if (a === "ob-back"){ obCollect(); S.ob.step = Math.max(0, S.ob.step - 1); S.forceRender = true; render(); window.scrollTo(0,0); return; }
   if (a === "ob-skip") return obSkip();
   if (a === "ob-start") return obStart();
-  if (a === "ob-havetrainer"){ await obSkip(); return openSheet({kind:"settings", back: set_().trackBack}); }
+  if (a === "ob-havetrainer"){ await obSkip(); return openSheet({kind:"settings", back: trackPain()}); }
   if (a === "otab"){ S.view = t.dataset.v; S.forceRender = true; render(); window.scrollTo(0,0); return; }
   if (a === "otrainer"){ Owner.sel = t.dataset.id; S.view = "otrainer"; S.forceRender = true; render(); window.scrollTo(0,0); return; }
   if (a === "o-rename"){ const n = val("o-gname"); if (!n) return toast("Enter the gym name."); await uref().update({gymName: n}).catch(()=>{}); await Cloud.db.collection("gyms").doc(Cloud.user.uid).update({name: n}).catch(()=>{}); if (Cloud.me.gymCode) await Cloud.db.collection("gymcodes").doc(Cloud.me.gymCode).update({name: n}).catch(()=>{}); return toast("Gym name saved"); }
@@ -1794,6 +2052,7 @@ app.addEventListener("click", async ev => {
     if (al.kind === "profile"){ S.ctab = "overview"; openClient(al.clientId); return; }
     S.ctab = "history"; openClient(al.clientId); setTimeout(() => openSheet({kind:"session", id: al.sessionId}), 900); return;
   }
+  if (a === "alert-del"){ Cloud.db.collection("trainers").doc(Cloud.user.uid).collection("alerts").doc(t.dataset.id).delete().catch(() => {}); return; }
   if (a === "alerts-read"){ const b = Cloud.db.batch(); (S.alerts || []).filter(x => !x.read).forEach(x => b.update(Cloud.db.collection("trainers").doc(Cloud.user.uid).collection("alerts").doc(x.id), {read:true})); b.commit().catch(()=>{}); return; }
   if (a === "copy-code"){ try { await navigator.clipboard.writeText(t.dataset.v); toast("Code copied"); } catch(e){ toast("Code: " + t.dataset.v); } return; }
   if (a === "new-code"){ await makeInviteCode(Cloud.me.name); return; }
@@ -1831,8 +2090,22 @@ app.addEventListener("click", async ev => {
   if (a === "connect-trainer") return connectTrainer(val("t-code"));
   if (a === "ask-disconnect"){ S.sheet = {kind:"confirm", title:"Disconnect from your trainer?", text:"They'll stop seeing your workouts. You keep your log and your current program.", yes:"Disconnect", danger:true, run: () => disconnectTrainer()}; S.forceRender = true; return render(); }
   if (a === "tab"){ S.view = t.dataset.v; S.sub = null; if (S.view === "workouts") S.ui.pw = null; S.forceRender = true; render(); window.scrollTo(0,0); return; }
-  if (a === "settings") return openSheet({kind:"settings", back: set_().trackBack});
+  if (a === "settings") return openSheet({kind:"settings", back: trackPain()});
   if (a === "profile-edit") return openSheet({kind:"profile"});
+  if (a === "cg-go") return consentGo();
+  if (a === "locate") return locateMe();
+  if (a === "units"){ const [k, v] = t.dataset.v.split(":"); S.profile.settings.units = {...U(), [k]: v}; S.profile.settings.unitsManual = true; await persistProfile(); S.forceRender = true; render(); return toast("Units updated"); }
+  if (a === "cg-redo"){ S.cg = {}; S.forceRender = true; return render(); }
+  if (a === "verify-check") return verifyCheck();
+  if (a === "verify-resend") return verifyResend();
+  if (a === "health-toggle"){
+    if (!healthOK()) return setHealthConsent(true);
+    const n = S.data.dexa.length + (S.data.reports || []).length;
+    S.sheet = {kind:"confirm", title:"Switch off health data?", text:`This deletes ${n ? `your ${S.data.dexa.length} DEXA scan${S.data.dexa.length === 1 ? "" : "s"} and ${(S.data.reports || []).length} health report${(S.data.reports || []).length === 1 ? "" : "s"}, ` : ""}your health-screening answers and your pain and injury details${isCloudClient() ? " from your account and this phone" : ""}. You can switch it back on later, but deleted data can't be recovered.`, yes:"Switch off and delete", danger:true, run: () => setHealthConsent(false)};
+    S.forceRender = true; return render();
+  }
+  if (a === "ask-delete-account") return openSheet({kind:"delacct"});
+  if (a === "delacct-go"){ const p = (document.getElementById("da-pass") || {}).value || ""; if (!p) return toast("Enter your password to confirm."); return deleteAccount(p); }
   if (a === "pf-pain"){ const P = S.sheet.p, v = t.dataset.v; P.pain = P.pain.includes(v) ? P.pain.filter(x => x !== v) : [...P.pain, v]; t.classList.toggle("on", P.pain.includes(v)); t.setAttribute("aria-pressed", P.pain.includes(v)); return; }
   if (a === "profile-save") return saveProfileSheet();
   if (a === "resume") return goLog();
@@ -1850,7 +2123,7 @@ app.addEventListener("click", async ev => {
   if (a === "precheck-go" || a === "precheck-skip"){
     const day = S.sheet.day; S.draft = newDraft(day, S.sheet.week);
     if (a === "precheck-go"){
-      const pre = {weight:numOrNull(val("p-weight")), waist:numOrNull(val("p-waist")), sleep:numOrNull(val("p-sleep")), recovery:numOrNull(val("p-rec")), backPain:S.sheet.pain};
+      const pre = {weight:num(val("p-weight")) ? +wIn(val("p-weight")) : null, waist:lenIn(val("p-waist")), sleep:numOrNull(val("p-sleep")), recovery:numOrNull(val("p-rec")), backPain:S.sheet.pain};
       S.draft.pre = pre;
       if (Object.values(pre).some(v => v != null)){
         const ex = S.data.body.find(b => b.date === today() && b.source === "pre-workout");
@@ -1866,8 +2139,8 @@ app.addEventListener("click", async ev => {
     const x = S.draft.exercises[+t.dataset.x], s = x.sets[+t.dataset.s];
     if (!s.done){
       const r = document.getElementById(`r-${t.dataset.x}-${t.dataset.s}`), k = document.getElementById(`k-${t.dataset.x}-${t.dataset.s}`);
-      if (s.reps === "" && r && r.placeholder){ s.reps = r.placeholder; r.value = s.reps; }
-      if (s.kg === "" && k && k.placeholder && !k.disabled){ s.kg = k.placeholder; k.value = s.kg; }
+      if (s.reps === "" && r && r.placeholder){ s.reps = fieldStore(x.type, "reps", r.placeholder); r.value = r.placeholder; }
+      if (s.kg === "" && k && k.placeholder && !k.disabled){ s.kg = fieldStore(x.type, "kg", k.placeholder); k.value = k.placeholder; }
       s.done = true; startTimer(x.rest || 0);
     } else s.done = false;
     t.classList.toggle("on", s.done); t.setAttribute("aria-pressed", s.done);
@@ -1967,9 +2240,9 @@ app.addEventListener("input", ev => {
   if (el.dataset && el.dataset.gin){ const D = Gym.drafts[el.dataset.u]; if (D) D.exercises[+el.dataset.x].sets[+el.dataset.s][el.dataset.gin] = el.value.replace(",", "."); return; }
   if (S.sheet && S.sheet.kind === "chal" && (el.dataset.chf === "title" || el.dataset.chf === "target" || el.dataset.chmix)){ if (el.dataset.chf) S.sheet.ch[el.dataset.chf] = el.value; else S.sheet.ch.mix[+el.dataset.chmix][el.dataset.k] = el.value; return; }
   if (el.id === "swap-q" && S.sheet){ const sel = document.getElementById("swap-sel"); if (sel) sel.innerHTML = libOptions(el.value, S.sheet.current, S.sheet.cat); return; }
-  if (el.dataset && el.dataset.xin && S.draft){ S.draft.exercises[+el.dataset.x][el.dataset.xin] = el.value.replace(",", "."); saveDraft(); return; }
+  if (el.dataset && el.dataset.xin && S.draft){ const v = el.value.replace(",", "."); S.draft.exercises[+el.dataset.x][el.dataset.xin] = el.dataset.xin === "speed" ? dIn(v) : v; saveDraft(); return; }
   const f = el.dataset && el.dataset.in; if (!f || !S.draft) return;
-  if (f === "notes"){ S.draft.notes = el.value; } else { const s = S.draft.exercises[+el.dataset.x].sets[+el.dataset.s]; s[f] = el.value.replace(",", "."); if (f === "kg") refreshAdj(+el.dataset.x); }
+  if (f === "notes"){ S.draft.notes = el.value; } else { const xx = S.draft.exercises[+el.dataset.x], s = xx.sets[+el.dataset.s]; s[f] = fieldStore(xx.type, f, el.value.replace(",", ".")); if (f === "kg") refreshAdj(+el.dataset.x); }
   saveDraft();
 });
 app.addEventListener("focusout", () => { setTimeout(() => { if (pendingRender && !(document.activeElement && document.activeElement.matches("main input, main textarea, main select"))){ S.forceRender = true; render(); } }, 50); });
@@ -1979,11 +2252,11 @@ app.addEventListener("submit", async ev => {
     const mins = numOrNull(val("c-min")) ?? numOrNull(document.getElementById("c-min").placeholder);
     if (!mins) return toast("Enter the minutes you walked.");
     const date = val("c-date") || today();
-    await saveRec("cardio", {id:uid("c"), date, week:weekOf(date), type:val("c-type"), minutes:mins, avgHr:numOrNull(val("c-hr")), speed:numOrNull(val("c-speed")), incline:numOrNull(val("c-inc")), notes:val("c-notes")}).catch(()=>{});
+    await saveRec("cardio", {id:uid("c"), date, week:weekOf(date), type:val("c-type"), minutes:mins, avgHr:numOrNull(val("c-hr")), speed:num(val("c-speed")) ? +dIn(val("c-speed")) : null, incline:numOrNull(val("c-inc")), notes:val("c-notes")}).catch(()=>{});
     S.forceRender = true; render(); toast(`Saved ${mins} min`);
   }
   if (ev.target.id === "bodyForm"){
-    const rec = {date: val("b-date") || today(), weight:numOrNull(val("b-weight")), waist:numOrNull(val("b-waist")), sleep:numOrNull(val("b-sleep")), recovery:numOrNull(val("b-rec")), backPain: set_().trackBack ? numOrNull(val("b-back")) : null, source:"check-in"};
+    const rec = {date: val("b-date") || today(), weight:num(val("b-weight")) ? +wIn(val("b-weight")) : null, waist:lenIn(val("b-waist")), sleep:numOrNull(val("b-sleep")), recovery:numOrNull(val("b-rec")), backPain: trackPain() ? numOrNull(val("b-back")) : null, source:"check-in"};
     if ([rec.weight, rec.waist, rec.sleep, rec.recovery, rec.backPain].every(v => v == null)) return toast("Enter at least one measurement.");
     await saveRec("body", {id:uid("b"), ...rec}).catch(()=>{});
     S.forceRender = true; render(); toast("Check-in saved");
@@ -2089,6 +2362,7 @@ async function onAuth(u){
 }
 async function createUserDoc(u, role, name){
   const doc = {role, name: name || "", email: u.email || "", trainerId: null, createdAt: ts()};
+  if (role === "client" && S.profile.settings.consent) doc.consent = clean(S.profile.settings.consent);
   if (role === "client"){ doc.settings = clean(S.profile.settings); doc.program = clean(S.profile.program); }
   await uref().set(doc);
   if (role === "trainer") await makeInviteCode(name);
@@ -2128,7 +2402,7 @@ function attachTrainer(){
     render();
   }, e => toast("Couldn't load your clients.")));
   Cloud.unsub.push(Cloud.db.collection("trainers").doc(Cloud.user.uid).collection("alerts").orderBy("ts", "desc").limit(80).onSnapshot(q => {
-    S.alerts = q.docs.map(d => ({id: d.id, ...d.data()})); render();
+    S.alerts = q.docs.map(d => ({id: d.id, ...d.data()})); render(); cleanupDeletedClients();
   }, () => {}));
 }
 async function cloudSaveRec(col, rec){
@@ -2237,7 +2511,7 @@ function viewAlerts(){
   const al = S.alerts || [];
   let out = `<div class="row between"><div><span class="eyebrow">Completed workouts</span><h1>Alerts</h1></div>${al.some(a => !a.read) ? `<button class="btn" data-act="alerts-read">Mark all read</button>` : ""}</div>`;
   if (!al.length) return out + `<div class="empty">When a client saves a workout, it appears here.</div>`;
-  return out + al.map(a => a.kind === "profile" ? `<button class="wcard" data-act="open-alert" data-id="${a.id}" style="${a.read ? "" : "border-color:var(--accent)"}"><div class="dayblock sm">${I.body.replace("<svg",'<svg width="20" height="20"')}</div><div style="min-width:0;flex:1"><b style="display:block">${esc(a.clientName)} updated their profile</b><span class="muted small">${a.date ? shortDate(a.date) : ""} · ${esc(a.text || "")}</span></div></button>` : `<button class="wcard" data-act="open-alert" data-id="${a.id}" style="${a.read ? "" : "border-color:var(--accent)"}"><div class="dayblock sm">${esc(a.day || "·")}</div><div style="min-width:0;flex:1"><b style="display:block">${esc(a.clientName)} finished ${esc(a.title)}</b><span class="muted small">${a.date ? shortDate(a.date) : ""} · week ${a.week || "–"} · ${a.sets || 0} sets · ${a.durationMin || "–"} min${a.backPain != null ? ` · back ${a.backPain}/10` : ""}${a.weight ? ` · ${fmt(a.weight)} kg` : ""}</span>${a.notes ? `<div class="small">“${esc(a.notes)}”</div>` : ""}</div>${a.read ? "" : `<span class="pill blue">New</span>`}</button>`).join("");
+  return out + al.map(a => a.kind === "deleted" ? `<div class="wcard" style="cursor:default"><div class="dayblock sm">·</div><div style="min-width:0;flex:1"><b style="display:block">${esc(a.clientName)} deleted their account</b><span class="muted small">${a.date ? shortDate(a.date) : ""} · their data and your notes about them have been removed</span></div><button class="btn ghost" data-act="alert-del" data-id="${a.id}" aria-label="Dismiss">×</button></div>` : a.kind === "profile" ? `<button class="wcard" data-act="open-alert" data-id="${a.id}" style="${a.read ? "" : "border-color:var(--accent)"}"><div class="dayblock sm">${I.body.replace("<svg",'<svg width="20" height="20"')}</div><div style="min-width:0;flex:1"><b style="display:block">${esc(a.clientName)} updated their profile</b><span class="muted small">${a.date ? shortDate(a.date) : ""} · ${esc(a.text || "")}</span></div></button>` : `<button class="wcard" data-act="open-alert" data-id="${a.id}" style="${a.read ? "" : "border-color:var(--accent)"}"><div class="dayblock sm">${esc(a.day || "·")}</div><div style="min-width:0;flex:1"><b style="display:block">${esc(a.clientName)} finished ${esc(a.title)}</b><span class="muted small">${a.date ? shortDate(a.date) : ""} · week ${a.week || "–"} · ${a.sets || 0} sets · ${a.durationMin || "–"} min${a.backPain != null ? ` · back ${a.backPain}/10` : ""}${a.weight ? ` · ${fmt(a.weight)} kg` : ""}</span>${a.notes ? `<div class="small">“${esc(a.notes)}”</div>` : ""}</div>${a.read ? "" : `<span class="pill blue">New</span>`}</button>`).join("");
 }
 function viewTrainerAccount(){
   return `<div><span class="eyebrow">Account</span><h1>${esc(Cloud.me.name || "Coach")}</h1></div>
@@ -2422,7 +2696,8 @@ async function authGo(){
     if (st.mode === "up"){
       const name = val("a-name"); if (!name){ if (btn){ btn.disabled = false; btn.textContent = "Create account"; } return toast("Enter your name."); }
       Cloud.pending = {role: ["trainer","owner"].includes(st.role) ? st.role : "client", name, gymName: val("a-gym")};
-      await firebase.auth().createUserWithEmailAndPassword(email, pass);
+      const cred = await firebase.auth().createUserWithEmailAndPassword(email, pass);
+      try { if (cred && cred.user && cred.user.sendEmailVerification) await cred.user.sendEmailVerification(); } catch(e){}
     } else await firebase.auth().signInWithEmailAndPassword(email, pass);
     if (S.sheet && S.sheet.kind === "auth") S.sheet = null; S.forceRender = true; render();
   } catch(e){
@@ -2438,6 +2713,7 @@ function accountSection(){
   if (!Cloud.user) return `<span class="muted small">Create an account to keep your log safe online, use it on more than one device, and connect with a trainer.</span><div class="grid2"><button class="btn blue" data-act="auth" data-v="up">Create account</button><button class="btn" data-act="auth" data-v="in">Sign in</button></div>`;
   const me = Cloud.me || {};
   return `<span class="muted small">Signed in as ${esc(Cloud.user.email)}. Your log syncs to your account.</span>
+  ${Cloud.user.emailVerified ? "" : `<div class="banner warn"><div><b>Your email isn't confirmed.</b> Confirm it so you can always get back into your account. <button class="btn ghost" data-act="verify-resend">Send the link</button> <button class="btn ghost" data-act="verify-check">I've confirmed it</button></div></div>`}
   <h3>Trainer</h3>${me.trainerId ? `<span class="small">Connected to <b>${esc(me.trainerName || "your trainer")}</b>. They can see your workouts and set your program.</span><button class="btn danger block" data-act="ask-disconnect">Disconnect from trainer</button>` : `<label class="f">Trainer's invite code<input id="t-code" autocapitalize="characters" placeholder="6 letters and numbers"></label><button class="btn blue block" data-act="connect-trainer">Connect</button>`}
   <button class="btn block" data-act="signout">Sign out</button>`;
 }
@@ -2634,18 +2910,23 @@ function viewOnboard(){
     body = `<h2>About you</h2><span class="muted small">Optional, but it helps set safe targets.</span>
     <div class="grid2"><label class="f">Age<input id="ob-age" inputmode="numeric" value="${esc(a.age || "")}"></label>
     <label class="f">Sex<select id="ob-sex"><option value="">Prefer not to say</option>${[["female","Female"],["male","Male"]].map(([v,l]) => `<option value="${v}" ${a.sex===v?"selected":""}>${l}</option>`).join("")}</select></label>
-    <label class="f">Height cm<input id="ob-height" inputmode="decimal" value="${esc(a.height || "")}"></label>
-    <label class="f">Weight kg<input id="ob-weight" inputmode="decimal" value="${esc(a.weight || "")}"></label></div>${nav()}`;
+    <label class="f">Height ${lenUnit()}<input id="ob-height" inputmode="decimal" value="${a.height ? esc(rnd(lenOut(a.height), 1)) : ""}"></label>
+    <label class="f">Weight ${wUnit()}<input id="ob-weight" inputmode="decimal" value="${a.weight ? esc(showW(a.weight)) : ""}"></label></div>${nav()}`;
+  } else if (step === "health" && !healthOK()){
+    body = `<h2>Health check</h2><div class="banner info"><div>You chose not to store health information, so the app skips the health screening and injury questions and builds a gentle, general plan.</div></div>
+    <p class="small" style="margin:0">If you have a heart condition, chest pain, dizziness, a joint problem or take blood-pressure medication, talk to a doctor before you start. You can switch on health data any time in Settings → Privacy.</p>
+    <p class="small muted" style="margin:0">${esc(MED_NOTE)}</p>${nav()}`;
   } else if (step === "health"){
     body = `<h2>Health check</h2><span class="muted small">Tick anything that applies to you. This is the standard pre-exercise screening coaches use.</span>
     ${HEALTH_Q.map(([k, l]) => `<label class="row small" style="flex-wrap:nowrap;align-items:flex-start;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px"><input type="checkbox" data-obh="${k}" ${a.health[k]?"checked":""} style="width:22px;height:22px;flex:none;margin:0"><span>${esc(l)}</span></label>`).join("")}
     <h3>Any pain or past injuries?</h3><div class="chips" style="flex-wrap:wrap">${PAIN.map(([k, l]) => `<button class="chip ${a.pain.includes(k)?"on":""}" data-act="ob-pain" data-v="${k}">${l}</button>`).join("")}</div>
-    <label class="f">Anything else your coach should know?<input id="ob-other" value="${esc(a.other || "")}" placeholder="Optional"></label>${nav()}`;
+    <label class="f">Anything else your coach should know?<input id="ob-other" value="${esc(a.other || "")}" placeholder="Optional"></label>
+    <p class="small muted" style="margin:0">${esc(MED_NOTE)}</p>${nav()}`;
   } else if (step === "strength"){
     const skip = a.experience === "new" || a.equipment === "bodyweight" || Object.values(a.health).some(Boolean);
     body = `<h2>Your strength now</h2>${skip ? `<p style="margin:0">${a.equipment === "bodyweight" ? "You're training with bodyweight, so no lifting numbers are needed." : Object.values(a.health).some(Boolean) ? "Because of your health answers, we'll skip strength testing and start light." : "As you're new to training, we'll skip this — you'll find your starting weights in week 1."}</p>` :
     `<span class="muted small">Enter your best recent set for each lift — the weight and how many clean reps you did. Leave it blank if you don't do that lift or aren't sure.</span>
-    ${LIFTS.map(([k, l]) => `<div><b class="small">${l}</b><div class="grid2"><label class="f">Kg<input id="ob-${k}-kg" inputmode="decimal" value="${esc((a.lifts[k]||{}).kg || "")}"></label><label class="f">Reps (1–12)<input id="ob-${k}-reps" inputmode="numeric" value="${esc((a.lifts[k]||{}).reps || "")}"></label></div></div>`).join("")}`}
+    ${LIFTS.map(([k, l]) => `<div><b class="small">${l}</b><div class="grid2"><label class="f">${isLb() ? "Lb" : "Kg"}<input id="ob-${k}-kg" inputmode="decimal" value="${esc(showW((a.lifts[k]||{}).kg || ""))}"></label><label class="f">Reps (1–12)<input id="ob-${k}-reps" inputmode="numeric" value="${esc((a.lifts[k]||{}).reps || "")}"></label></div></div>`).join("")}`}
     ${nav("Build my plan")}`;
   } else if (step === "plan"){
     const r = O.result;
@@ -2654,7 +2935,7 @@ function viewOnboard(){
     <section class="card"><h3>Why this plan</h3>${r.why.map(w => `<p class="small" style="margin:0">${esc(w)}</p>`).join("")}</section>
     ${r.program.days.map((d, di) => `<section class="card" style="padding-block:10px"><div class="row" style="flex-wrap:nowrap"><div class="dayblock sm">${d.id}</div><div><b>${esc(d.title)}</b><div class="muted small">${DOW[d.dow]} · ${d.ex.length} exercise${d.ex.length===1?"":"s"}</div></div></div>
       ${d.ex.map((e, i) => `<div class="small" style="border-top:1px solid var(--line);padding-top:6px"><b>${esc(e.n)}</b> <span class="muted">${esc(withProgram(r.program, () => targetText(e, i, 1)))}${e.rest ? ` · ${fmtRest(e.rest)} rest` : ""}${e.rir != null ? ` · RIR ${e.rir}` : ""}</span></div>`).join("")}</section>`).join("")}
-    <section class="card"><h3>Coach's tips</h3>${r.tips.map(w => `<p class="small" style="margin:0">${esc(w)}</p>`).join("")}</section>
+    <section class="card"><h3>Coach's tips</h3>${r.tips.map(w => `<p class="small" style="margin:0">${esc(w)}</p>`).join("")}<p class="small muted" style="margin:0">${esc(MED_NOTE)}</p></section>
     <section class="card" style="border-color:var(--accent)"><h3>Work with a trainer</h3><p class="small" style="margin:0">This starter block is a safe first step, not a full program. A trainer can assess you in person, check your technique and build a program around your goals, history and progress.</p>
     <p class="small" style="margin:0">${isCloudClient() ? "Already have a trainer? Ask for their invite code and enter it any time under <b>Settings → Trainer</b>." : "Create an account in the Android app to connect with a trainer."}</p></section>
     <button class="btn primary block" data-act="ob-start">Start my plan · begins ${shortDate(r.program.startDate)}</button>
@@ -2668,9 +2949,9 @@ function obCollect(){
   const O = S.ob, a = O.a, step = OB_STEPS[O.step];
   if (step === "hello" && document.getElementById("ob-name")) S.profile.settings.name = val("ob-name");
   if (step === "goal" && document.getElementById("ob-evdate")) a.eventDate = val("ob-evdate");
-  if (step === "about"){ a.age = numOrNull(val("ob-age")); a.sex = val("ob-sex"); a.height = numOrNull(val("ob-height")); a.weight = numOrNull(val("ob-weight")); }
+  if (step === "about"){ a.age = numOrNull(val("ob-age")); a.sex = val("ob-sex"); a.height = lenIn(val("ob-height")); a.weight = num(val("ob-weight")) ? +wIn(val("ob-weight")) : null; }
   if (step === "health"){ a.health = {}; document.querySelectorAll("[data-obh]").forEach(c => { if (c.checked) a.health[c.dataset.obh] = true; }); a.other = val("ob-other"); }
-  if (step === "strength") LIFTS.forEach(([k]) => { const kg = numOrNull(val(`ob-${k}-kg`)), reps = numOrNull(val(`ob-${k}-reps`)); if (document.getElementById(`ob-${k}-kg`)) a.lifts[k] = kg && reps ? {kg, reps} : {}; });
+  if (step === "strength") LIFTS.forEach(([k]) => { const kg = num(val(`ob-${k}-kg`)) ? +wIn(val(`ob-${k}-kg`)) : null, reps = numOrNull(val(`ob-${k}-reps`)); if (document.getElementById(`ob-${k}-kg`)) a.lifts[k] = kg && reps ? {kg, reps} : {}; });
 }
 async function obStart(){
   const r = S.ob.result, a = S.ob.a;
@@ -2769,10 +3050,10 @@ function pbScan(){
       let c = null;
       if (e.type === "load" || e.type === "carry"){
         const top = ds.filter(x => +x.kg > 0).sort((a,b) => (+b.kg - +a.kg) || ((+b.reps||0) - (+a.reps||0)))[0];
-        if (top) c = {k: +top.kg, r: +top.reps || 0, text: `${fmt(top.kg)} kg × ${top.reps || "–"}${e.type === "carry" ? " m" : ""}`};
+        if (top) c = {k: +top.kg, r: +top.reps || 0, text: `${W(top.kg)} × ${top.reps || "–"}${e.type === "carry" ? " m" : ""}`};
       } else if (["bw","time","run"].includes(e.type)){
         const m = Math.max(0, ...ds.map(x => +x.reps || 0));
-        if (m) c = {k: m, r: 0, text: e.type === "bw" ? `${m} reps` : e.type === "time" ? `${m} s` : `${fmt(m)} km`};
+        if (m) c = {k: m, r: 0, text: e.type === "bw" ? `${m} reps` : e.type === "time" ? `${m} s` : D(m)};
       }
       if (!c) return;
       const b = best[n], better = b && (c.k > b.k || (c.k === b.k && c.r > b.r));
@@ -2901,18 +3182,18 @@ function viewTrophies(){
   out += `<section class="card"><h3>Strength score</h3>`;
   if (sc){
     out += `<div class="row between"><div style="font-family:var(--f-display);font-size:44px;line-height:1" class="num">${sc.score}</div><span class="small muted" style="max-width:60%;text-align:right">100 = intermediate standards: squat 1.5×, bench 1×, deadlift 2× and overhead press 0.65× body weight</span></div>
-    <div class="tbl"><table><tr><th>Lift</th><th>Est. 1RM</th><th>× body weight</th><th>Score</th></tr>${sc.parts.map(p => `<tr><td>${p.label}</td><td>${fmt(p.e1)} kg</td><td>${p.ratio.toFixed(2)}</td><td>${Math.round(p.pct * 100)}</td></tr>`).join("")}</table></div>`;
+    <div class="tbl"><table><tr><th>Lift</th><th>Est. 1RM</th><th>× body weight</th><th>Score</th></tr>${sc.parts.map(p => `<tr><td>${p.label}</td><td>${W(p.e1)}</td><td>${p.ratio.toFixed(2)}</td><td>${Math.round(p.pct * 100)}</td></tr>`).join("")}</table></div>`;
     const pts = []; for (let i = 11; i >= 0; i--){ const d = addDays(today(), -7 * i); const s = strengthScore(d); if (s) pts.push({x: d, y: s.score}); }
     if (pts.length > 1) out += lineChart([{pts}], {dec: 0});
-    out += `<span class="small muted">Based on your best set in the last 120 days and body weight ${fmt(sc.bw)} kg.</span>`;
+    out += `<span class="small muted">Based on your best set in the last 120 days and body weight ${W(sc.bw)}.</span>`;
   } else out += `<div class="empty">Log a squat, bench press, deadlift or overhead press (or a close variation) and your body weight to get a score.</div>`;
   out += `</section>`;
-  const t = G.tonnage, nextPlace = RUN_PLACES.find(p => p[0] > G.totalKm);
+  const t = G.tonnage, places = runPlaces(), nextPlace = places.find(p => p[0] > G.totalKm);
   out += `<section class="card"><h3>Milestones</h3>
   <div class="row between small"><span>Total lifted</span><b class="num">${fmt(t, 1)} tonnes</b></div>
   <span class="small muted">${t >= 4 ? `That's about ${Math.floor(t / 4)} Asian elephant${Math.floor(t / 4) === 1 ? "" : "s"} (about 4 tonnes each).` : `That's about ${Math.max(0, Math.round(t / 1.5 * 10) / 10)} cars' worth (about 1.5 tonnes each).`}</span>
-  <div class="row between small"><span>Total run</span><b class="num">${fmt(G.totalKm, 1)} km</b></div>
-  ${nextPlace ? `<div class="meter"><i style="width:${Math.min(100, G.totalKm / nextPlace[0] * 100)}%"></i></div><span class="small muted">${fmt(nextPlace[0] - G.totalKm, 1)} km to go to cover ${nextPlace[1]} (${nextPlace[0]} km).</span>` : `<span class="small muted">You've run further than Bangalore to Delhi.</span>`}
+  <div class="row between small"><span>Total run</span><b class="num">${D(G.totalKm)}</b></div>
+  ${nextPlace ? `<div class="meter"><i style="width:${Math.min(100, G.totalKm / nextPlace[0] * 100)}%"></i></div><span class="small muted">${D(nextPlace[0] - G.totalKm)} to go to cover ${nextPlace[1]} (${D(nextPlace[0], nextPlace[0] < 100 ? 1 : 0)}).</span>` : `<span class="small muted">You've run further than ${places[places.length - 1][1]}.</span>`}
   <div class="row between small"><span>Workouts logged</span><b class="num">${S.data.sessions.length}</b></div></section>`;
   out += `<section class="card"><h3>Badges · ${G.badges.size} of ${BADGES.length}</h3><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px">${BADGES.map(([id, ic, nm, ds]) => { const on = G.badges.has(id); return `<div class="stat" style="text-align:center;${on ? "" : "opacity:.42;filter:grayscale(1)"}" title="${esc(ds)}"><div style="font-size:28px">${ic}</div><b style="font-size:14px;font-family:var(--f-body)">${esc(nm)}</b><span>${esc(ds)}</span></div>`; }).join("")}</div></section>`;
   const best = Object.entries(G.pb.best).filter(([n]) => G.pb.events.some(e => e.n === n)).sort((a, b) => b[1].date.localeCompare(a[1].date));
@@ -3244,7 +3525,7 @@ function repMetrics(r){ // [{key,label,unit,value}]
 function viewReports(trainer){
   const reps = [...(S.data.reports || [])].sort(byDateDesc);
   let out = `<section class="card"><div class="row between"><h3>Health reports</h3>${trainer ? "" : `<button class="btn blue" data-act="rep-new">Add report</button>`}</div>
-  <span class="small muted">${trainer ? "Reports your client has chosen to share with you." : `Blood work, VO2 max tests, blood pressure and anything else.${isCloudClient() && Cloud.me.trainerId ? " Private unless you switch on sharing for a report." : ""}`} The app tracks your numbers over time; it doesn't interpret results — talk them through with your doctor.</span>`;
+  <span class="small muted">${trainer ? "Reports your client has chosen to share with you." : `Blood work, VO2 max tests, blood pressure and anything else.${isCloudClient() && Cloud.me.trainerId ? " Private unless you switch on sharing for a report." : ""}`} The app tracks your numbers over time; it doesn't interpret results and isn't medical advice — talk them through with your doctor.</span>`;
   if (!reps.length){ out += `<div class="empty">${trainer ? "No shared reports yet." : "No reports yet. Add your latest blood work or fitness test to start tracking trends."}</div></section>`; return out; }
   S.ui.rmetric = S.ui.rmetric || {};
   [...new Set(reps.map(r => r.type))].forEach(ty => {
@@ -3659,6 +3940,8 @@ function viewOwnerAccount(){
 }
 
 /* ============ Start over ============ */
+// Starting over clears the log but keeps your consent, date of birth, location and units.
+function keepOnReset(){ const s = set_(); return clean({consent: s.consent || null, loc: s.loc || null, units: s.units || null, unitsManual: s.unitsManual || null, intake: s.intake && s.intake.dob ? {dob: s.intake.dob} : null}); }
 async function resetAccount(){
   toast("Deleting your data…");
   try {
@@ -3667,13 +3950,14 @@ async function resetAccount(){
         const q = await uref().collection(c).get();
         await Promise.all(q.docs.map(d => uref().collection(c).doc(d.id).delete()));
       }
-      const fresh = defaultsFor(false);
+      const fresh = defaultsFor(false); Object.assign(fresh.settings, keepOnReset());
       await uref().update({program: clean(fresh.program), settings: clean(fresh.settings), trainerId: null, trainerCode: null, trainerName: null});
     }
     await Store.clearAll();
     clearDraft(); S.timer = null;
     S.data = emptyData();
-    S.profile = defaultsFor(false);
+    const keep = keepOnReset();
+    S.profile = defaultsFor(false); Object.assign(S.profile.settings, keep);
     if (!isCloudClient()) await Store.saveProfile(S.profile);
     S.ob = null; S.obOffered = false; S.view = "today"; S.sub = null;
     toast("Done — you're starting fresh");

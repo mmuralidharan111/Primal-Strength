@@ -54,9 +54,9 @@ jobs:
         run: npx --yes @capacitor/assets@3 generate --android
         continue-on-error: true
 
-      - name: Allow rest-timer vibration
+      - name: Allow rest-timer vibration and city lookup
         run: |
-          sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.VIBRATE" />#' android/app/src/main/AndroidManifest.xml
+          sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.VIBRATE" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />#' android/app/src/main/AndroidManifest.xml
 
       - name: Keep the screen on while the app is open
         run: |

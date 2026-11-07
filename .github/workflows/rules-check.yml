@@ -17,5 +17,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - run: npm install
+      - name: Smoke test
+        run: node test/smoke.js
       - name: Database rules tests (official Firestore emulator)
         run: npx --yes firebase-tools@13 emulators:exec --only firestore --project demo-primal "node test/rules.test.js"

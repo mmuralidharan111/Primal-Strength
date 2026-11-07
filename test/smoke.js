@@ -78,13 +78,23 @@ function makeFirebase(){
   const emit = () => authCbs.forEach(cb => cb(user));
   const auth = {
     onAuthStateChanged: cb => { authCbs.push(cb); setTimeout(() => cb(user), 0); },
-    createUserWithEmailAndPassword: async (e, p) => { if (accounts[e]) throw {code: "auth/email-already-in-use"}; accounts[e] = {uid: "u_" + e.split("@")[0], email: e, p}; user = accounts[e]; emit(); return {user}; },
+    createUserWithEmailAndPassword: async (e, p) => {
+      if (accounts[e]) throw {code: "auth/email-already-in-use"};
+      const acc = accounts[e] = {uid: "u_" + e.split("@")[0], email: e, p, emailVerified: false, verifySent: 0};
+      acc.sendEmailVerification = async () => { acc.verifySent++; };
+      acc.reload = async () => {};
+      acc.reauthenticateWithCredential = async c => { if (!c || c.p !== acc.p) throw {code: "auth/wrong-password"}; };
+      acc.delete = async () => { delete accounts[e]; user = null; emit(); };
+      user = acc; emit(); return {user};
+    },
+    get currentUser(){ return user; },
     signInWithEmailAndPassword: async (e, p) => { if (!accounts[e] || accounts[e].p !== p) throw {code: "auth/invalid-credential"}; user = accounts[e]; emit(); return {user}; },
     signOut: async () => { user = null; emit(); },
     sendPasswordResetEmail: async () => {}
   };
   const firestoreFn = () => db; firestoreFn.FieldValue = {serverTimestamp: () => SERVER_TS, arrayUnion: (...v) => ({__au: v}), arrayRemove: (...v) => ({__ar: v})};
-  return {initializeApp: () => {}, firestore: firestoreFn, auth: () => auth, _docs: docs};
+  const authFn = () => auth; authFn.EmailAuthProvider = {credential: (e, p) => ({e, p})};
+  return {initializeApp: () => {}, firestore: firestoreFn, auth: authFn, _docs: docs, verify: e => { accounts[e].emailVerified = true; }, accounts};
 }
 
 /* ---------- harness ---------- */
@@ -106,12 +116,35 @@ async function load(fb){
   return {w, $, click, type, text};
 }
 
+// The privacy screen every new user sees before anything else
+async function agree(X, {dob = "1985-04-12", health = true, staff = false} = {}){
+  check(X.text().includes("Your privacy"), "privacy and consent screen shown");
+  if (staff){ X.$("#cg-adult").checked = true; }
+  else { await X.type("#cg-dob", dob); if (health) X.$("#cg-health").checked = true; }
+  X.$("#cg-agree").checked = true;
+  await X.click('[data-act="cg-go"]', "agree and continue"); await sleep(300);
+}
+async function verifyEmail(X, fb, email){
+  check(X.text().includes("Confirm your email") && fb.accounts[email].verifySent === 1, "new account asked to confirm the email address");
+  await X.click('[data-act="verify-check"]', "try to continue before confirming"); await sleep(100);
+  check(X.text().includes("Confirm your email"), "still blocked until the email is confirmed");
+  fb.verify(email); await X.click('[data-act="verify-check"]', "continue after confirming"); await sleep(300);
+}
+
 (async () => {
   /* ===== 1. Offline client flow ===== */
   step = "offline";
   let A = await load(null);
+  step = "consent";
+  check(!A.$('[data-act="tab"]') && !A.text().includes("I'm your Primal Strength coach"), "nothing opens before the privacy screen");
+  A.$("#cg-agree").checked = false; await A.type("#cg-dob", "2010-05-01"); await A.click('[data-act="cg-go"]', "under-18 tries to continue"); await sleep(200);
+  check(A.text().includes("18 or over") && !A.$('[data-act="tab"]'), "under-18 is stopped");
+  await A.click('[data-act="cg-redo"]', "go back from the age stop");
+  await A.type("#cg-dob", "1981-03-02"); await A.click('[data-act="cg-go"]'); await sleep(100);
+  check(A.text().includes("Your privacy"), "can't continue without agreeing to the policy");
+  await agree(A);
   step = "onboarding";
-  check(A.text().includes("I'm your Primal Strength coach"), "first run opens the coach questionnaire");
+  check(A.text().includes("I'm your Primal Strength coach"), "after consent the coach questionnaire opens");
   await A.type("#ob-name", "Manas");
   await A.click('[data-act="ob-next"]', "start questionnaire");
   await A.click('[data-act="ob-pick"][data-k="goal"][data-v="strength"]', "pick goal");
@@ -212,6 +245,9 @@ async function load(fb){
   await T.click('[data-act="auth-role"][data-v="trainer"]', "pick trainer role");
   await T.type("#a-name", "Coach Ravi"); await T.type("#a-email", "coach@test.in"); await T.type("#a-pass", "secret1");
   await T.click('[data-act="auth-go"]', "create trainer account"); await sleep(600);
+  await verifyEmail(T, fb, "coach@test.in");
+  await agree(T, {staff: true});
+  check(!!fb._docs.get("users/u_coach").consent && fb._docs.get("users/u_coach").consent.v === 1, "trainer's consent saved");
   check(T.text().includes("Clients") || T.text().includes("clients"), "trainer lands on Clients");
   check(T.text().includes(", Coach"), "trainer greeted by name");
   const code = [...fb._docs.keys()].find(k => k.startsWith("codes/"));
@@ -222,6 +258,9 @@ async function load(fb){
   let C = await load(makeFirebase());      // client's phone: same backend, its own sign-in
   await C.type("#a-name", "Asha"); await C.type("#a-email", "asha@test.in"); await C.type("#a-pass", "secret2");
   await C.click('[data-act="auth-go"]', "create client account"); await sleep(600);
+  await verifyEmail(C, fb, "asha@test.in");
+  await agree(C);
+  check(fb._docs.get("users/u_asha").consent.health === true && fb._docs.get("users/u_asha").settings.intake.dob === "1985-04-12", "client's consent and date of birth saved");
   check(C.text().includes("Hi Asha"), "new client greeted by name in the questionnaire");
   await C.click('[data-act="ob-havetrainer"]', "client says they have a trainer's code"); await sleep(200);
   await C.type("#t-code", inviteCode);
@@ -307,6 +346,8 @@ async function load(fb){
   let B = await load(makeFirebase());
   await B.type("#a-name", "Ben Thomas"); await B.type("#a-email", "ben@test.in"); await B.type("#a-pass", "secret3");
   await B.click('[data-act="auth-go"]', "create buddy account"); await sleep(600);
+  fb.verify("ben@test.in"); await B.click('[data-act="verify-check"]'); await sleep(200);
+  await agree(B, {health: false});
   await B.click('[data-act="ob-skip"]', "buddy skips questionnaire"); await sleep(200);
   check(B.text().includes("Let's set up your training") && !!B.$("#e-tcode"), "new account without a program sees questionnaire and trainer-code options");
   await B.click('[data-act="tab"][data-v="squad"]'); await sleep(300);
@@ -315,6 +356,17 @@ async function load(fb){
   check(B.text().includes("Asha") && B.text().includes("Buddy board"), "buddy card and board shown");
   await B.click('[data-act="five"]', "send high-five"); await sleep(300);
   check([...fb._docs.keys()].some(k => k.startsWith("public/u_asha/fives/")), "high-five delivered");
+  await B.click('[data-act="tab"][data-v="body"]'); check(B.text().includes("haven't switched on health data") && !B.$('[data-act="dexa-new"]'), "health features hidden without health consent");
+
+  step = "delete-account";
+  await B.click('[data-act="settings"]'); await B.click('[data-act="ask-delete-account"]', "delete my account");
+  await B.type("#da-pass", "wrong"); await B.click('[data-act="delacct-go"]', "wrong password"); await sleep(200);
+  check(!!fb._docs.get("users/u_ben"), "wrong password deletes nothing");
+  await B.type("#da-pass", "secret3"); await B.click('[data-act="delacct-go"]', "confirm deletion"); await sleep(800);
+  check(!fb._docs.get("users/u_ben") && !fb._docs.get("public/u_ben") && !fb.accounts["ben@test.in"], "account, profile, summary and login deleted");
+  check(![...fb._docs.keys()].some(k => k.startsWith("users/u_ben/")), "all of the deleted user's records gone");
+  check(!(fb._docs.get("public/u_asha").buddies || []).includes("u_ben"), "deleted user removed from their buddy's list");
+  check(B.text().includes("Train with a plan"), "after deletion the app returns to the sign-up page");
   await C.click('[data-act="tab"][data-v="today"]'); await sleep(200);
   check(C.text().includes("high-fived"), "client sees the high-five");
   B.w.close();
@@ -368,6 +420,8 @@ async function load(fb){
   await O.click('[data-act="auth-role"][data-v="owner"]', "pick gym owner role");
   await O.type("#a-name", "Gita Owner"); await O.type("#a-email", "gita@test.in"); await O.type("#a-pass", "secret4"); await O.type("#a-gym", "Primal Gym HSR");
   await O.click('[data-act="auth-go"]', "create owner account"); await sleep(800);
+  fb.verify("gita@test.in"); await O.click('[data-act="verify-check"]'); await sleep(200);
+  await agree(O, {staff: true}); await sleep(300);
   const gcode = (fb._docs.get("users/u_gita") || {}).gymCode;
   check(fb._docs.get("gyms/u_gita") && fb._docs.get("gyms/u_gita").name === "Primal Gym HSR" && !!gcode, "gym and gym code created");
   check(O.text().includes(gcode) && O.text().includes("No trainers yet"), "owner dashboard shows the gym code");

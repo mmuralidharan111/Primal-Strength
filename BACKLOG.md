@@ -8,6 +8,11 @@ Requested features, not yet built.
 - (nothing yet)
 
 ## Later
+- **Wearable and health-app data (Google Health / Fitbit, Health Connect, Apple Health, Garmin, Strava, Oura, Whoop and others)**: bring in steps, heart rate and resting heart rate, sleep, workouts and cardio sessions (counting toward the cardio ring), body weight and VO2 max.
+  - Android, recommended first route: Health Connect, read on the phone. One connection covers apps that write to it (Fitbit/Pixel via the Google Health app, Samsung Health, Oura, Whoop, Strava and others). Needs a Health Connect plugin in the Android app, a permissions screen and Play's Health Connect declaration, so it fits with Play Store readiness.
+  - iPhone: Apple Health (HealthKit) needs the native iPhone app, so it follows the TestFlight item.
+  - Cloud route: the Google Health API replaced the Fitbit Web API (switched off 2 Nov 2026); every scope is "Restricted" and needs Google's privacy and security review, and Google paused onboarding of new projects in October. Garmin, Oura, Whoop and Strava have their own APIs (Garmin needs business approval). Cloud routes need a server (Firebase Cloud Functions on the Blaze plan).
+  - Only with the user's health-data consent; privacy policy updated to name each connected service.
 - Parental consent for under-18s (verifiable, needs email sending: Firebase Blaze plan + Cloud Function). Until then the app is 18+ only.
 - Location-aware event suggestions (nearby races) and gym city for city-wide leaderboards.
 - Firebase App Check: switch on together with Play Store readiness (Android check only works for apps installed from the Play Store).

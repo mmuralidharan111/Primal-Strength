@@ -7,6 +7,38 @@ Requested features, not yet built.
 ## Next build (agreed)
 - (nothing yet)
 
+## From Manas's notes (18 Nov 2026)
+
+**Priority**
+- **iPhone app ASAP.** Native iPhone app (TestFlight first, then App Store). Needs the Apple Developer Program (US$99/year). Replaces the "iPhone TestFlight" item under Later.
+
+**Sign-up by sport**
+- Sign-up asks for the user's sport: triathlon, HYROX, CrossFit, strength, running and others. The sport decides the exercises and workouts in their plan.
+
+**Events and community**
+- Track events (races, competitions) as workouts.
+- Event calendar of races people can browse, filtered from city → state → region → country → part of a continent → continent → world.
+- Connect with others targeting the same event (HYROX, CrossFit etc.) and compare event prep; option to share event-prep progress; event leaderboard that isn't limited by location.
+- Buddies: with permission, find and add buddies by email address.
+
+**Progress by sport**
+- Progress screens differ by sport instead of one fixed layout. Example, HYROX: run times and speed, sled times, the other station times and Roxzone (transition) time.
+- Body tab: add HYROX, CrossFit and other event result reports.
+- AI insights for trainers: correlate progress, event results, VO2 max, DEXA and other reports, and give the trainer insights. Build the AI logic and confirm it works (links to AI coaching under Later).
+
+**Trainer tools**
+- Build a workout once and send it to several clients; each client's weights and reps are set from their own history.
+- Trainer approves a logged workout; an approved workout counts as attendance, so trainer and gym can track attendance for billing.
+- AMRAP and other smart timers (EMOM, Tabata, For Time), with a landscape full-screen mode so the timer is as big as possible.
+- Gym big screen: also show live heart rate, SpO2 and other wearable data; the coach chooses what to display (needs the wearables item).
+- Class vs event: to clarify with Manas what this should cover.
+
+**Gym management (desktop app and backend)**
+- Desktop web app for gyms and trainers, with a proper backend, covering client and trainer data: missed sessions, progress alerts, member tenure, billing.
+- Views: (a) existing clients who need a new program; (b) new clients and whether they've been given a program; (c) defaulters (overdue payments); (d) clients nearing the end of their membership.
+- Memberships: monthly, quarterly, 6-monthly and yearly.
+- Payments in the app with invoices for clients and gyms; tax (GST) calculated for accounting.
+
 ## Later
 - Email verification for new accounts: built, then switched off (Nov 2026) because Firebase's confirmation emails weren't arriving. Before switching it back on, send Firebase's emails through your own Gmail (Authentication → Templates → SMTP settings) or a custom domain, and show Firebase's error code if sending fails.
 - **Wearable and health-app data (Google Health / Fitbit, Health Connect, Apple Health, Garmin, Strava, Oura, Whoop and others)**: bring in steps, heart rate and resting heart rate, sleep, workouts and cardio sessions (counting toward the cardio ring), body weight and VO2 max.
@@ -20,7 +52,6 @@ Requested features, not yet built.
 - Firebase App Check: switch on together with Play Store readiness (Android check only works for apps installed from the Play Store).
 - Play Store readiness: signed release bundle (.aab) with an upload key and Play App Signing, target Android 16 (API 36), decide the final app ID, store listing assets, Data safety and health declarations, 12-tester / 14-day closed test.
 - AI coaching (Cloud Functions + Claude API): post-workout feedback, weekly review, trainer suggestions. Needs Anthropic API key and Firebase Blaze plan.
-- iPhone TestFlight build (needs Apple Developer Program).
 
 ## Ideas (not yet requested)
 - Privacy documents: terms for gyms using the app, a data-breach response plan (72-hour reporting), a data-retention rule for inactive accounts.

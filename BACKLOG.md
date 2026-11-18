@@ -4,16 +4,19 @@ Requested features, not yet built.
 
 > Process: when Manas next asks for changes or additions, go through every item below and ask whether it should go into the next build. Release a new build once 4–5 items are agreed.
 
-## Priority order (proposed 18 Nov 2026, awaiting Manas's OK)
+## Priority order (agreed 18 Nov 2026)
 
-**Tier 1, next build:** 1. Sign-up by sport (whole app adapts) · 2. Progress by sport (all sports) · 3. Events as workouts + event results · 4. Workout timers (AMRAP/EMOM/Tabata/For Time, landscape) · 5. One workout to many clients, personalised loads.
+**Tier 1, next build:** 1. Sign-up by sport (whole app adapts) · 2. Progress by sport (all 19 sports) · 3. Events as workouts + event results.
+**Tier 1b, the build after:** Workout timers (AMRAP/EMOM/Tabata/For Time, landscape) · One workout to many clients, personalised loads.
 **Parallel track:** iPhone app (starts once the Apple Developer account exists).
 **Tier 2:** Classes (recurring schedule per troop) · Trainer approval = attendance · Event calendar + same-event community + event leaderboard (with nearby race suggestions) · Buddies by email · Wearables via Health Connect, then wearable data on the big screen.
 **Tier 3:** Play Store readiness + App Check · Push notifications · Email verification back on (after SMTP setup) · AI insights / AI coaching.
 **Tier 4:** Gym management desktop app + backend (views, memberships, billing, payments, GST invoices) with privacy documents (gym terms, breach plan, retention) · Age verification · Health report files on all devices.
 
 ## Next build (agreed)
-- (nothing yet)
+- Sign-up by sport, with the whole app environment adapting to the sport (see notes section).
+- Progress by sport, for every sport on the sign-up list.
+- Track events as workouts, and event result reports in the Body tab.
 
 ## From Manas's notes (18 Nov 2026)
 

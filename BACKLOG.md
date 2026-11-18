@@ -6,7 +6,7 @@ Requested features, not yet built.
 
 ## Priority order (proposed 18 Nov 2026, awaiting Manas's OK)
 
-**Tier 1, next build:** 1. Sign-up by sport · 2. Progress by sport · 3. Events as workouts + event results · 4. Workout timers (AMRAP/EMOM/Tabata/For Time, landscape) · 5. One workout to many clients, personalised loads.
+**Tier 1, next build:** 1. Sign-up by sport (whole app adapts) · 2. Progress by sport (all sports) · 3. Events as workouts + event results · 4. Workout timers (AMRAP/EMOM/Tabata/For Time, landscape) · 5. One workout to many clients, personalised loads.
 **Parallel track:** iPhone app (starts once the Apple Developer account exists).
 **Tier 2:** Classes (recurring schedule per troop) · Trainer approval = attendance · Event calendar + same-event community + event leaderboard (with nearby race suggestions) · Buddies by email · Wearables via Health Connect, then wearable data on the big screen.
 **Tier 3:** Play Store readiness + App Check · Push notifications · Email verification back on (after SMTP setup) · AI insights / AI coaching.
@@ -21,7 +21,12 @@ Requested features, not yet built.
 - **iPhone app ASAP.** Native iPhone app (TestFlight first, then App Store). Needs the Apple Developer Program (US$99/year). Replaces the "iPhone TestFlight" item under Later.
 
 **Sign-up by sport**
-- Sign-up asks for the user's sport: triathlon, HYROX, CrossFit, strength, running and others. The sport decides the exercises and workouts in their plan.
+- Sign-up asks for the user's sport (one main sport, optional second). The whole app environment changes with it, not just the plan:
+  - exercise library, swap suggestions and templates show only what fits the sport (a triathlete never sees back squats unless they ask; a strength athlete isn't shown swim drills);
+  - log screen fields fit the sport (pace, distance, splits, heart rate, rounds, time, weight);
+  - Today screen, rings and weekly targets (e.g. swim/bike/run minutes for triathlon instead of lifts);
+  - progress, trophies, milestones, challenge metrics and the trainer's view.
+  - Sport can be changed later in Edit profile; a "general fitness" option keeps today's mixed layout.
 
 **Events and community**
 - Track events (races, competitions) as workouts.
@@ -30,7 +35,27 @@ Requested features, not yet built.
 - Buddies: with permission, find and add buddies by email address.
 
 **Progress by sport**
-- Progress screens differ by sport instead of one fixed layout, showing what an athlete or trainer in that sport cares about. Example: a HYROX athlete wants run times and pace, sled and station times and Roxzone (transition) time; a strength athlete wants lifts, estimated maxes and volume.
+- Progress screens differ by sport instead of one fixed layout, showing what an athlete or trainer in that sport cares about. Cover every sport offered at sign-up:
+  - General fitness / weight loss: workouts per week, body weight, waist, body fat, steps, cardio minutes.
+  - Strength / powerlifting: squat, bench, deadlift estimated maxes, Wilks/DOTS-style total, volume, rep PBs.
+  - Bodybuilding / physique: volume per muscle group, measurements, body composition, progress photos.
+  - Olympic weightlifting: snatch, clean and jerk, front squat; technique-lift PBs.
+  - HYROX: 1 km run splits and pace, each station time (ski, sled push, sled pull, burpee broad jumps, row, farmers carry, lunges, wall balls), Roxzone time, finish time.
+  - CrossFit / functional fitness: benchmark workouts (Fran, Grace, Murph…), Open scores, gymnastics skills, lifts, engine (row/bike calories).
+  - Running (5 km to marathon): pace, weekly distance, long run, race times, heart-rate zones, VO2 max.
+  - Triathlon: swim pace per 100 m, bike power/speed and distance, run pace, weekly volume per sport, brick sessions, race splits and transitions.
+  - Cycling: distance, speed, power (FTP), climbing, cadence.
+  - Swimming: pace per 100 m, distance, stroke, intervals.
+  - Obstacle racing (Spartan, Devil's Circuit, Yoddha): run pace, grip and carry tests, obstacle skills, race times.
+  - Team sports (football, cricket, hockey, basketball, rugby): sprint, agility (5-10-5), jump, Yo-Yo or beep test, strength.
+  - Racquet sports (tennis, badminton, squash, padel, pickleball): agility, sprint, jump, shoulder and core strength, endurance.
+  - Combat sports (boxing, MMA, Brazilian jiu-jitsu, wrestling): rounds and conditioning, strength-to-weight, weight-class tracking.
+  - Calisthenics: pull-ups, dips, push-ups, skills (muscle-up, handstand, front lever).
+  - Rowing: 500 m split, 2 km time, stroke rate, distance.
+  - Climbing / bouldering: grades sent, finger strength, pull-ups.
+  - Yoga / mobility: sessions, mobility scores, consistency.
+  - Older adults / rehab: balance, sit-to-stand, walking speed, grip strength, pain trend.
+
 - Body tab: add HYROX, CrossFit and other event result reports.
 - AI insights for trainers: correlate progress, event results, VO2 max, DEXA and other reports, and give the trainer insights. Build the AI logic and confirm it works (links to AI coaching under Later).
 

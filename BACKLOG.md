@@ -11,7 +11,8 @@ Requested features, not yet built.
 **Parallel track:** iPhone app (starts once the Apple Developer account exists).
 **Tier 2:** Classes (recurring schedule per troop) · Trainer approval = attendance · Event calendar + same-event community + event leaderboard (with nearby race suggestions) · Buddies by email · Wearables via Health Connect, then wearable data on the big screen.
 **Tier 3:** Play Store readiness + App Check · Push notifications · Email verification back on (after SMTP setup) · AI insights / AI coaching.
-**Tier 4:** Gym management desktop app + backend (views, memberships, billing, payments, GST invoices) with privacy documents (gym terms, breach plan, retention) · Age verification · Health report files on all devices.
+**Tier 3b:** Video calls client ↔ trainer (start with scheduled call links, then in-app video) and form-check videos.
+**Tier 4:** Paid plans for clients (app only / weekly check-in with or without video / video every workout) and billing for independent trainers, together with gym management desktop app + backend (views, memberships, billing, payments, GST invoices) with privacy documents (gym terms, breach plan, retention) · Age verification · Health report files on all devices.
 
 ## Next build (agreed)
 - Sign-up by sport, with the whole app environment adapting to the sport (see notes section).
@@ -68,6 +69,16 @@ Requested features, not yet built.
 - AMRAP and other smart timers (EMOM, Tabata, For Time), with a landscape full-screen mode so the timer is as big as possible.
 - Gym big screen: also show live heart rate, SpO2 and other wearable data; the coach chooses what to display (needs the wearables item).
 - Classes: trainer schedules regular recurring classes (e.g. Mon/Wed/Fri 7 am) for the same group or sub-group of clients (troops), separate from one-off events; clients see their class schedule.
+
+**Video coaching and paid plans (added 18 Nov 2026)**
+- Video calls between client and trainer, in the app, to watch form live and give feedback. Options: a video provider's SDK (e.g. 100ms, Agora, Daily) for in-app calls, or a simpler first step that creates a scheduled Google Meet / Jitsi link per session. Calls logged against the client (date, length, notes).
+- Suggested extra: clients record a short form-check video of a set and send it to the trainer for feedback later (no live call needed).
+- Independent trainers (not linked to a gym) can sign clients up and bill them through the app.
+- Client plans:
+  1. Basic: app only (self-coached).
+  2. Weekly check-in with an in-house trainer: one rate without video, a higher rate with a video call.
+  3. Premium: a trainer on a video call for every workout.
+- Needs: subscriptions and payments (e.g. Razorpay subscriptions with GST invoices), payouts to independent trainers with the platform's commission (e.g. Razorpay Route, needs trainer KYC), trainer availability and booking, and a server (Firebase Blaze). Shares the billing foundation with the gym management item.
 
 **Gym management (desktop app and backend)**
 - Desktop web app for gyms and trainers, with a proper backend, covering client and trainer data: missed sessions, progress alerts, member tenure, billing.

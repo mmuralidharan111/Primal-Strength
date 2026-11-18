@@ -22,7 +22,7 @@ Requested features, not yet built.
 - Buddies: with permission, find and add buddies by email address.
 
 **Progress by sport**
-- Progress screens differ by sport instead of one fixed layout. Example, HYROX: run times and speed, sled times, the other station times and Roxzone (transition) time.
+- Progress screens differ by sport instead of one fixed layout, showing what an athlete or trainer in that sport cares about. Example: a HYROX athlete wants run times and pace, sled and station times and Roxzone (transition) time; a strength athlete wants lifts, estimated maxes and volume.
 - Body tab: add HYROX, CrossFit and other event result reports.
 - AI insights for trainers: correlate progress, event results, VO2 max, DEXA and other reports, and give the trainer insights. Build the AI logic and confirm it works (links to AI coaching under Later).
 
@@ -31,7 +31,7 @@ Requested features, not yet built.
 - Trainer approves a logged workout; an approved workout counts as attendance, so trainer and gym can track attendance for billing.
 - AMRAP and other smart timers (EMOM, Tabata, For Time), with a landscape full-screen mode so the timer is as big as possible.
 - Gym big screen: also show live heart rate, SpO2 and other wearable data; the coach chooses what to display (needs the wearables item).
-- Class vs event: to clarify with Manas what this should cover.
+- Classes: trainer schedules regular recurring classes (e.g. Mon/Wed/Fri 7 am) for the same group or sub-group of clients (troops), separate from one-off events; clients see their class schedule.
 
 **Gym management (desktop app and backend)**
 - Desktop web app for gyms and trainers, with a proper backend, covering client and trainer data: missed sessions, progress alerts, member tenure, billing.

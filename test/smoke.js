@@ -123,12 +123,6 @@ async function agree(X, {dob = "1985-04-12", health = true, staff = false} = {})
   X.$("#cg-agree").checked = true;
   await X.click('[data-act="cg-go"]', "agree and continue"); await sleep(300);
 }
-async function verifyEmail(X, fb, email){
-  check(X.text().includes("Confirm your email") && fb.accounts[email].verifySent === 1, "new account asked to confirm the email address");
-  await X.click('[data-act="verify-check"]', "try to continue before confirming"); await sleep(100);
-  check(X.text().includes("Confirm your email"), "still blocked until the email is confirmed");
-  fb.verify(email); await X.click('[data-act="verify-check"]', "continue after confirming"); await sleep(300);
-}
 
 (async () => {
   /* ===== 1. Offline client flow ===== */
@@ -241,7 +235,7 @@ async function verifyEmail(X, fb, email){
   await T.click('[data-act="auth-role"][data-v="trainer"]', "pick trainer role");
   await T.type("#a-name", "Coach Ravi"); await T.type("#a-email", "coach@test.in"); await T.type("#a-pass", "secret1");
   await T.click('[data-act="auth-go"]', "create trainer account"); await sleep(600);
-  await verifyEmail(T, fb, "coach@test.in");
+  check(!T.text().includes("Confirm your email"), "no email confirmation step");
   await agree(T, {staff: true});
   check(!!fb._docs.get("users/u_coach").consent && fb._docs.get("users/u_coach").consent.v === 1, "trainer's consent saved");
   check(T.text().includes("Clients") || T.text().includes("clients"), "trainer lands on Clients");
@@ -254,7 +248,6 @@ async function verifyEmail(X, fb, email){
   let C = await load(makeFirebase());      // client's phone: same backend, its own sign-in
   await C.type("#a-name", "Asha"); await C.type("#a-email", "asha@test.in"); await C.type("#a-pass", "secret2");
   await C.click('[data-act="auth-go"]', "create client account"); await sleep(600);
-  await verifyEmail(C, fb, "asha@test.in");
   await agree(C);
   check(fb._docs.get("users/u_asha").consent.health === true && fb._docs.get("users/u_asha").settings.intake.dob === "1985-04-12", "client's consent and date of birth saved");
   check(C.text().includes("Hi Asha"), "new client greeted by name in the questionnaire");
@@ -342,7 +335,6 @@ async function verifyEmail(X, fb, email){
   let B = await load(makeFirebase());
   await B.type("#a-name", "Ben Thomas"); await B.type("#a-email", "ben@test.in"); await B.type("#a-pass", "secret3");
   await B.click('[data-act="auth-go"]', "create buddy account"); await sleep(600);
-  fb.verify("ben@test.in"); await B.click('[data-act="verify-check"]'); await sleep(200);
   await agree(B, {health: false, dob: ""});
   check(!!fb._docs.get("users/u_ben").consent, "date of birth is optional");
   await B.click('[data-act="ob-skip"]', "buddy skips questionnaire"); await sleep(200);
@@ -417,7 +409,6 @@ async function verifyEmail(X, fb, email){
   await O.click('[data-act="auth-role"][data-v="owner"]', "pick gym owner role");
   await O.type("#a-name", "Gita Owner"); await O.type("#a-email", "gita@test.in"); await O.type("#a-pass", "secret4"); await O.type("#a-gym", "Primal Gym HSR");
   await O.click('[data-act="auth-go"]', "create owner account"); await sleep(800);
-  fb.verify("gita@test.in"); await O.click('[data-act="verify-check"]'); await sleep(200);
   await agree(O, {staff: true}); await sleep(300);
   const gcode = (fb._docs.get("users/u_gita") || {}).gymCode;
   check(fb._docs.get("gyms/u_gita") && fb._docs.get("gyms/u_gita").name === "Primal Gym HSR" && !!gcode, "gym and gym code created");

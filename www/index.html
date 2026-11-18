@@ -935,13 +935,12 @@ function render(){
   if (S.view !== "log" && ae && ae.matches && ae.matches("main input, main textarea, main select") && !S.forceRender){ pendingRender = true; return; }
   S.forceRender = false; pendingRender = false;
   let html = "";
-  if (needsOnboarding() && !needsConsent() && !needsVerify() && !S.ob && S.view !== "log" && !S.obOffered){
+  if (needsOnboarding() && !needsConsent() && !S.ob && S.view !== "log" && !S.obOffered){
     S.obOffered = true; const prev = set_().intake || {};
     S.ob = {step: 0, a: {pain: [], health: {}, lifts: {}, days: 3, mins: 60, ...clean(prev)}}; S.view = "onboard";
   }
   if (cloudOK() && (!Cloud.authKnown || (Cloud.user && !Cloud.me))) html = viewSplash();
   else if (cloudOK() && !Cloud.user) html = viewWelcome();
-  else if (needsVerify()) html = viewVerify();
   else if (needsConsent()) html = viewConsent();
   else if (S.view === "onboard" && S.ob && !isTrainer()) html = viewOnboard();
   else if (isOwner()){
@@ -2688,8 +2687,7 @@ async function authGo(){
     if (st.mode === "up"){
       const name = val("a-name"); if (!name){ if (btn){ btn.disabled = false; btn.textContent = "Create account"; } return toast("Enter your name."); }
       Cloud.pending = {role: ["trainer","owner"].includes(st.role) ? st.role : "client", name, gymName: val("a-gym")};
-      const cred = await firebase.auth().createUserWithEmailAndPassword(email, pass);
-      try { if (cred && cred.user && cred.user.sendEmailVerification) await cred.user.sendEmailVerification(); } catch(e){}
+      await firebase.auth().createUserWithEmailAndPassword(email, pass);
     } else await firebase.auth().signInWithEmailAndPassword(email, pass);
     if (S.sheet && S.sheet.kind === "auth") S.sheet = null; S.forceRender = true; render();
   } catch(e){
@@ -2705,7 +2703,6 @@ function accountSection(){
   if (!Cloud.user) return `<span class="muted small">Create an account to keep your log safe online, use it on more than one device, and connect with a trainer.</span><div class="grid2"><button class="btn blue" data-act="auth" data-v="up">Create account</button><button class="btn" data-act="auth" data-v="in">Sign in</button></div>`;
   const me = Cloud.me || {};
   return `<span class="muted small">Signed in as ${esc(Cloud.user.email)}. Your log syncs to your account.</span>
-  ${Cloud.user.emailVerified ? "" : `<div class="banner warn"><div><b>Your email isn't confirmed.</b> Confirm it so you can always get back into your account. <button class="btn ghost" data-act="verify-resend">Send the link</button> <button class="btn ghost" data-act="verify-check">I've confirmed it</button></div></div>`}
   <h3>Trainer</h3>${me.trainerId ? `<span class="small">Connected to <b>${esc(me.trainerName || "your trainer")}</b>. They can see your workouts and set your program.</span><button class="btn danger block" data-act="ask-disconnect">Disconnect from trainer</button>` : `<label class="f">Trainer's invite code<input id="t-code" autocapitalize="characters" placeholder="6 letters and numbers"></label><button class="btn blue block" data-act="connect-trainer">Connect</button>`}
   <button class="btn block" data-act="signout">Sign out</button>`;
 }

@@ -8,6 +8,7 @@ Requested features, not yet built.
 - (nothing yet)
 
 ## Later
+- Email verification for new accounts: built, then switched off (Nov 2026) because Firebase's confirmation emails weren't arriving. Before switching it back on, send Firebase's emails through your own Gmail (Authentication → Templates → SMTP settings) or a custom domain, and show Firebase's error code if sending fails.
 - **Wearable and health-app data (Google Health / Fitbit, Health Connect, Apple Health, Garmin, Strava, Oura, Whoop and others)**: bring in steps, heart rate and resting heart rate, sleep, workouts and cardio sessions (counting toward the cardio ring), body weight and VO2 max.
   - Android, recommended first route: Health Connect, read on the phone. One connection covers apps that write to it (Fitbit/Pixel via the Google Health app, Samsung Health, Oura, Whoop, Strava and others). Needs a Health Connect plugin in the Android app, a permissions screen and Play's Health Connect declaration, so it fits with Play Store readiness.
   - iPhone: Apple Health (HealthKit) needs the native iPhone app, so it follows the TestFlight item.
@@ -29,7 +30,6 @@ Requested features, not yet built.
 ## Built (November 2026, privacy release)
 - Privacy and consent screen before anything else: privacy policy agreement, date of birth (optional), country and city; separate optional health-data consent.
 - Health data switch in Settings → Privacy; switching off deletes DEXA scans, reports, screening answers and pain scores and hides those features.
-- Email verification for new accounts (accounts from 7 Nov 2026); older accounts see a reminder in Settings.
 - Delete my account (password confirm) removes login, all records, public summary, buddy links, challenge entries; trainer is told and their notes are removed. Web page: delete-account.html.
 - Privacy policy page (privacy.html), linked from the app and download page; not-medical-advice note on consent, questionnaire, plan and reports.
 - Units by country (kg/lb, km/mi, cm/in, km/h/mph) with manual override; local running milestones by city/country; "Use my location" looks up the city once and stores only city and country.

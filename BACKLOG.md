@@ -46,6 +46,7 @@ Builds in order. Each groups items that share setup; later builds depend on earl
 - Paid client plans: app only / weekly check-in without or with video / video every workout.
 - Billing and payouts for independent trainers (Razorpay Route, trainer KYC).
 - Gym management desktop app + backend: views (clients needing a new program, new clients without a program, defaulters, memberships ending), monthly/quarterly/6-monthly/yearly memberships.
+- **Gym website / desktop app (Manas, 24 Nov 2026):** gym owners and front-desk staff sign in from any computer and do everything there: dashboard (members, active this week, at risk, revenue, renewals due), reports and trends (attendance, retention, new members, trainer performance, revenue by week and month, exports for accounts), trainers and their clients, every member's profile, and **notifications on clients who are "at risk"** (missed sessions, stopped logging, renewal near without training), naming the client's trainer. Shown to prospects as "coming" in the customer document.
 - Payments with GST invoices.
 - Privacy documents: gym terms, 72-hour breach plan, retention rule for inactive accounts.
 

@@ -5,6 +5,7 @@
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
 </head><body>
 <script src="vendor/firebase-app-compat.js"></script>
+<script src="vendor/firebase-app-check-compat.js"></script>
 <script src="vendor/firebase-auth-compat.js"></script>
 <script src="vendor/firebase-firestore-compat.js"></script>
 <title>Primal Strength</title>
@@ -3114,6 +3115,11 @@ const FB_CONFIG = {
   messagingSenderId: "546060061659",
   appId: "1:546060061659:web:a5fd330b697bbb45a835fe"
 };
+// App Check proves requests come from this app, not a script using the API key.
+// Off until a reCAPTCHA v3 site key is set here (Firebase console → App Check). With a key, the app sends
+// App Check tokens; Firebase only rejects requests without one after "Enforce" is switched on in the console.
+// Switching it on loads Google's reCAPTCHA script, which the privacy policy must then mention.
+const APP_CHECK_SITE_KEY = "";
 const Cloud = { user:null, db:null, me:null, unsub:[], attached:null, pending:null };
 const cloudOK = () => !!(window.firebase && Cloud.db);
 const isCloudClient = () => !!(Cloud.user && Cloud.me && Cloud.me.role === "client");
@@ -3128,6 +3134,7 @@ async function cloudInit(){
   if (!window.firebase) return;
   try {
     firebase.initializeApp(FB_CONFIG);
+    if (APP_CHECK_SITE_KEY && firebase.appCheck){ try { firebase.appCheck().activate(new firebase.appCheck.ReCaptchaV3Provider(APP_CHECK_SITE_KEY), true); } catch(e){ console.warn("App Check not started", e); } }
     Cloud.db = firebase.firestore();
     try { await Cloud.db.enablePersistence({synchronizeTabs:true}); } catch(e){}
     firebase.auth().onAuthStateChanged(u => { Cloud.authKnown = true; S.obOffered = false; S.ob = null; if (!u) S.forceRender = true; onAuth(u).then(() => { if (!u){ S.forceRender = true; render(); } }).catch(err => { console.error(err); toast("Couldn't load your account — check your connection."); }); });

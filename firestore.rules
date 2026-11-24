@@ -45,8 +45,11 @@ service cloud.firestore {
         allow update: if isMe(uid) && col in ['sessions', 'cardio', 'body', 'dexa', 'reports']
           && (col != 'sessions' || request.resource.data.get('approved', null) == resource.data.get('approved', null));
         allow delete: if isMe(uid) && col in ['sessions', 'cardio', 'body', 'dexa', 'reports'];
-        // Trainer logging a client's workout on the gym screen, or approving a logged workout
-        allow create, update: if col == 'sessions' && isTrainerOf(uid);
+        // Trainer logging a client's workout on the gym screen
+        allow create: if col == 'sessions' && isTrainerOf(uid);
+        // Trainer approving a workout: the approval is the only thing they may change in what a client logged
+        allow update: if col == 'sessions' && isTrainerOf(uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approved']);
       }
     }
 

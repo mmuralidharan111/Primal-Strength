@@ -168,6 +168,9 @@ const allow = (l, f) => expect("allow", l, f), deny = (l, f) => expect("deny", l
   await deny("trainer changes a client's settings or consent", () => updateDoc(doc(coach, "users/asha"), {"settings.intake": {}}));
   await deny("trainer rewrites what a client logged in a workout", () => updateDoc(doc(coach, "users/asha/sessions/s1"), {title: "Changed by trainer", exercises: []}));
   await allow("trainer approves a workout (only the approval changes)", () => updateDoc(doc(coach, "users/asha/sessions/s1"), {approved: {by: "coach", at: "2026-11-09"}}));
+  await deny("trainer approves and changes the weights in one go", () => updateDoc(doc(coach, "users/asha/sessions/s1"), {approved: {by: "coach", at: "2026-11-10"}, exercises: []}));
+  await deny("trainer overwrites a client's workout with a new one", () => setDoc(doc(coach, "users/asha/sessions/s1"), {date: "2026-11-02", title: "Replaced"}));
+  await allow("trainer saves a new workout for a client from the gym screen", () => setDoc(doc(coach, "users/asha/sessions/g2"), {date: "2026-11-09", loggedOn: "gym screen", approved: {by: "coach", at: "2026-11-09"}}));
 
   console.log("Security audit: gym owners see summaries of their own trainers' clients only");
   await deny("gym owner lists a client's check-ins", () => getDocs(collection(gita, "users/asha/body")));

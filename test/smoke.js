@@ -31,7 +31,8 @@ function makeFirebase(){
   function snapDoc(p, d){ return {id: p.split("/").pop(), exists: d !== undefined, data: () => d && JSON.parse(JSON.stringify(d))}; }
   function runQuery(q){
     let rows = [...docs.entries()].filter(([p]) => isDirectChild(p, q.path)).map(([p, d]) => ({p, d}));
-    for (const [f, op, v] of q.wh) rows = rows.filter(r => op === "==" ? r.d[f] === v : true);
+    const cmp = {"==": (a, b) => a === b, "<": (a, b) => a < b, "<=": (a, b) => a <= b, ">": (a, b) => a > b, ">=": (a, b) => a >= b};
+    for (const [f, op, v] of q.wh) rows = rows.filter(r => cmp[op] ? r.d[f] != null && cmp[op](r.d[f], v) : true);
     if (q.ob) rows.sort((a, b) => String(b.d[q.ob[0]]).localeCompare(String(a.d[q.ob[0]])) * (q.ob[1] === "desc" ? 1 : -1));
     if (q.lim) rows = rows.slice(0, q.lim);
     return rows;
@@ -644,6 +645,23 @@ async function agree(X, {dob = "1985-04-12", health = true, staff = false} = {})
   await O2.click('[data-act="otrainer"]', "open trainer"); await sleep(300);
   check(O2.text().includes("Attendance") && O2.text().includes("Asha") && O2.text().includes("All clients"), "gym owner sees the trainer's attendance for billing");
   O2.w.close();
+
+  step = "bounded-reads";
+  const dayStr = n => { const d = new Date(Date.now() - n * 86400000); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
+  await fb.firestore().collection("users").doc("u_asha").collection("sessions").doc("old300").set({id: "old300", date: dayStr(300), title: "Year-ago workout", week: 1, day: "A", exercises: []});
+  await fb.firestore().collection("users").doc("u_asha").collection("sessions").doc("mid100").set({id: "mid100", date: dayStr(100), title: "Spring workout", week: 1, day: "A", exercises: []});
+  let C2 = await load(makeFirebase());
+  await C2.click('[data-act="auth-mode"][data-v="in"]'); await C2.type("#a-email", "asha@test.in"); await C2.type("#a-pass", "secret2");
+  await C2.click('[data-act="auth-go"]', "client signs in on a new phone"); await sleep(900);
+  const ids = () => C2.w.eval("S.data.sessions.map(s => s.id)");
+  check(ids().includes("mid100") && !ids().includes("old300"), "a new phone loads the last 6 months, not older history");
+  check(C2.w.eval("S.data.sessions.length") >= 2, "recent workouts still loaded");
+  await C2.click('[data-act="tab"][data-v="progress"]');
+  check(C2.text().includes("Showing the last 6 months") && !!C2.$('[data-act="hist-all"]'), "Progress says how far back it goes and offers older history");
+  await C2.click('[data-act="hist-all"]', "load older history"); await sleep(400);
+  check(ids().includes("old300") && !C2.$('[data-act="hist-all"]'), "older history loads on request");
+  check(C2.w.eval('localStorage.getItem("ps-hist-all:u:u_asha")') === "1", "the phone remembers to show all history next time");
+  C2.w.close();
 
   report();
 })().catch(e => { errors.push("crash: " + (e && (e.stack || e.message) || e)); report(); });

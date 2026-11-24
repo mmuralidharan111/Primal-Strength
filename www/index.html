@@ -2322,7 +2322,7 @@ function viewProgress(){
   const ptab = S.ui.ptab || "stats";
   let out = `<div><span class="eyebrow">Trends</span><h1>Progress</h1></div><div class="chips"><button class="chip ${ptab==="stats"?"on":""}" data-act="ptab" data-v="stats">Stats</button><button class="chip ${ptab==="trophies"?"on":""}" data-act="ptab" data-v="trophies">Trophies</button></div>`;
   if (ptab === "trophies") return out + viewTrophies();
-  out += sportProgressHTML() + `<h2 style="margin-top:6px">All stats</h2>`;
+  out += historyNote() + sportProgressHTML() + `<h2 style="margin-top:6px">All stats</h2>`;
   // lifts
   const names = {};
   sessionsSorted().forEach(s => s.exercises.forEach(e => { if ((e.type === "load" || e.type === "carry") && topSet(e)) names[e.performedAs] = (names[e.performedAs]||0) + 1; }));
@@ -2601,12 +2601,14 @@ const numOrNull = v => v === "" || v == null || isNaN(+v) ? null : +v;
 async function saveRec(col, rec){
   const arr = S.data[col]; const i = arr.findIndex(r => r.id === rec.id);
   if (i >= 0) arr[i] = rec; else arr.push(rec);
+  if (S.hist) S.hist.touch(col, rec);
   if (isCloudClient()) return cloudSaveRec(col, rec);
   try { await Store.put({...rec, col}); } catch(e){ toast("Couldn't save on this device."); throw e; }
 }
 async function delRec(col, id){
   const rec = S.data[col].find(r => r.id === id);
   S.data[col] = S.data[col].filter(r => r.id !== id);
+  if (S.hist) S.hist.touch(col, id, true);
   if (isCloudClient()){ cloudDelRec(col, id); if (rec && rec.fileId) Store.delFile(rec.fileId).catch(()=>{}); return; }
   try { await Store.del(id); if (rec && rec.fileId) await Store.delFile(rec.fileId); } catch(e){ toast("Couldn't delete on this device."); }
 }
@@ -2642,6 +2644,7 @@ async function finishWorkout(){
 }
 
 async function exportJSON(kind){
+  if (S.hist && !S.hist.all){ toast("Loading your full history…"); await S.hist.load(true); }
   const payload = { app:"Primal Strength", version:1, exportedAt:new Date().toISOString(), program: prog(), settings: set_(),
     sessions: S.data.sessions, cardio: S.data.cardio, body: S.data.body, dexa: S.data.dexa.map(d => ({...d})) };
   const text = JSON.stringify(payload, null, 1);
@@ -2649,7 +2652,8 @@ async function exportJSON(kind){
   const ok = await saveFile(name, text, kind === "backup" ? "Backup" : "Export for Claude");
   if (ok){ S.profile.settings.lastBackup = today(); await persistProfile(); S.forceRender = true; render(); }
 }
-function exportCSV(){
+async function exportCSV(){
+  if (S.hist && !S.hist.all){ toast("Loading your full history…"); await S.hist.load(true); }
   const rows = [["date","week","day","workout","exercise","performed_as","set","reps_or_metres_or_sec","kg","done","back_pain","session_notes"]];
   [...S.data.sessions].sort((a,b)=>a.date.localeCompare(b.date)).forEach(s => s.exercises.forEach(e => e.sets.forEach(t =>
     rows.push([s.date, s.week, s.day, s.title, e.base, e.performedAs, t.label, t.reps, t.kg, t.done ? "yes" : "no", s.backPain ?? "", s.notes || ""]))));
@@ -2739,6 +2743,7 @@ app.addEventListener("click", async ev => {
   if (a === "mw-send") return mwSend();
   if (a === "approve") return approveSession(t.dataset.c || (S.cctx && S.cctx.uid), t.dataset.id);
   if (a === "oatt-month"){ S.ui.oattMonth = t.dataset.v; S.forceRender = true; return render(); }
+  if (a === "hist-all"){ const H = S.cctx ? S.cctx.H : S.hist; if (H){ H.load(true).then(() => toast("Older history loaded")); S.forceRender = true; render(); } return; }
   if (a === "att-month"){ S.ui.attMonth = t.dataset.v; S.forceRender = true; return render(); }
   if (a === "att-csv") return attendanceCSV(Social.att || [], t.dataset.v, "clients");
   if (a === "oatt-csv"){ const tr = Owner.trainers.find(x => x.id === Owner.sel) || {}; return attendanceCSV(Owner.att[Owner.sel] || [], t.dataset.v, (tr.name || "trainer").replace(/\W+/g, "-").toLowerCase()); }
@@ -3128,7 +3133,7 @@ async function cloudInit(){
     firebase.auth().onAuthStateChanged(u => { Cloud.authKnown = true; S.obOffered = false; S.ob = null; if (!u) S.forceRender = true; onAuth(u).then(() => { if (!u){ S.forceRender = true; render(); } }).catch(err => { console.error(err); toast("Couldn't load your account — check your connection."); }); });
   } catch(e){ console.error(e); Cloud.db = null; }
 }
-function stopListeners(){ Cloud.unsub.forEach(f => { try { f(); } catch(e){} }); Cloud.unsub = []; Cloud.attached = null; closeClient(); socialStop(); ownerStop(); gymStop(); }
+function stopListeners(){ S.hist = null; Cloud.unsub.forEach(f => { try { f(); } catch(e){} }); Cloud.unsub = []; Cloud.attached = null; closeClient(); socialStop(); ownerStop(); gymStop(); }
 function softRender(){ render(); }
 async function onAuth(u){
   const had = !!Cloud.user;
@@ -3191,7 +3196,8 @@ async function makeInviteCode(name){
 }
 function attachClient(){
   S.data = emptyData();
-  COLS.forEach(c => Cloud.unsub.push(uref().collection(c).onSnapshot(q => { S.data[c] = q.docs.map(d => d.data()); render(); scheduleSync(); }, () => {})));
+  const A = attachData(null, S, "u:" + Cloud.user.uid, () => { render(); scheduleSync(); });
+  Cloud.unsub.push(...A.unsubs); S.hist = A.H;
   socialStartClient();
 }
 function attachTrainer(){
@@ -3251,7 +3257,8 @@ function clientProfile(c){ return {program: (c && c.program) || emptyProgram(), 
 function openClient(id){
   closeClient();
   S.cctx = {uid: id, data: emptyData(), unsub: []};
-  COLS.forEach(c => S.cctx.unsub.push((c === "reports" ? uref(id).collection(c).where("shared", "==", true) : uref(id).collection(c)).onSnapshot(q => { if (S.cctx && S.cctx.uid === id){ S.cctx.data[c] = q.docs.map(d => d.data()); render(); } }, () => {})));
+  const A = attachData(id, S.cctx, "c:" + Cloud.user.uid + ":" + id, () => { if (S.cctx && S.cctx.uid === id) render(); });
+  S.cctx.unsub.push(...A.unsubs); S.cctx.H = A.H;
   S.cctx.notes = [];
   S.cctx.unsub.push(notesRef().where("clientId", "==", id).onSnapshot(q => {
     if (!S.cctx || S.cctx.uid !== id) return;
@@ -4128,10 +4135,11 @@ function socialStartTrainer(){
   }, () => {}));
 }
 function syncEntryListeners(){
-  const ids = new Set(Social.challenges.map(c => c.id));
+  // Every repeating challenge adds a new challenge each period; old leaderboards aren't shown, so don't listen to them
+  const ids = new Set(Social.challenges.filter(c => c.end >= addDays(today(), -30) || (isTrainer() && !c.next)).map(c => c.id));
   Object.keys(Social.entryUnsub).forEach(id => { if (!ids.has(id)){ Social.entryUnsub[id](); delete Social.entryUnsub[id]; delete Social.entries[id]; } });
   Social.challenges.forEach(c => {
-    if (Social.entryUnsub[c.id]) return;
+    if (!ids.has(c.id) || Social.entryUnsub[c.id]) return;
     Social.entryUnsub[c.id] = Cloud.db.collection("challenges").doc(c.id).collection("entries").onSnapshot(q => { Social.entries[c.id] = q.docs.map(d => ({id: d.id, ...d.data()})); render(); }, () => {});
   });
 }
@@ -4691,7 +4699,7 @@ async function mwPreview(){
   toast("Reading each client's history…"); st.preview = {};
   await Promise.all(st.sel.map(async cid => {
     let sessions = [];
-    try { const q = await uref(cid).collection("sessions").get(); sessions = q.docs.map(d => d.data()); } catch(e){}
+    try { const q = await uref(cid).collection("sessions").where("date", ">=", addDays(today(), -120)).get(); sessions = q.docs.map(d => d.data()); } catch(e){}
     st.preview[cid] = {ex: st.day.ex.map(e => personalEx(e, sessions))};
   }));
   st.stage = "preview"; S.forceRender = true; render();
@@ -4733,6 +4741,7 @@ async function approveSession(cid, sid){
   if (!s) return toast("That workout isn't in the client's log any more.");
   try { await uref(cid).collection("sessions").doc(sid).update({approved: {by: Cloud.user.uid, at: today()}}); }
   catch(e){ return toast("Couldn't approve: " + (e.code || "error") + ". Check the database rules are up to date."); }
+  if (S.cctx && S.cctx.uid === cid){ const rec = {...s, approved: {by: Cloud.user.uid, at: today()}}; S.cctx.data.sessions = S.cctx.data.sessions.map(x => x.id === sid ? rec : x); if (S.cctx.H) S.cctx.H.touch("sessions", rec); }
   await attRef().doc("w_" + sid).set(clean({clientId: cid, clientName: c.name || c.email || "", date: s.date, title: s.title, durationMin: s.durationMin || null, kind: s.event ? "event" : "workout", sessionId: sid, approvedAt: today()})).catch(() => {});
   (S.alerts || []).filter(a => a.sessionId === sid && !a.approved).forEach(a => Cloud.db.collection("trainers").doc(Cloud.user.uid).collection("alerts").doc(a.id).update({approved: true, read: true}).catch(() => {}));
   S.forceRender = true; render(); toast("Approved: counted as attendance");
@@ -4849,6 +4858,59 @@ function sportMetricValue(m, ch){
   return 0;
 }
 
+
+/* ============ Bounded reads ============
+   A listener re-reads every document it returns each time the app opens (after about 30 minutes away),
+   so listeners cover only recent records. Older records come from this phone's saved copy, which is free;
+   the server is asked for them once per phone. By default history goes back 6 months; "Load older history"
+   fetches the rest, once per phone. */
+const LIVE_DAYS = 42, HISTORY_DAYS = 183, DATED_COLS = ["sessions", "cardio", "body"];
+const lsGet = k => { try { return localStorage.getItem(k); } catch(e){ return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch(e){} };
+// The live window: 6 weeks back, or a week before this phone last synced, whichever is earlier
+function liveStart(key){ const seen = lsGet("ps-seen:" + key), d = addDays(today(), -LIVE_DAYS); return seen && addDays(seen, -7) < d ? addDays(seen, -7) : d; }
+// Records dated from `want` up to (not including) `to`: from this phone's copy where the server copy was already fetched here
+async function fetchHistory(colRef, key, to, want){
+  const have = lsGet("ps-hist-from:" + key), out = new Map();
+  const add = q => { if (q) q.docs.forEach(d => out.set(d.id, d.data())); };
+  if (have && have < to) add(await colRef.where("date", ">=", have > want ? have : want).where("date", "<", to).get({source: "cache"}).catch(() => null));
+  if (!have || have > want){
+    const q = await colRef.where("date", ">=", want).where("date", "<", have && have < to ? have : to).get().catch(() => null);
+    if (q){ add(q); lsSet("ps-hist-from:" + key, want); }
+  }
+  return [...out.values()];
+}
+// Listen to someone's collections into target.data: recent records live, older ones as history
+function attachData(uid, target, key, onChange){
+  const ref = uref(uid), unsubs = [], live = {}, hist = {}, start = liveStart(key);
+  const merge = c => { const m = new Map(); (hist[c] || []).forEach(r => m.set(r.id, r)); (live[c] || []).forEach(r => m.set(r.id, r)); target.data[c] = [...m.values()]; };
+  COLS.forEach(c => {
+    let q = ref.collection(c);
+    if (c === "reports" && uid && isTrainer()) q = q.where("shared", "==", true);
+    if (DATED_COLS.includes(c)) q = q.where("date", ">=", start);
+    unsubs.push(q.onSnapshot(sn => {
+      live[c] = sn.docs.map(d => d.data()); merge(c);
+      if (c === "sessions" && !(sn.metadata && sn.metadata.fromCache)) lsSet("ps-seen:" + key, today());
+      onChange();
+    }, () => {}));
+  });
+  const H = {all: lsGet("ps-hist-all:" + key) === "1", loading: false,
+    // keep an edited or deleted record that is older than the live window in step with the screen
+    touch(c, rec, del){ if (!DATED_COLS.includes(c) || !hist[c]) return; hist[c] = hist[c].filter(r => r.id !== (del ? rec : rec.id)); if (!del && rec.date < start) hist[c].push(rec); },
+    async load(all){
+      if (all){ H.all = true; lsSet("ps-hist-all:" + key, "1"); }
+      H.loading = true; const want = H.all ? "0000-00-00" : addDays(today(), -HISTORY_DAYS);
+      for (const c of DATED_COLS){ hist[c] = await fetchHistory(ref.collection(c), key + ":" + c, start, want); merge(c); }
+      H.loading = false; onChange();
+    }};
+  H.load(false);
+  return {unsubs, H};
+}
+function historyNote(){
+  const H = S.cctx ? S.cctx.H : S.hist; if (!H || H.all) return "";
+  return `<div class="row between small" style="flex-wrap:nowrap;gap:12px"><span class="muted">${H.loading ? "Loading history…" : "Showing the last 6 months."}</span><button class="btn ghost" data-act="hist-all">Load older history</button></div>`;
+}
+
 /* ============ Gym big screen (trainer) ============ */
 const Gym = {pick: new Set(), sel: [], data: {}, unsub: [], drafts: {}, rest: {}, saved: {}, beeped: {}, timer: null};
 function gymStop(){
@@ -4865,7 +4927,7 @@ function gymStart(){
   if (!Gym.sel.length) return toast("Pick at least one client.");
   Gym.sel.forEach(cid => {
     Gym.data[cid] = emptyData();
-    ["sessions", "dexa"].forEach(c => Gym.unsub.push(uref(cid).collection(c).onSnapshot(q => { Gym.data[cid][c] = q.docs.map(d => d.data()); if (!document.activeElement || !document.activeElement.matches("[data-gin]")) { S.forceRender = true; render(); } }, () => {})));
+    ["sessions", "dexa"].forEach(c => Gym.unsub.push((c === "sessions" ? uref(cid).collection(c).where("date", ">=", addDays(today(), -LIVE_DAYS)) : uref(cid).collection(c)).onSnapshot(q => { Gym.data[cid][c] = q.docs.map(d => d.data()); if (!document.activeElement || !document.activeElement.matches("[data-gin]")) { S.forceRender = true; render(); } }, () => {})));
   });
   S.view = "gym"; keepAwake();
   Gym.timer = setInterval(gymTick, 500);

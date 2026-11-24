@@ -20,8 +20,8 @@ A workout app for **clients, trainers and gym owners**, built by Manas (Bengalur
 | `www/download.html`, `privacy.html`, `delete-account.html` | Static web pages. Privacy policy v1.0 names Manas as data fiduciary, contact mmuralidharan111@gmail.com. Update it when data handling changes. |
 | `firestore.rules` | Source of truth for the database rules. **Manas pastes these into Firebase console → Firestore → Rules → Publish** after every change — always remind him and give him the full file. |
 | `test/smoke.js` | jsdom end-to-end test against a fake Firestore/Auth (offline, client, trainer, owner, buddies, challenges, consent, deletion…). Failures print `::error` annotations. |
-| `test/rules.test.js` | 78 security-rule checks on the official Firestore emulator. |
-| `.github/workflows/build-apk.yml` | On push to `main`: npm install → bundle Firebase compat SDK into `www/vendor/` → smoke test → rules tests → Capacitor 7 Android build (keep-screen-on patch, VIBRATE + COARSE_LOCATION permissions) → signed debug APK → GitHub release `build-N` → Pages deploy. |
+| `test/rules.test.js` | 122 security-rule checks on the official Firestore emulator, including a security-audit section (cross-account reads/writes, trainer and gym-owner scope, gym codes). |
+| `.github/workflows/build-apk.yml` | On push to `main` (or a manual run on any branch): `npm ci` → bundle Firebase compat SDK into `www/vendor/` → smoke test → rules tests → Capacitor 7 Android build (keep-screen-on patch, VIBRATE + COARSE_LOCATION permissions, backups and phone-to-phone transfer off) → signed **release** APK, checked not debuggable → then, only on `main`: GitHub release `build-N` (separate `release` job) and Pages deploy. The build job is read-only; only those two jobs can publish. |
 | `.github/workflows/rules-check.yml` | Same tests on `test/**` branches without releasing — use it to try risky changes. |
 | `BACKLOG.md` | Agreed next build, priority tiers, everything requested, and what's been built. |
 | `assets/` | Gorilla icon and splash. |
@@ -31,10 +31,11 @@ Signing: the permanent keystore is the repo secret `ANDROID_KEYSTORE_B64` (alias
 ## Running things
 
 ```bash
-npm install
+npm ci                                   # exact versions from package-lock.json
 node test/smoke.js                       # end-to-end smoke test
-npx firebase-tools@13 emulators:exec --only firestore --project demo-primal "node test/rules.test.js"   # needs Java 21
+npx firebase emulators:exec --only firestore --project demo-primal "node test/rules.test.js"   # needs Java 21
 ```
+Supply chain: every package is pinned to an exact version in `package.json` and locked in `package-lock.json` (commit both); CI uses `npm ci`; build tools (`firebase-tools`, `@capacitor/assets`) are devDependencies, never `npx --yes pkg@range`; GitHub Actions are pinned to commit SHAs with the version in a comment. When updating anything, pick a version at least two weeks old.
 Open `www/index.html` in a browser for a quick look: without `www/vendor/` Firebase is absent, so it runs in offline (on-device) mode. Releasing = commit and push to `main`; CI does the rest (~10 min). Check results with `gh run list` / `gh api .../check-runs/<id>/annotations`.
 
 ## How the app code is organised (`www/index.html`)

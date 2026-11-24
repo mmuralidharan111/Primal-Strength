@@ -5,22 +5,21 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+# Read-only by default: only the release and website jobs below may publish, and they install nothing
 permissions:
-  contents: write
-  pages: write
-  id-token: write
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
           java-version: 21
@@ -28,8 +27,8 @@ jobs:
       - name: Check Android SDK
         run: echo "ANDROID_HOME=$ANDROID_HOME" && ls "$ANDROID_HOME/platforms"
 
-      - name: Install Capacitor, Firebase and test tools
-        run: npm install
+      - name: Install Capacitor, Firebase and test tools (exact versions from package-lock.json)
+        run: npm ci
 
       - name: Bundle Firebase into the app
         run: |
@@ -40,10 +39,10 @@ jobs:
         run: node test/smoke.js
 
       - name: Database rules tests (official Firestore emulator)
-        run: npx --yes firebase-tools@13 emulators:exec --only firestore --project demo-primal "node test/rules.test.js"
+        run: npx firebase emulators:exec --only firestore --project demo-primal "node test/rules.test.js"
 
       - name: Package the web version for GitHub Pages
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         with:
           path: www
 
@@ -51,7 +50,7 @@ jobs:
         run: npx cap add android
 
       - name: App icon and splash
-        run: npx --yes @capacitor/assets@3 generate --android
+        run: npx capacitor-assets generate --android
         continue-on-error: true
 
       - name: Allow rest-timer vibration and city lookup
@@ -173,14 +172,26 @@ jobs:
           cp android/app/build/outputs/apk/release/app-release.apk PrimalStrength.apk
 
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: PrimalStrength-apk
-          path: PrimalStrength-*.apk
+          path: PrimalStrength*.apk
+
+
+  release:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Get the APK from the build
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: PrimalStrength-apk
 
       - name: Publish as a release
-        if: github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: build-${{ github.run_number }}
           name: Primal Strength build ${{ github.run_number }}
@@ -192,6 +203,9 @@ jobs:
     needs: build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     continue-on-error: true
     environment:
       name: github-pages
@@ -199,4 +213,4 @@ jobs:
     steps:
       - name: Publish the web version
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5

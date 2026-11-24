@@ -15,13 +15,13 @@ Builds in order. Each groups items that share setup; later builds depend on earl
 - Classes: recurring sessions for a troop (e.g. Mon/Wed/Fri 7 am); clients see their class schedule.
 - Coach challenges by sport (swim metres, rounds, HYROX time and more).
 
-**2. Events and community**
+**2. Events and community — AGREED 24 Nov 2026 (all items below), not started**
 - Event calendar of races, filtered city → state → region → country → part of a continent → continent → world.
 - Same-event community: find people targeting the same event (HYROX, CrossFit…), compare prep, option to share event-prep progress.
 - Event leaderboard not limited by location.
 - Nearby race suggestions, and gym city for city-wide leaderboards.
 - Buddies by email (with permission).
-- Decision needed: where race listings come from (added by trainers/users, or a paid race-data source).
+- Race listings (decided 24 Nov 2026): **searched on the web every week** and kept as an up-to-date list the app shows. Plan: a weekly scheduled Claude task searches for races (running, HYROX, triathlon, cycling, swimming, obstacle races, CrossFit and more; India first, then worldwide), checks each race's official page, and updates a list in the repo (`www/events.json`: name, sport, date, city, state, country, distance or format, official link, last checked). Only facts and a link to the official page, never copied text or images. Races that have passed or can't be confirmed drop off. A data-only update shouldn't trigger a new APK (workflow change). Users can also suggest a race, which goes on the list once checked.
 
 **3. Play Store and phone features**
 - Play Store readiness: signed release bundle (.aab), target Android 16 (API 36), final app ID decision, store listing, Data safety and health declarations, 12-tester / 14-day closed test.

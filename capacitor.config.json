@@ -3,6 +3,8 @@
   "appName": "Primal Strength",
   "webDir": "www",
   "android": {
-    "backgroundColor": "#FFFFFF"
+    "backgroundColor": "#FFFFFF",
+    "webContentsDebuggingEnabled": false,
+    "allowMixedContent": false
   }
 }

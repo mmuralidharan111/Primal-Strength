@@ -44,6 +44,14 @@ const allow = (l, f) => expect("allow", l, f), deny = (l, f) => expect("deny", l
     await setDoc(doc(db, "users/asha/sessions/s9"), {date: "2026-11-05", title: "Day C"});
     await setDoc(doc(db, "classes/k1"), {trainerId: "coach", title: "Morning HIIT", days: [1, 3, 5], members: null});
     await setDoc(doc(db, "trainers/coach/attendance/w_ok1"), {clientId: "asha", date: "2026-11-04", kind: "workout"});
+    // security audit: a second client of the same trainer, a stranger, and an owner of a different gym
+    await setDoc(doc(db, "users/ravi2"), {role: "client", name: "Second client", trainerId: "coach", gymId: null, settings: {}, program: {days: []}});
+    await setDoc(doc(db, "users/ravi2/sessions/r1"), {date: "2026-11-02", title: "Day A"});
+    await setDoc(doc(db, "users/ravi2/body/b1"), {date: "2026-11-02", weight: 80});
+    await setDoc(doc(db, "users/mallory"), {role: "client", name: "Mallory", trainerId: null, gymId: null, settings: {}, program: {days: []}});
+    await setDoc(doc(db, "users/olga"), {role: "owner", name: "Other gym owner", trainerId: null, gymId: "olga"});
+    await setDoc(doc(db, "users/asha/body/b1"), {date: "2026-11-02", weight: 61, tests: {rhr: 58}});
+    await setDoc(doc(db, "trainers/coach2/notes/n9"), {clientId: "x", text: "Other trainer's note"});
   });
   const as = uid => env.authenticatedContext(uid).firestore();
   const anon = env.unauthenticatedContext().firestore();
@@ -132,6 +140,50 @@ const allow = (l, f) => expect("allow", l, f), deny = (l, f) => expect("deny", l
   await deny("another trainer edits the class", () => updateDoc(doc(coach2, "classes/k1"), {title: "Mine now"}));
   await deny("trainer hands a class to another trainer", () => updateDoc(doc(coach, "classes/k1"), {trainerId: "coach2"}));
   await allow("trainer deletes their class", () => deleteDoc(doc(coach, "classes/k2")));
+
+  console.log("Security audit: one person reading or changing another's data");
+  const mallory = as("mallory"), ravi2 = as("ravi2"), olga = as("olga");
+  for (const col of ["sessions", "cardio", "body", "dexa", "reports"]){
+    await deny(`stranger lists a client's ${col}`, () => getDocs(collection(mallory, `users/asha/${col}`)));
+  }
+  await deny("stranger lists every user", () => getDocs(collection(mallory, "users")));
+  await deny("stranger lists every public summary", () => getDocs(collection(mallory, "public")));
+  await deny("stranger writes into a client's workouts", () => setDoc(doc(mallory, "users/asha/sessions/x1"), {date: "2026-11-09"}));
+  await deny("stranger changes a client's program", () => updateDoc(doc(mallory, "users/asha"), {program: {days: [], name: "Hacked"}}));
+  await deny("signed-out visitor lists challenges", () => getDocs(collection(anon, "challenges")));
+  await deny("client reads another client of the same trainer", () => getDoc(doc(ravi2, "users/asha")));
+  await deny("client reads another client's workouts (same trainer)", () => getDocs(collection(ravi2, "users/asha/sessions")));
+  await deny("client reads another client's check-ins (same trainer)", () => getDocs(collection(ravi2, "users/asha/body")));
+  await deny("client reads their trainer's private notes list", () => getDocs(collection(ravi2, "trainers/coach/notes")));
+  await deny("client reads their trainer's attendance list", () => getDocs(collection(ravi2, "trainers/coach/attendance")));
+
+  console.log("Security audit: trainers see only their own clients");
+  await allow("trainer lists their own clients", () => getDocs(query(collection(coach, "users"), where("trainerId", "==", "coach"))));
+  await deny("trainer lists every user", () => getDocs(collection(coach, "users")));
+  await deny("trainer reads a stranger's profile", () => getDoc(doc(coach, "users/mallory")));
+  await deny("trainer lists a stranger's workouts", () => getDocs(collection(coach, "users/mallory/sessions")));
+  await deny("other trainer lists the client's check-ins", () => getDocs(collection(coach2, "users/asha/body")));
+  await deny("other trainer lists the client's DEXA scans", () => getDocs(collection(coach2, "users/asha/dexa")));
+  await deny("trainer reads another trainer's notes", () => getDoc(doc(coach, "trainers/coach2/notes/n9")));
+  await deny("trainer changes a client's settings or consent", () => updateDoc(doc(coach, "users/asha"), {"settings.intake": {}}));
+  await deny("trainer rewrites what a client logged in a workout", () => updateDoc(doc(coach, "users/asha/sessions/s1"), {title: "Changed by trainer", exercises: []}));
+  await allow("trainer approves a workout (only the approval changes)", () => updateDoc(doc(coach, "users/asha/sessions/s1"), {approved: {by: "coach", at: "2026-11-09"}}));
+
+  console.log("Security audit: gym owners see summaries of their own trainers' clients only");
+  await deny("gym owner lists a client's check-ins", () => getDocs(collection(gita, "users/asha/body")));
+  await deny("gym owner lists a client's DEXA scans", () => getDocs(collection(gita, "users/asha/dexa")));
+  await deny("gym owner reads the trainer's private notes", () => getDocs(collection(gita, "trainers/coach/notes")));
+  await deny("gym owner reads the trainer's alerts", () => getDocs(collection(gita, "trainers/coach/alerts")));
+  await deny("gym owner reads a trainer outside their gym", () => getDoc(doc(gita, "users/coach2")));
+  await deny("another gym's owner reads this trainer's attendance", () => getDocs(collection(olga, "trainers/coach/attendance")));
+  await deny("another gym's owner reads this trainer's client summaries", () => getDocs(query(collection(olga, "public"), where("trainerId", "==", "coach"))));
+  await deny("another gym's owner reads this trainer's classes", () => getDoc(doc(olga, "classes/k1")));
+
+  console.log("Security audit: gym codes");
+  await deny("stranger takes over a gym's join code", () => setDoc(doc(mallory, "gymcodes/GYM123"), {gymId: "mallory", name: "Fake gym"}));
+  await deny("another gym owner takes over a gym's join code", () => setDoc(doc(olga, "gymcodes/GYM123"), {gymId: "olga", name: "Other gym"}));
+  await deny("a client (not a gym owner) creates a gym join code", () => setDoc(doc(mallory, "gymcodes/MAL999"), {gymId: "mallory", name: "Not a gym"}));
+  await allow("gym owner creates their own gym join code", () => setDoc(doc(olga, "gymcodes/OLG123"), {gymId: "olga", name: "Other gym"}));
 
   console.log("Deleting an account");
   await deny("stranger deletes a client's account", () => deleteDoc(doc(bob, "users/asha")));

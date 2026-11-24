@@ -646,6 +646,114 @@ async function agree(X, {dob = "1985-04-12", health = true, staff = false} = {})
   check(O2.text().includes("Attendance") && O2.text().includes("Asha") && O2.text().includes("All clients"), "gym owner sees the trainer's attendance for billing");
   O2.w.close();
 
+  /* ===== Retention: risk score, call list, pause, comeback, report card, dashboard, membership, badges ===== */
+  step = "retention-risk";
+  const R = (c, k) => C.w.eval(`riskOf(${JSON.stringify(c)}${k ? ", " + k : ""})`);
+  const dAgo = n => C.w.eval(`addDays(today(), ${-n})`), monAgo = n => C.w.eval(`addDays(mondayOf(today()), -${7 * n})`);
+  const wc = arr => Object.fromEntries(arr.map((v, i) => [monAgo(i), v]));
+  const steady = {joined: dAgo(200), weekCounts: wc([0, 3, 3, 3, 3, 3, 3, 3]), lastWorkout: {date: dAgo(2)}};
+  check(R(steady).st === "active", "member at their usual 3 a week is active");
+  const drop = {joined: dAgo(200), weekCounts: wc([0, 1, 3, 3, 3, 3, 3, 3]), lastWorkout: {date: dAgo(3)}};
+  const rd = R(drop); check(rd.st === "risk" && /1 workout last week; usually 3 a week/.test(rd.why), "drop from 3 a week to 1 is flagged, with the reason");
+  check(R({...drop, weekCounts: wc([2, 1, 3, 3, 3, 3, 3, 3])}).st === "active", "a member already back on track this week isn't flagged");
+  const easy = {joined: dAgo(200), weekCounts: wc([0, 1, 1, 1, 1, 1, 1, 1]), lastWorkout: {date: dAgo(9)}};
+  check(R(easy).st === "active", "a once-a-week member isn't flagged after 9 days");
+  check(R({...easy, joined: dAgo(30)}).st === "risk" && R({...easy, joined: dAgo(30)}).isNew, "a new member (first 60 days) is flagged sooner");
+  check(R({joined: dAgo(200), weekCounts: {}, lastWorkout: {date: dAgo(16)}}).st === "risk" && R({joined: dAgo(200), weekCounts: {}, lastWorkout: {date: dAgo(40)}}).st === "inactive", "16 days off is at risk, 40 days inactive");
+  check(R({joined: dAgo(10), weekCounts: {}}).st === "never" && R({joined: dAgo(2), weekCounts: {}}).fresh, "new member with no workout yet");
+  check(R({...drop, pauses: [{from: dAgo(3), to: dAgo(-4)}]}).st === "paused", "a paused member is not at risk");
+  check(R({...drop, weekCounts: wc([0, 0, 0, 3, 3, 3, 3, 3]), lastWorkout: {date: dAgo(10)}, pauses: [{from: dAgo(13), to: dAgo(1)}]}).st === "active", "days on pause don't count as missed training");
+  check(R(steady, 3).st === "active" && R({joined: dAgo(200), weekCounts: wc([0, 0, 0, 0, 3, 3, 3, 3]), lastWorkout: {date: dAgo(30)}}, 0).st !== "active", "trend: risk worked out for earlier weeks");
+
+  step = "retention-pause";
+  await C.click('[data-act="tab"][data-v="today"]');
+  await C.click('[data-act="settings"]', "open settings");
+  check(C.text().includes("Pause / holiday"), "settings offer a pause");
+  await C.click('[data-act="pause-open"]', "open pause sheet");
+  await C.type("#pz-from", dAgo(1)); await C.type("#pz-to", dAgo(-6));
+  const why = C.$("#pz-why"); why.value = "ill";
+  await C.click('[data-act="pause-save"]', "save pause"); await sleep(300);
+  const pz = (fb._docs.get("users/u_asha").pauses || [])[0];
+  check(pz && pz.from === dAgo(1) && pz.to === dAgo(-6) && pz.why === "ill" && pz.by === "member", "member's pause saved with reason");
+  check(C.text().includes("Training paused until"), "Today says training is paused");
+  check(C.w.eval("gameStats().rings.paused") >= 2, "this week's rings know about the pause");
+  await sleep(2800);
+  const pubA = fb._docs.get("public/u_asha");
+  check(pubA.pauses && pubA.pauses[0].from === dAgo(1) && !("why" in pubA.pauses[0]), "public summary carries the pause dates but not the reason");
+  check(!!pubA.joined, "public summary carries the join date");
+  await C.click('[data-act="pause-open"]'); await C.click('[data-act="pause-end"]', "end the pause"); await sleep(300);
+  check((fb._docs.get("users/u_asha").pauses || [])[0].to === dAgo(1), "ending the pause closes it yesterday");
+  check(!C.text().includes("Training paused until"), "pause banner gone");
+
+  step = "retention-profile";
+  await C.click('[data-act="settings"]'); await C.click('[data-act="profile-edit"]', "edit profile");
+  await C.type("#pf-phone", "98450 12345"); await C.type("#pf-mend", dAgo(-20));
+  await C.click('[data-act="profile-save"]', "save profile"); await sleep(400);
+  check(fb._docs.get("users/u_asha").settings.phone === "98450 12345" && fb._docs.get("users/u_asha").memberEnd === dAgo(-20), "WhatsApp number and membership end saved");
+
+  step = "retention-trainer";
+  await fb.firestore().collection("public").doc("u_ravi").set({name: "Ravi K", trainerId: "u_coach", buddies: [], week: monAgo(0), joined: dAgo(40), weekCounts: wc([0, 0, 2, 2, 2, 2, 2, 2]), lastWorkout: {date: dAgo(9), title: "Legs"}, program: {name: "Hyrox prep", days: 3}});
+  await T.click('[data-act="ttab"][data-v="clients"]'); await sleep(300);
+  check(T.text().includes("Members to contact this week") && T.text().includes("Ravi K"), "trainer's call list shows the member slipping");
+  check(T.$('[data-call="u_ravi"]').textContent.includes("New") && /No workout for 9 days/.test(T.text()), "new-member tag and reason shown");
+  check(/Membership ends in 20 days/.test(T.text()), "trainer sees the membership end soon");
+  const wa = T.$('[data-call="u_ravi"] a[href^="https://wa.me/"]'); check(!!wa && wa.href.includes("text="), "one-tap WhatsApp link with a ready message");
+  await T.click('[data-act="call-out"][data-id="u_ravi"][data-v="called"]', "record: called"); await sleep(300);
+  const callId = `trainers/u_coach/calls/u_ravi_${monAgo(0)}`;
+  check(fb._docs.get(callId) && fb._docs.get(callId).outcome === "called" && fb._docs.get(callId).clientName === "Ravi K", "call outcome saved");
+  await T.click('[data-act="call-out"][data-id="u_ravi"][data-v="back"]', "record: back training"); await sleep(300);
+  check(fb._docs.get(callId).outcome === "back" && !T.$('[data-call="u_ravi"]'), "member marked back drops off this week's list");
+  await T.click('[data-act="open-client"][data-id="u_asha"]', "open Asha"); await sleep(300);
+  check(T.text().includes("Status") && T.text().includes("Membership ends"), "client overview has status and membership");
+  check(T.$('a[href*="wa.me/919845012345"]') !== null, "WhatsApp link uses the client's number with India's code");
+  await T.type("#mend-date", dAgo(-45)); await T.click('[data-act="mend-save"]', "trainer saves membership end"); await sleep(300);
+  check(fb._docs.get("users/u_asha").memberEnd === dAgo(-45) && fb._docs.get("public/u_asha").memberEnd === dAgo(-45), "membership end saved to the client and their summary");
+  await T.click('[data-act="pause-open"][data-c="u_asha"]', "trainer opens pause");
+  await T.type("#pz-from", dAgo(-10)); await T.type("#pz-to", dAgo(-17));
+  await T.click('[data-act="pause-save"]', "trainer saves pause"); await sleep(300);
+  check((fb._docs.get("users/u_asha").pauses || []).some(p => p.by === "trainer" && p.from === dAgo(-10)) && (fb._docs.get("public/u_asha").pauses || []).some(p => p.from === dAgo(-10)), "trainer can pause a client");
+  await T.click('[data-act="ctab"][data-v="progress"]'); check(T.text().includes("Monthly report card"), "trainer sees the client's monthly report card");
+  await T.click('[data-act="ttab"][data-v="clients"]'); await T.click('[data-act="ttab"][data-v="tretention"]', "trainer retention dashboard"); await sleep(200);
+  check(T.text().includes("By month joined") && T.text().includes("Active members per week") && T.text().includes("By troop"), "trainer retention dashboard renders");
+  await T.click('[data-act="ret-split"][data-v="program"]'); check(T.text().includes("Hyrox prep"), "split by program");
+
+  step = "retention-comeback";
+  const cbk = C.w.eval(`(() => {
+    const keep = S.data; const d0 = addDays(today(), -14);
+    S.data = {...keep, sessions: [{id: "x1", date: addDays(today(), -30), exercises: []}, {id: "x2", date: d0, exercises: []}]};
+    const ex = {n: "Back squat", sets: 4, reps: "5", kg: 60, type: "load"}, w = Math.max(1, weekOf(today()));
+    const on = comebackInfo(), banner = comebackBanner(), sets = setLabels(ex, 0, w).length, kg = targetKg(ex, w);
+    S.profile.settings.comebackOff = on && on.after; const off = comebackInfo(), sets2 = setLabels(ex, 0, w).length, kg2 = targetKg(ex, w);
+    S.profile.settings.comebackOff = null; S.data = {...keep, sessions: [{id: "x1", date: addDays(today(), -12), exercises: []}, {id: "x2", date: addDays(today(), -2), exercises: []}]};
+    const back = comebackInfo(); S.data = keep;
+    return {waiting: on && on.waiting, gap: on && on.gap, banner, sets, kg, off, sets2, kg2, back: back && back.start};
+  })()`);
+  check(cbk.waiting && cbk.gap === 14 && /Welcome back/.test(cbk.banner), "after 14 days off, a comeback week is offered");
+  check(cbk.sets === 3 && cbk.sets2 === 4 && cbk.kg < cbk.kg2, "comeback week has fewer sets and lighter weights");
+  check(cbk.off === null, "member can switch the comeback week off");
+  check(cbk.back === C.w.eval("addDays(today(), -2)"), "comeback week runs 7 days from the first workout back");
+
+  step = "retention-report";
+  const mr = C.w.eval(`(() => { const r = monthReport(monthKey(today())); return {w: r.workouts, pbs: Array.isArray(r.pbs), m: r.m}; })()`);
+  check(mr.w >= 1 && mr.pbs, "monthly report counts this month's workouts");
+  await C.click('[data-act="tab"][data-v="progress"]'); await C.click('[data-act="ptab"][data-v="stats"]');
+  check(C.text().includes("Monthly report card") && !!C.$('[data-act="mr-share"]'), "report card with share button on Progress");
+  check(C.w.eval(`BADGES.some(b => b[0] === "m12")`) && C.w.eval(`(() => { const s = S.profile.since; S.profile.since = addDays(today(), -100); const b = gameStats().badges; S.profile.since = s; return b.has("m3") && !b.has("m6"); })()`), "anniversary badge at 3 months");
+
+  step = "retention-owner";
+  let O3 = await load(makeFirebase());
+  await O3.click('[data-act="auth-mode"][data-v="in"]'); await O3.type("#a-email", "gita@test.in"); await O3.type("#a-pass", "secret4");
+  await O3.click('[data-act="auth-go"]', "owner signs in"); await sleep(800);
+  check(O3.text().includes("At risk or inactive") && O3.text().includes("New (first 60 days)"), "owner dashboard shows at-risk and new-member counts");
+  await O3.click('[data-act="otrainer"]'); await sleep(200);
+  check(O3.text().includes("Follow-up") && O3.text().includes("Back training") && O3.text().includes("Ravi K"), "owner sees trainer follow-up outcomes");
+  check(!O3.text().includes("Illness") && !O3.text().includes("98450"), "owner sees no pause reasons or phone numbers");
+  await O3.click('[data-act="otab"][data-v="oretention"]', "owner retention tab"); await sleep(200);
+  check(O3.text().includes("By month joined") && O3.text().includes("Trainer follow-ups") && O3.text().includes("Coach Ravi"), "owner retention dashboard by trainer");
+  await O3.click('[data-act="ret-split"][data-v="class"]'); check(O3.text().includes("Morning HIIT"), "split by class");
+  O3.w.close();
+  await fb.firestore().collection("public").doc("u_ravi").delete();
+
   step = "bounded-reads";
   const dayStr = n => { const d = new Date(Date.now() - n * 86400000); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
   await fb.firestore().collection("users").doc("u_asha").collection("sessions").doc("old300").set({id: "old300", date: dayStr(300), title: "Year-ago workout", week: 1, day: "A", exercises: []});

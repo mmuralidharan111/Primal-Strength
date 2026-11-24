@@ -9,6 +9,9 @@ service cloud.firestore {
     // A text field that is absent, empty (null) or a string of at most n characters
     function textUpTo(d, f, n) { return d.get(f, null) == null || (d[f] is string && d[f].size() <= n); }
     function ownsGymOfTrainer(tid) { return signedIn() && tid != null && userData(tid).get('gymId', null) == request.auth.uid; }
+    // Pause dates (a short list) and a membership end date ("YYYY-MM-DD" or empty)
+    function pausesOK(d) { return !('pauses' in d) || d.pauses == null || (d.pauses is list && d.pauses.size() <= 20); }
+    function memberEndOK(d) { return textUpTo(d, 'memberEnd', 10); }
 
     // A person's profile, settings and program
     match /users/{uid} {
@@ -30,9 +33,10 @@ service cloud.firestore {
             || (resource.data.role == 'owner' && request.resource.data.gymId == uid)
             || (resource.data.role == 'trainer'
                 && get(/databases/$(database)/documents/gymcodes/$(request.resource.data.gymCode)).data.gymId == request.resource.data.gymId));
-      // Their trainer: may only change the program
+      // Their trainer: may only change the program, pauses (holiday / illness) and the membership end date
       allow update: if signedIn() && resource.data.get('trainerId', null) == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['program', 'programUpdatedAt']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['program', 'programUpdatedAt', 'pauses', 'memberEnd'])
+        && pausesOK(request.resource.data) && memberEndOK(request.resource.data);
       // Deleting your own account
       allow delete: if isMe(uid);
 
@@ -94,6 +98,10 @@ service cloud.firestore {
       allow update: if isMe(uid) && request.resource.data.buddies.size() <= 20
         && request.resource.data.get('trainerId', null) == userData(uid).get('trainerId', null);
       allow delete: if isMe(uid);
+      // Their trainer: may only set pause dates and the membership end date
+      allow update: if signedIn() && !isMe(uid) && resource.data.get('trainerId', null) == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pauses', 'memberEnd'])
+        && pausesOK(request.resource.data) && memberEndOK(request.resource.data);
       // Someone else: may only add themselves (with this person's buddy code) or remove themselves
       allow update: if signedIn() && !isMe(uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['buddies', 'joinCode'])
@@ -155,6 +163,17 @@ service cloud.firestore {
     match /trainers/{tid}/attendance/{aid} {
       allow read: if isMe(tid) || ownsGymOfTrainer(tid);
       allow create, update: if isMe(tid) && isTrainerOf(request.resource.data.clientId);
+      allow delete: if isMe(tid);
+    }
+
+    // Follow-ups a trainer records from their weekly call list (Called / Back training / Lost); their gym owner sees the outcomes
+    match /trainers/{tid}/calls/{cid} {
+      allow read: if isMe(tid) || ownsGymOfTrainer(tid);
+      allow create, update: if isMe(tid) && isTrainerOf(request.resource.data.clientId)
+        && request.resource.data.keys().hasOnly(['clientId', 'clientName', 'week', 'date', 'outcome', 'why', 'ts'])
+        && request.resource.data.outcome in ['called', 'back', 'lost']
+        && textUpTo(request.resource.data, 'clientName', 120) && textUpTo(request.resource.data, 'why', 200)
+        && textUpTo(request.resource.data, 'week', 10) && textUpTo(request.resource.data, 'date', 10);
       allow delete: if isMe(tid);
     }
 

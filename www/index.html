@@ -1339,20 +1339,21 @@ function setLabels(ex, idx, w){
   if (sd){
     const [a,b] = sd.order; const out = [];
     for (const s of [a,b]){
-      let n = isDeload(w) ? 2 : +ex.sets + (sd.extra === s ? 1 : 0);
+      let n = isDeload(w) ? 2 : comebackFor(w) ? Math.max(1, +ex.sets - 1) : +ex.sets + (sd.extra === s ? 1 : 0);
       for (let i=1;i<=n;i++) out.push(s + i);
     }
     return out;
   }
-  let n = isDeload(w) ? Math.min(2, +ex.sets) : ((blk().extra || []).includes(w) && idx === 0 ? +ex.sets + 1 : +ex.sets);
+  let n = isDeload(w) ? Math.min(2, +ex.sets) : comebackFor(w) ? cbSets(+ex.sets) : ((blk().extra || []).includes(w) && idx === 0 ? +ex.sets + 1 : +ex.sets);
   return Array.from({length:n}, (_,i) => String(i+1));
 }
 function targetReps(ex, w){
-  const base = repTop(ex.reps), inc = +ex.repsInc || 0;
-  if (base == null || (!inc && !(isDeload(w) && (ex.type === "run" || ex.type === "cardio")))) return String(ex.reps);
+  const base = repTop(ex.reps), inc = +ex.repsInc || 0, cbD = !!comebackFor(w) && (ex.type === "run" || ex.type === "cardio");
+  if (base == null || (!inc && !cbD && !(isDeload(w) && (ex.type === "run" || ex.type === "cardio")))) return String(ex.reps);
   let n = base + inc * (progWeek(w) - 1);
   if (ex.repsMax) n = Math.min(n, +ex.repsMax);
   if (isDeload(w) && (ex.type === "run" || ex.type === "cardio")) n = n * 0.7;
+  else if (cbD) n = n * 0.8;
   n = ex.type === "run" ? Math.round(n * 2) / 2 : Math.round(n);
   return String(ex.reps).replace(/(\d+(?:\.\d+)?)(?!.*\d)/, String(n));
 }
@@ -1376,6 +1377,7 @@ function targetKg(ex, w){
   if (ex.kg == null || ex.kg === "" || isNaN(+ex.kg)) return null;
   let k = +ex.kg + (+ex.kgInc || 0) * (progWeek(w) - 1);
   if (isDeload(w)) k = Math.round(k * 0.85 / 2.5) * 2.5;
+  else if (comebackFor(w)) k = Math.round(k * 0.9 / 2.5) * 2.5;
   return Math.round(k * 4) / 4;
 }
 function cardioPlan(w, dow){
@@ -1669,15 +1671,15 @@ function render(){
   else if (needsConsent()) html = viewConsent();
   else if (S.view === "onboard" && S.ob && !isTrainer()) html = viewOnboard();
   else if (isOwner()){
-    if (!["owner","otrainer","oaccount"].includes(S.view)) S.view = "owner";
-    html = ownerHeader() + `<main><div class="wrap" style="max-width:900px">${S.view === "otrainer" ? viewOwnerTrainer() : S.view === "oaccount" ? viewOwnerAccount() : viewOwner()}</div></main>` + ownerNav();
+    if (!["owner","otrainer","oaccount","oretention"].includes(S.view)) S.view = "owner";
+    html = ownerHeader() + `<main><div class="wrap" style="max-width:900px">${S.view === "otrainer" ? viewOwnerTrainer() : S.view === "oaccount" ? viewOwnerAccount() : S.view === "oretention" ? viewOwnerRetention() : viewOwner()}</div></main>` + ownerNav();
   }
   else if (isTrainer()){
     if (S.view === "gym" && Gym.sel.length) html = viewGym();
     else if (S.view === "builder" && S.builder) html = viewBuilder();
     else {
       if (S.view === "client" && !S.cctx) S.view = "clients";
-      html = trainerHeader() + `<main><div class="wrap">${S.view === "alerts" ? viewAlerts() : S.view === "gympick" ? viewGymPick() : S.view === "tsquad" ? viewTrainerSquad() : S.view === "tclasses" ? viewTrainerClasses() : S.view === "account" ? viewTrainerAccount() : S.view === "client" ? viewClient() : viewClients()}</div></main>` + trainerNav();
+      html = trainerHeader() + `<main><div class="wrap">${S.view === "alerts" ? viewAlerts() : S.view === "gympick" ? viewGymPick() : S.view === "tsquad" ? viewTrainerSquad() : S.view === "tclasses" ? viewTrainerClasses() : S.view === "tretention" ? viewTrainerRetention() : S.view === "account" ? viewTrainerAccount() : S.view === "client" ? viewClient() : viewClients()}</div></main>` + trainerNav();
     }
   }
   else if (S.view === "log") html = viewLog();
@@ -1716,6 +1718,7 @@ function viewToday(){
       out += `<div class="banner bad"><div><b>Back flag.</b> Last session's back pain was ${last.backPain}/10, 2+ above your normal of ${set_().backNormal}. Cut lower-body loads by 20% this week and use goblet squats.</div></div>`;
   }
   const banners = [];
+  out += pauseBanner() + comebackBanner() + reportCardToday();
   if (!healthOK()){} else if (ds.state === "overdue") banners.push(`<div class="banner warn"><div><b>DEXA scan overdue.</b> Your last scan was ${shortDate(ds.last)}; the next was due ${shortDate(ds.next)}. <button class="btn ghost" data-act="tab" data-v="body">Add scan</button></div></div>`);
   else if (ds.state === "soon") banners.push(`<div class="banner warn"><div><b>DEXA due in ${ds.left} days</b> (${shortDate(ds.next)}). Book the same machine as last time.</div></div>`);
   else if (ds.state === "none") banners.push(`<div class="banner info"><div><b>Add your last DEXA scan</b> so the app can remind you when the next one is due. <button class="btn ghost" data-act="tab" data-v="body">Add scan</button></div></div>`);
@@ -2045,7 +2048,7 @@ function runPlaces(){
 }
 
 /* ============ Privacy: consent, age check, email verification, account deletion ============ */
-const CONSENT_V = 1, POLICY_V = "1.1";   // raise CONSENT_V only when data is used in a new way: that asks everyone to agree again
+const CONSENT_V = 1, POLICY_V = "1.2";   // raise CONSENT_V only when data is used in a new way: that asks everyone to agree again
 const SITE = "https://mmuralidharan111.github.io/Primal-Strength/";
 const PRIVACY_URL = SITE + "privacy.html", DELETE_URL = SITE + "delete-account.html";
 const VERIFY_FROM = "2026-11-07";      // accounts created from this date must confirm their email first
@@ -2127,6 +2130,7 @@ async function eraseHealthData(){
   for (const b of S.data.body.filter(x => x.backPain != null)) await saveRec("body", {...b, backPain: null}).catch(() => {});
   const it = {...(set_().intake || {})}; it.health = {}; it.pain = []; it.other = "";
   Object.assign(S.profile.settings, {intake: clean(it), trackBack: false, backNormal: null});
+  if (pauseList().some(p => ["ill", "injury"].includes(p.why))) await savePauses(pauseList().map(p => ["ill", "injury"].includes(p.why) ? {...p, why: "other"} : p)).catch(() => {});
 }
 async function setHealthConsent(on){
   if (!on) await eraseHealthData();
@@ -2163,7 +2167,7 @@ async function deleteAccount(pass){
     }
     if (me.role === "trainer"){
       if (me.inviteCode) await del(db.collection("codes").doc(me.inviteCode));
-      for (const c of ["squads","notes","alerts"]) await delAll(db.collection("trainers").doc(uid).collection(c));
+      for (const c of ["squads","notes","alerts","calls"]) await delAll(db.collection("trainers").doc(uid).collection(c));
       const ch = await db.collection("challenges").where("trainerId", "==", uid).get().catch(() => null);
       if (ch) for (const d of ch.docs){ await delAll(db.collection("challenges").doc(d.id).collection("entries")); await del(db.collection("challenges").doc(d.id)); }
     }
@@ -2182,6 +2186,8 @@ async function cleanupDeletedClients(){
   for (const a of (S.alerts || []).filter(x => x.kind === "deleted" && !x.cleaned)){
     const notes = await notesRefFor(Cloud.user.uid).where("clientId", "==", a.clientId).get().catch(() => null);
     if (notes) for (const d of notes.docs) await notesRefFor(Cloud.user.uid).doc(d.id).delete().catch(() => {});
+    const calls = await callsRef().where("clientId", "==", a.clientId).get().catch(() => null);
+    if (calls) for (const d of calls.docs) await callsRef().doc(d.id).delete().catch(() => {});
     await Cloud.db.collection("trainers").doc(Cloud.user.uid).collection("alerts").doc(a.id).update({cleaned: true}).catch(() => {});
   }
 }
@@ -2215,6 +2221,9 @@ function profileSheet(){
   <label class="f">Minutes per session${sel("pf-mins", [30,45,60,75].map(d => [d, d]), it.mins || 60)}</label></div>
   ${healthOK() ? `<div><div class="small muted" style="font-weight:600;margin-bottom:6px">Pain or past injuries</div><div class="chips" style="flex-wrap:wrap">${PAIN.map(([k, l]) => `<button class="chip ${P.pain.includes(k) ? "on" : ""}" data-act="pf-pain" data-v="${k}" aria-pressed="${P.pain.includes(k)}">${l}</button>`).join("")}</div></div>
   <label class="f">Anything else your coach should know?<input id="pf-other" value="${esc(it.other || "")}" placeholder="Optional"></label>` : ""}
+  ${isCloudClient() ? `<div class="grid2"><label class="f">WhatsApp number (optional)<input id="pf-phone" type="tel" inputmode="tel" value="${esc(set_().phone || "")}" placeholder="e.g. 98450 12345" autocomplete="tel"></label>
+  <label class="f">Membership ends (optional)<input type="date" id="pf-mend" value="${esc(S.profile.memberEnd || "")}"></label></div>
+  <span class="small muted">Only your trainer sees your number, to message you. Your gym sees the membership end date.</span>` : ""}
   <button class="btn primary block" data-act="profile-save">Save profile</button><button class="btn block" data-act="sheet-close">Cancel</button>`;
 }
 async function saveProfileSheet(){
@@ -2227,6 +2236,12 @@ async function saveProfileSheet(){
   if (it.height != null && (it.height < 100 || it.height > 250)) return toast(`Height looks off: enter it in ${isLb() ? "inches" : "centimetres"}.`);
   if (weight != null && (weight < 25 || weight > 300)) return toast(`Weight looks off: enter it in ${isLb() ? "pounds" : "kilograms"}.`);
   setLoc(val("pf-country"), val("pf-city"));
+  if (document.getElementById("pf-phone")){
+    const ph = val("pf-phone").replace(/[^\d+ ]/g, "").trim().slice(0, 20);
+    if (ph && ph.replace(/\D/g, "").length < 8) return toast("That WhatsApp number looks too short.");
+    S.profile.settings.phone = ph || null;
+  }
+  const mEnd = document.getElementById("pf-mend") ? (val("pf-mend") || null) : undefined;
   if (document.getElementById("pf-wclass")) S.profile.settings.weightClass = num(val("pf-wclass")) ? +wIn(val("pf-wclass")) : null;
   const planKeys = ["sport","sport2","goal","experience","equipment","days","mins"], changed = planKeys.filter(k => String(old[k] ?? "") !== String(it[k] ?? ""));
   const painChanged = [...(old.pain || [])].sort().join() !== [...it.pain].sort().join();
@@ -2234,6 +2249,7 @@ async function saveProfileSheet(){
   if (it.pain.includes("back")) S.profile.settings.trackBack = true;
   if (name){ if (isCloudClient() && name !== Cloud.me.name){ Cloud.me.name = name; uref().update({name}).catch(() => {}); scheduleSync(); } else if (!isCloudClient()) S.profile.settings.name = name; }
   await persistProfile();
+  if (mEnd !== undefined && mEnd !== (S.profile.memberEnd || null)){ S.profile.memberEnd = mEnd; uref().update({memberEnd: mEnd}).catch(() => {}); scheduleSync(); }
   const lw = latestBody("weight");
   if (weight != null && (!lw || +lw.weight !== weight)) await saveRec("body", {id: uid("b"), date: today(), weight, source: "check-in"}).catch(() => {});
   if (isCloudClient() && Cloud.me.trainerId && (changed.length || painChanged)){
@@ -2323,7 +2339,7 @@ function viewProgress(){
   const ptab = S.ui.ptab || "stats";
   let out = `<div><span class="eyebrow">Trends</span><h1>Progress</h1></div><div class="chips"><button class="chip ${ptab==="stats"?"on":""}" data-act="ptab" data-v="stats">Stats</button><button class="chip ${ptab==="trophies"?"on":""}" data-act="ptab" data-v="trophies">Trophies</button></div>`;
   if (ptab === "trophies") return out + viewTrophies();
-  out += historyNote() + sportProgressHTML() + `<h2 style="margin-top:6px">All stats</h2>`;
+  out += historyNote() + reportCardProgress() + sportProgressHTML() + `<h2 style="margin-top:6px">All stats</h2>`;
   // lifts
   const names = {};
   sessionsSorted().forEach(s => s.exercises.forEach(e => { if ((e.type === "load" || e.type === "carry") && topSet(e)) names[e.performedAs] = (names[e.performedAs]||0) + 1; }));
@@ -2463,6 +2479,8 @@ function sheetHTML(){
   else if (k === "report"){ body = reportSheet(); }
   else if (k === "event"){ body = eventSheet(); }
   else if (k === "wt"){ body = wtSetupSheet(); }
+  else if (k === "pause"){ body = pauseSheet(); }
+  else if (k === "img"){ body = `<h2>${esc(S.sheet.title)}</h2><img src="${S.sheet.src}" alt="${esc(S.sheet.title)}" style="width:100%;border-radius:12px"><span class="small muted">Press and hold the image to save or share it.</span><button class="btn block" data-act="sheet-close">Close</button>`; }
   else if (k === "msend"){ body = msendSheet(); }
   else if (k === "class"){ body = classSheet(); }
   else if (k === "roll"){ body = rollSheet(); }
@@ -2570,6 +2588,7 @@ function sheetHTML(){
     ${!isStaff() && curSport().k !== "general" ? `<div><div class="small muted" style="font-weight:600;margin-bottom:6px">Weekly targets · ${esc(curSport().l.split(" (")[0])}</div><div class="grid2">${sportTargets(curSport()).map((t, i) => `<label class="f">${esc(t.l)}${t.u === "long" ? " (longest)" : ""}${targetUnit(t)}<input id="s-tgt-${i}" inputmode="decimal" value="${t.t}"></label>`).join("")}</div></div>` : ""}
     <button class="btn primary block" data-act="settings-save">Save settings</button>
     <hr style="border:0;border-top:1px solid var(--line);width:100%">
+    ${isStaff() ? "" : `<h3>Pause / holiday</h3><span class="small muted">${curPause(pauseList()) ? `Paused ${shortDate(curPause(pauseList()).from)} – ${shortDate(curPause(pauseList()).to)}.` : "Travelling or unwell? Pause so your streak and rings freeze until you're back."}</span><button class="btn block" data-act="pause-open">${curPause(pauseList()) ? "Change or end the pause" : "Pause my training"}</button><hr style="border:0;border-top:1px solid var(--line);width:100%">`}
     ${trainerManaged() ? `<h3>Program</h3><span class="muted small">${esc(prog().name || "Your program")} is set by ${esc(Cloud.me.trainerName || "your trainer")}. You can still swap an exercise for a single workout.</span><hr style="border:0;border-top:1px solid var(--line);width:100%">` : `    <h3>Program</h3><span class="muted small">Current: ${!hasProgram() ? "none yet" : prog().starter ? "starter block from the coach questionnaire" : prog().kind === "personal" ? "back-friendly" : prog().kind === "standard" ? "standard 3-day block" : esc(prog().name || "custom program")}. Switching keeps your logged workouts.</span>
     <button class="btn blue block" data-act="ob-retake">Get a starter plan from the coach questionnaire</button><button class="btn block" data-act="selftpl">Browse ready-made programs</button>
     <div class="grid2"><button class="btn" data-act="ask-prog" data-v="standard">Standard</button><button class="btn" data-act="ask-prog" data-v="personal">Back-friendly</button></div>
@@ -2818,6 +2837,20 @@ app.addEventListener("click", async ev => {
   if (a === "ob-skip") return obSkip();
   if (a === "ob-start") return obStart();
   if (a === "ob-havetrainer"){ await obSkip(); return openSheet({kind:"settings", back: trackPain()}); }
+  if (a === "pause-open") return openSheet({kind:"pause", cid: t.dataset.c || null});
+  if (a === "pause-save") return pauseSave();
+  if (a === "pause-end") return pauseEnd();
+  if (a === "cb-off"){ const cb = comebackInfo(); if (cb){ S.profile.settings.comebackOff = cb.after; await persistProfile(); } S.forceRender = true; render(); return toast("Back to your normal program"); }
+  if (a === "call-out") return saveCall(t.dataset.id, t.dataset.v);
+  if (a === "mr-seen"){ S.profile.settings.reportSeen = t.dataset.v; await persistProfile(); S.forceRender = true; return render(); }
+  if (a === "mr-share") return shareReport(t.dataset.v);
+  if (a === "mr-month"){ S.ui.mrMonth = t.dataset.v; S.forceRender = true; return render(); }
+  if (a === "ret-split"){ S.ui.retSplit = t.dataset.v; S.forceRender = true; return render(); }
+  if (a === "mend-save"){
+    const cid = t.dataset.c, d = val("mend-date") || null;
+    try { await uref(cid).update({memberEnd: d}); await pubRef(cid).update({memberEnd: d}).catch(() => {}); } catch(e){ return toast("Couldn't save: " + (e.code || "error")); }
+    return toast(d ? `Membership end set to ${shortDate(d)}` : "Membership end date cleared");
+  }
   if (a === "otab"){ S.view = t.dataset.v; S.forceRender = true; render(); window.scrollTo(0,0); return; }
   if (a === "otrainer"){ Owner.sel = t.dataset.id; S.view = "otrainer"; S.forceRender = true; render(); window.scrollTo(0,0); return; }
   if (a === "o-rename"){ const n = val("o-gname"); if (!n) return toast("Enter the gym name."); await uref().update({gymName: n}).catch(()=>{}); await Cloud.db.collection("gyms").doc(Cloud.user.uid).update({name: n}).catch(()=>{}); if (Cloud.me.gymCode) await Cloud.db.collection("gymcodes").doc(Cloud.me.gymCode).update({name: n}).catch(()=>{}); return toast("Gym name saved"); }
@@ -3165,7 +3198,7 @@ async function onAuth(u){
     } else if (d.role === "trainer"){
       if (Cloud.attached !== "trainer"){ Cloud.attached = "trainer"; attachTrainer(); S.view = "clients"; }
     } else {
-      S.profile = {program: d.program || emptyProgram(), settings: {...defaultsFor(false).settings, ...(d.settings || {})}, created: ""};
+      S.profile = {program: d.program || emptyProgram(), settings: {...defaultsFor(false).settings, ...(d.settings || {})}, created: "", pauses: d.pauses || [], memberEnd: d.memberEnd || null, since: tsDate(d.createdAt)};
       if (Cloud.attached !== "client"){ Cloud.attached = "client"; attachClient(); if (!["today","workouts","cardio","body","progress","squad","log","onboard"].includes(S.view)) S.view = "today"; }
       else { socialTrainerSync(); scheduleSync(); }
     }
@@ -3260,7 +3293,7 @@ async function disconnectTrainer(){
 
 /* ---- Trainer: client context ---- */
 function clientDoc(id){ return (S.clients || []).find(c => c.id === id); }
-function clientProfile(c){ return {program: (c && c.program) || emptyProgram(), settings: {...defaultsFor(false).settings, ...((c && c.settings) || {})}}; }
+function clientProfile(c){ return {program: (c && c.program) || emptyProgram(), settings: {...defaultsFor(false).settings, ...((c && c.settings) || {})}, pauses: (c && c.pauses) || [], memberEnd: (c && c.memberEnd) || null, since: c ? tsDate(c.createdAt) : null}; }
 function openClient(id){
   closeClient();
   S.cctx = {uid: id, data: emptyData(), unsub: []};
@@ -3301,7 +3334,7 @@ function trainerHeader(){
 function trainerNav(){
   const unread = (S.alerts || []).filter(a => !a.read).length;
   const t = [["clients","Clients",I.body],["alerts","Alerts" + (unread ? ` (${unread})` : ""),I.note],["tclasses","Classes",I.clock],["tsquad","Troop",I.squad],["account","Account",I.gear]];
-  const cur = S.view === "client" || S.view === "builder" ? "clients" : S.view;
+  const cur = S.view === "client" || S.view === "builder" || S.view === "tretention" ? "clients" : S.view;
   return `<nav class="tabs" aria-label="Sections"><div class="wrap" style="grid-template-columns:repeat(5,1fr)">${t.map(([k,l,ic]) => `<button data-act="ttab" data-v="${k}" class="${cur===k?"on":""}">${ic}${l}</button>`).join("")}</div></nav>`;
 }
 function lastAlertFor(id){ return (S.alerts || []).find(a => a.clientId === id); }
@@ -3314,10 +3347,13 @@ function viewClients(){
   ${(S.clients || []).length ? `<button class="btn blue block" data-act="gympick">🖥️ Gym screen — show clients side by side</button><button class="btn block" data-act="mw-new">Send one workout to several clients</button>` : ""}`;
   const cl = S.clients || [];
   if (!cl.length) return out + `<div class="empty">No clients yet. Share your invite code to connect your first client.</div>`;
+  out += callListCard();
   out += cl.map(c => {
     const la = lastAlertFor(c.id); const unread = (S.alerts || []).filter(a => a.clientId === c.id && !a.read).length;
     const prog = c.program && c.program.byTrainer ? esc(c.program.name || "Program") : "No program from you yet";
-    return `<button class="wcard" data-act="open-client" data-id="${c.id}"><div class="dayblock" style="font-size:22px">${esc(initials(c.name))}</div><div style="min-width:0;flex:1"><b style="font-size:18px;display:block">${esc(c.name || c.email)}</b><span class="muted small">${esc(sportLabel(((c.settings || {}).intake || {}).sport).split(" (")[0])} · ${prog} · ${la ? `last workout ${shortDate(la.date)}` : "no workouts logged yet"}</span>${unread ? `<div style="margin-top:6px"><span class="pill blue">${unread} new</span></div>` : ""}</div></button>`;
+    const pub = (Social.tBoard || []).find(x => x.id === c.id), r = pub ? riskOf(pub) : null;
+    const pills = [unread ? `<span class="pill blue">${unread} new</span>` : "", r && r.st !== "active" && r.st !== "none" ? riskPill(r) : r && r.isNew ? `<span class="pill blue">New member</span>` : "", memberEndPill(c.memberEnd)].filter(Boolean).join(" ");
+    return `<button class="wcard" data-act="open-client" data-id="${c.id}"><div class="dayblock" style="font-size:22px">${esc(initials(c.name))}</div><div style="min-width:0;flex:1"><b style="font-size:18px;display:block">${esc(c.name || c.email)}</b><span class="muted small">${esc(sportLabel(((c.settings || {}).intake || {}).sport).split(" (")[0])} · ${prog} · ${la ? `last workout ${shortDate(la.date)}` : "no workouts logged yet"}</span>${pills ? `<div style="margin-top:6px">${pills}</div>` : ""}</div></button>`;
   }).join("");
   return out;
 }
@@ -3369,10 +3405,21 @@ function clientOverview(){
   let pre = `<div class="row" style="gap:8px">${streakChip(G)}${rankBadge(G)}${sc ? `<span class="pill good">Strength score ${sc.score}</span>` : ""}<span class="pill">${G.pb.events.length} PBs</span></div>` + countdownCard();
   let out = `<section class="grid3"><div class="stat"><b class="num">${w < 1 ? "–" : w}</b><span>Week of ${blk().weeks}</span></div><div class="stat"><b class="num">${st.sessions.length}/${prog().days.length}</b><span>Workouts this week</span></div><div class="stat"><b class="num">${st.cardio}</b><span>Cardio min${st.plan ? ` / ${st.plan}` : ""}</span></div>
   <div class="stat"><b class="num">${lw ? fmt(lw.weight) : "–"}</b><span>Weight kg${lw ? " · " + shortDate(lw.date) : ""}</span></div><div class="stat"><b class="num">${lwa ? fmt(lwa.waist) : "–"}</b><span>Waist cm</span></div><div class="stat"><b class="num">${st.pain != null ? fmt(st.pain) : "–"}</b><span>Back pain avg</span></div></section>`;
-  out = pre + out + `<section class="card"><h3>This week</h3>${ringsCard(G)}</section>`;
+  out = pre + clientRetentionCard() + out + `<section class="card"><h3>This week</h3>${ringsCard(G)}</section>`;
   out += `<section class="card"><h3>Recent workouts</h3>${clientHistoryList(6)}</section>` + intakeCard();
   if (last) out += `<p class="small muted" style="margin:0">Last workout ${shortDate(last.date)}.</p>`;
   return out;
+}
+function clientRetentionCard(){
+  const c = clientDoc(S.cctx.uid) || {}, pub = (Social.tBoard || []).find(x => x.id === S.cctx.uid), r = pub ? riskOf(pub) : null;
+  const pz = curPause(pauseList()), cb = comebackInfo(), ph = (c.settings || {}).phone, call = lastCall(Social.calls, S.cctx.uid);
+  return `<section class="card"><div class="row between"><h3>Status</h3><div class="row" style="gap:6px">${r ? riskPill(r) : ""}${memberEndPill(c.memberEnd)}</div></div>
+  ${r ? `<span class="small">${esc(r.why || "")}</span>` : `<span class="small muted">Status appears once the client opens the latest app.</span>`}
+  ${pz ? `<span class="small"><b>${pz.from > today() ? "Pause planned" : "Paused"}:</b> ${shortDate(pz.from)} – ${shortDate(pz.to)}${pz.why ? " · " + esc((PAUSE_WHY.find(x => x[0] === pz.why) || [, ""])[1]) : ""}</span>` : ""}
+  ${cb ? `<span class="small"><b>Comeback week</b> until ${shortDate(cb.end)}: workouts are lighter after ${cb.gap} days off.</span>` : ""}
+  ${call ? `<span class="small muted">Last follow-up: ${esc(callLabel(call.outcome))}, ${shortDate(call.date)}</span>` : ""}
+  <div class="grid2"><button class="btn" data-act="pause-open" data-c="${S.cctx.uid}">${pz ? "Change pause" : "Pause training"}</button><a class="btn" href="${esc(waLink(c, r))}" target="_blank" rel="noopener">WhatsApp${ph ? "" : " (no number)"}</a></div>
+  <div class="row" style="flex-wrap:nowrap;gap:8px;align-items:flex-end"><label class="f" style="flex:1">Membership ends<input type="date" id="mend-date" value="${esc(c.memberEnd || "")}"></label><button class="btn" data-act="mend-save" data-c="${S.cctx.uid}">Save</button></div></section>`;
 }
 function clientHistoryList(n){
   const hist = sessionsSorted().slice(0, n);
@@ -3851,7 +3898,10 @@ const BADGES = [
   ["run100","🛣️","100 km club","Run 100 km in total"],
   ["target","✅","Target smashed","Hit the target in a coach challenge"],
   ["rank2","🦍","Silverback","Reach Silverback rank"],
-  ["rank4","🌋","Primal","Reach Primal rank"]
+  ["rank4","🌋","Primal","Reach Primal rank"],
+  ["m3","🎂","3 months","Be a member for 3 months"],
+  ["m6","🎉","6 months","Be a member for 6 months"],
+  ["m12","🏅","One year","Be a member for a whole year"]
 ];
 function rankFor(xp){
   let i = 0; RANKS.forEach((r, k) => { if (xp >= r[1]) i = k; });
@@ -3903,12 +3953,13 @@ function pbScan(){
   return {best, events};
 }
 function ringsFor(w){
-  const st = weekStats(w), planned = Math.max(1, prog().days.length);
+  const st = weekStats(w), pd = pauseDaysIn(pauseList(), st.start, st.end), left = (7 - pd) / 7;
+  const planned = pd >= 7 ? 0 : Math.max(1, Math.ceil(Math.max(1, prog().days.length) * left));
   const cardio = st.cardio;
-  const target = st.plan || 90;
-  const check = S.data.body.some(b => b.date >= st.start && b.date <= st.end) ? 1 : 0;
-  const r = {work:[st.sessions.length, planned], cardio:[cardio, target], check:[check, 1], st};
-  r.full = st.sessions.length >= planned && cardio >= target && check === 1;
+  const target = Math.round((st.plan || 90) * left);
+  const check = S.data.body.some(b => b.date >= st.start && b.date <= st.end) || pd >= 4 ? 1 : 0;
+  const r = {work:[st.sessions.length, planned], cardio:[cardio, target], check:[check, 1], st, paused: pd};
+  r.full = pd < 7 && st.sessions.length >= planned && cardio >= target && check === 1;
   return r;
 }
 function activeWeeks(){
@@ -3921,7 +3972,9 @@ function streakInfo(){
   if (!sess.length) return {cur:0, best:0, thisWeek:"missed"};
   const planned = Math.max(1, prog().days.length), first = Math.min(...sess.map(s => weekOf(s.date))), normal = set_().backNormal;
   const status = w => {
-    const st = weekStats(w); if (st.sessions.length >= planned) return "done";
+    const st = weekStats(w), pd = pauseDaysIn(pauseList(), st.start, st.end);
+    if (st.sessions.length >= (pd ? Math.ceil(planned * (7 - pd) / 7) || 1 : planned)) return pd >= 7 ? "excused" : "done";
+    if (pd >= 3) return "excused";
     const pains = [...st.sessions.map(s => s.backPain), ...S.data.body.filter(b => b.date >= st.start && b.date <= st.end).map(b => b.backPain)].filter(v => v != null && v !== "").map(Number);
     return pains.some(p => p >= 7 || (normal != null && p >= +normal + 3)) ? "excused" : "missed";
   };
@@ -3970,7 +4023,7 @@ function gameStats(){
     streak4: streak.best >= 4, streak12: streak.best >= 12, pb1: pb.events.length >= 1, pb25: pb.events.length >= 25,
     big3: famPB("squat") && famPB("bench") && famPB("deadlift"), block: hasProgram() && b.weeks > 0 && wNow > b.weeks && inBlock >= 0.75 * prog().days.length * b.weeks,
     checkin4: ckBest >= 4, dexa2: S.data.dexa.filter(d => d.date).length >= 2, t10: tonnage >= 10, t100: tonnage >= 100,
-    km5: longest >= 5, km10: longest >= 10, km21: longest >= 21.1, km42: longest >= 42.2, run100: totalKm >= 100, rank2: rank.idx >= 2, rank4: rank.idx >= 4, target: (set_().targetsHit || []).length > 0};
+    km5: longest >= 5, km10: longest >= 10, km21: longest >= 21.1, km42: longest >= 42.2, run100: totalKm >= 100, rank2: rank.idx >= 2, rank4: rank.idx >= 4, target: (set_().targetsHit || []).length > 0, m3: memberDays() >= 91, m6: memberDays() >= 182, m12: memberDays() >= 365};
   return {pb, led, xp: led.total, rank, streak, weekPts, tonnage, totalKm, longest, rings, badges: new Set(Object.keys(has).filter(k => has[k])),
     weekSessions: rings.work[0], weekCardio: rings.cardio[0]};
 }
@@ -3992,7 +4045,7 @@ function ringsCard(G){
   const line = (col, lbl, v, unit) => `<div class="row" style="gap:8px;flex-wrap:nowrap"><i style="width:10px;height:10px;border-radius:50%;background:${col};flex:none"></i><span class="small" style="flex:1">${lbl}</span><b class="num small">${v[0]}${unit} / ${v[1]}${unit}</b></div>`;
   return `<div class="row" style="flex-wrap:nowrap;gap:16px">${ringsSVG(r)}<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
   ${line("var(--accent)", "Workouts", r.work, "")}${line("var(--chart-2)", esc(curSport().ring || "Cardio"), r.cardio, " min")}<div class="row" style="gap:8px;flex-wrap:nowrap"><i style="width:10px;height:10px;border-radius:50%;background:var(--good);flex:none"></i><span class="small" style="flex:1">Check-in</span><b class="small">${r.check[0] ? "Done" : "Not yet"}</b></div>
-  <span class="small muted">${r.full ? "All three closed — +150 bonus points" : "Close all three for a Full week bonus"}</span></div></div>`;
+  <span class="small muted">${r.paused ? `Paused ${r.paused} day${r.paused === 1 ? "" : "s"} this week, so the targets are smaller. ` : ""}${r.full ? "All three closed — +150 bonus points" : r.paused >= 7 ? "Rings are on hold during the pause." : "Close all three for a Full week bonus"}</span></div></div>`;
 }
 function rankBadge(G){ return `<span class="pill blue">🦍 ${G.rank.name} · ${kfmt(G.xp)} pts</span>`; }
 function streakChip(G){ return G.streak.cur ? `<span class="pill warn">🔥 ${G.streak.cur}-week streak</span>` : `<span class="pill">Start a streak this week</span>`; }
@@ -4089,7 +4142,7 @@ function countdownCard(){
 }
 
 /* ============ Squad: challenges, boards, buddies ============ */
-const Social = {unsub:[], tUnsub:[], buddyUnsub:{}, entryUnsub:{}, me:null, buddies:{}, fives:[], challenges:[], entries:{}, board:[], tBoard:[], lastWritten:"", timer:null, tid:undefined, fived:new Set()};
+const Social = {unsub:[], tUnsub:[], buddyUnsub:{}, entryUnsub:{}, me:null, buddies:{}, fives:[], challenges:[], entries:{}, board:[], tBoard:[], calls:[], lastWritten:"", timer:null, tid:undefined, fived:new Set()};
 const pubRef = uid => Cloud.db.collection("public").doc(uid || Cloud.user.uid);
 const FV = () => firebase.firestore.FieldValue;
 function dispName(n){ const p = String(n || (Cloud.me && Cloud.me.name) || "").trim().split(/\s+/).filter(Boolean); return p.length > 1 ? `${p[0]} ${p[p.length-1][0].toUpperCase()}.` : (p[0] || "Athlete"); }
@@ -4098,7 +4151,7 @@ const fresh = (d, k) => d && d.week === weekKey() ? (+d[k] || 0) : 0;
 
 function socialStop(){
   [...Social.unsub, ...Social.tUnsub, ...Object.values(Social.buddyUnsub), ...Object.values(Social.entryUnsub)].forEach(f => { try { f(); } catch(e){} });
-  Object.assign(Social, {unsub:[], tUnsub:[], buddyUnsub:{}, entryUnsub:{}, me:null, buddies:{}, fives:[], challenges:[], entries:{}, board:[], tBoard:[], lastWritten:"", tid:undefined, classes:[], att:[]});
+  Object.assign(Social, {unsub:[], tUnsub:[], buddyUnsub:{}, entryUnsub:{}, me:null, buddies:{}, fives:[], challenges:[], entries:{}, board:[], tBoard:[], calls:[], lastWritten:"", tid:undefined, classes:[], att:[]});
   clearTimeout(Social.timer);
 }
 async function socialStartClient(){
@@ -4136,6 +4189,7 @@ function socialStartTrainer(){
   }, () => {}));
   Social.tUnsub.push(Cloud.db.collection("classes").where("trainerId", "==", uid).onSnapshot(q => { Social.classes = q.docs.map(d => ({id: d.id, ...d.data()})).sort((a, b) => (a.time || "").localeCompare(b.time || "")); render(); }, () => {}));
   Social.tUnsub.push(attRef().where("date", ">=", addDays(today(), -100)).onSnapshot(q => { Social.att = q.docs.map(d => ({id: d.id, ...d.data()})); render(); }, () => {}));
+  Social.tUnsub.push(callsRef().where("week", ">=", addDays(weekKey(), -7 * 26)).onSnapshot(q => { Social.calls = q.docs.map(d => ({id: d.id, ...d.data()})); render(); }, () => {}));
   Social.tUnsub.push(squadsRef().onSnapshot(q => { Social.squads = q.docs.map(d => ({id: d.id, ...d.data()})).sort((a, b) => a.name.localeCompare(b.name)); render(); }, () => {}));
   Social.tUnsub.push(Cloud.db.collection("public").where("trainerId", "==", uid).onSnapshot(q => {
     Social.tBoard = q.docs.map(d => ({id: d.id, ...d.data()})); render();
@@ -4178,6 +4232,7 @@ async function syncSocial(){
     planned: hasProgram() ? prog().days.length : 0, pbs30: G.pb.events.filter(e => e.date >= addDays(today(), -30)).length,
     program: hasProgram() ? {name: prog().name || "Program", days: prog().days.length, weeks: blk().weeks, week: weekOf(today()), starter: !!prog().starter, byTrainer: !!prog().byTrainer, event: prog().event && prog().event.date ? prog().event : null} : null,
     firstSession: S.data.sessions.length ? ascSessions()[0].date : null,
+    joined: memberSince(), pauses: pubPauses(pauseList()), memberEnd: S.profile.memberEnd || null,
     joinedChallenges: (set_().joined || []).length});
   const str = JSON.stringify(payload);
   if (str !== Social.lastWritten){ await pubRef().update(payload); Social.lastWritten = str; }
@@ -5022,20 +5077,22 @@ async function gymSave(cid){
 }
 
 /* ============ Gym owner ============ */
-const Owner = {trainers: [], clients: {}, chals: {}, att: {}, unsub: [], tUnsub: {}, sel: null};
+const Owner = {trainers: [], clients: {}, chals: {}, att: {}, calls: {}, cls: {}, unsub: [], tUnsub: {}, sel: null};
 const isOwner = () => !!(Cloud.user && Cloud.me && Cloud.me.role === "owner");
-function ownerStop(){ Owner.unsub.forEach(f => { try { f(); } catch(e){} }); Object.values(Owner.tUnsub).forEach(arr => arr.forEach(f => { try { f(); } catch(e){} })); Object.assign(Owner, {trainers: [], clients: {}, chals: {}, att: {}, unsub: [], tUnsub: {}, sel: null}); }
+function ownerStop(){ Owner.unsub.forEach(f => { try { f(); } catch(e){} }); Object.values(Owner.tUnsub).forEach(arr => arr.forEach(f => { try { f(); } catch(e){} })); Object.assign(Owner, {trainers: [], clients: {}, chals: {}, att: {}, calls: {}, cls: {}, unsub: [], tUnsub: {}, sel: null}); }
 function attachOwner(){
   Owner.unsub.push(Cloud.db.collection("users").where("gymId", "==", Cloud.user.uid).onSnapshot(q => {
     Owner.trainers = q.docs.map(d => ({id: d.id, ...d.data()})).filter(t => t.role === "trainer").sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     const ids = new Set(Owner.trainers.map(t => t.id));
-    Object.keys(Owner.tUnsub).forEach(id => { if (!ids.has(id)){ Owner.tUnsub[id].forEach(f => f()); delete Owner.tUnsub[id]; delete Owner.clients[id]; delete Owner.chals[id]; } });
+    Object.keys(Owner.tUnsub).forEach(id => { if (!ids.has(id)){ Owner.tUnsub[id].forEach(f => f()); delete Owner.tUnsub[id]; delete Owner.clients[id]; delete Owner.chals[id]; delete Owner.calls[id]; delete Owner.cls[id]; } });
     Owner.trainers.forEach(t => {
       if (Owner.tUnsub[t.id]) return;
       Owner.tUnsub[t.id] = [
         Cloud.db.collection("public").where("trainerId", "==", t.id).onSnapshot(q2 => { Owner.clients[t.id] = q2.docs.map(d => ({id: d.id, ...d.data()})); render(); }, () => {}),
         Cloud.db.collection("challenges").where("trainerId", "==", t.id).onSnapshot(q2 => { Owner.chals[t.id] = q2.docs.map(d => ({id: d.id, ...d.data()})); render(); }, () => {}),
-        attRef(t.id).where("date", ">=", addDays(today(), -100)).onSnapshot(q2 => { Owner.att[t.id] = q2.docs.map(d => ({id: d.id, ...d.data()})); render(); }, () => {})
+        attRef(t.id).where("date", ">=", addDays(today(), -100)).onSnapshot(q2 => { Owner.att[t.id] = q2.docs.map(d => ({id: d.id, ...d.data()})); render(); }, () => {}),
+        callsRef(t.id).where("week", ">=", addDays(weekKey(), -49)).onSnapshot(q2 => { Owner.calls[t.id] = q2.docs.map(d => ({id: d.id, ...d.data()})); render(); }, () => {}),
+        Cloud.db.collection("classes").where("trainerId", "==", t.id).onSnapshot(q2 => { Owner.cls[t.id] = q2.docs.map(d => ({id: d.id, ...d.data()})); render(); }, () => {})
       ];
     });
     render();
@@ -5061,13 +5118,329 @@ async function joinGym(code){
     toast(`Joined ${d.data().name || "the gym"}`); S.forceRender = true; render();
   } catch(e){ toast("Couldn't join: " + (e.code || "error")); }
 }
+/* ============ Retention ============ */
+/* Pauses (holiday, illness): [{from, to, why, by}] on the user's own doc, set by the member or their trainer.
+   The public summary carries the dates only, never the reason. */
+const PAUSE_WHY = [["travel", "Travel / holiday"], ["ill", "Illness"], ["injury", "Injury"], ["busy", "Work / busy"], ["other", "Other"]];
+const pauseList = () => (S.profile && S.profile.pauses) || [];
+const pauseOn = (list, d) => (list || []).find(p => p && p.from <= d && p.to >= d) || null;
+function pauseDaysIn(list, a, b){ if (!(list || []).length) return 0; let n = 0; for (let d = a; d <= b; d = addDays(d, 1)) if (pauseOn(list, d)) n++; return n; }
+function curPause(list){ const t = today(); return pauseOn(list, t) || (list || []).filter(p => p.from > t).sort((a, b) => a.from.localeCompare(b.from))[0] || null; }
+const pubPauses = list => (list || []).filter(p => p.to >= addDays(today(), -63)).map(p => ({from: p.from, to: p.to}));
+async function savePauses(list, cid){
+  list = (list || []).filter(p => p.to >= addDays(today(), -120)).sort((a, b) => a.from.localeCompare(b.from)).slice(-12);
+  if (cid){
+    await uref(cid).update({pauses: list});
+    await pubRef(cid).update({pauses: pubPauses(list)}).catch(() => {});
+    return;
+  }
+  S.profile.pauses = list;
+  if (isCloudClient()){ await uref().update({pauses: list}); scheduleSync(); }
+  else await Store.saveProfile(S.profile);
+}
+function pauseSheet(){
+  const cid = S.sheet.cid, c = cid ? clientDoc(cid) : null, list = cid ? ((c || {}).pauses || []) : pauseList(), cur = curPause(list);
+  const who = cid ? esc(((c || {}).name || "This client").split(" ")[0]) : "";
+  const why = k => (PAUSE_WHY.find(x => x[0] === k) || [, ""])[1];
+  let h = `<h2>${cid ? `Pause ${who}'s training` : "Pause your training"}</h2><span class="small muted">Going away or unwell? During a pause, streaks, weekly rings and the "at risk" status are frozen. Nothing is lost, and the plan picks up when the pause ends.</span>`;
+  if (cur) h += `<div class="banner info"><div><b>${cur.from > today() ? "Pause planned" : "Paused"}:</b> ${shortDate(cur.from)} – ${shortDate(cur.to)}${cur.why ? " · " + esc(why(cur.why)) : ""}</div></div><button class="btn danger block" data-act="pause-end">${cur.from > today() ? "Cancel this pause" : "End the pause today"}</button><h3>${cur.from > today() ? "Or plan a different pause" : "Change the pause"}</h3>`;
+  h += `<div class="grid2"><label class="f">First day off<input type="date" id="pz-from" value="${esc(cur ? cur.from : today())}" min="${addDays(today(), -14)}"></label><label class="f">Last day off<input type="date" id="pz-to" value="${esc(cur ? cur.to : addDays(today(), 6))}" min="${today()}"></label></div>
+  <label class="f">Reason<select id="pz-why">${PAUSE_WHY.filter(([k]) => !["ill", "injury"].includes(k) || (cid ? !!(c && c.consent && c.consent.health) : healthOK())).map(([k, l]) => `<option value="${k}" ${cur && cur.why === k ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></label>
+  <span class="small muted">The reason is seen only by ${cid ? "you and your client" : "you and your trainer"}. A gym owner sees just the dates. Up to 90 days.</span>
+  <button class="btn primary block" data-act="pause-save">Save pause</button><button class="btn block" data-act="sheet-close">Cancel</button>`;
+  return h;
+}
+async function pauseSave(){
+  const cid = S.sheet.cid, from = val("pz-from"), to = val("pz-to"), why = val("pz-why") || "other";
+  if (!from || !to) return toast("Pick the first and last day off.");
+  if (to < from) return toast("The last day off is before the first.");
+  if (to < today()) return toast("That pause is already over.");
+  if (daysBetween(from, to) > 89) return toast("A pause can be up to 90 days.");
+  const list = cid ? ((clientDoc(cid) || {}).pauses || []) : pauseList(), cur = curPause(list);
+  const keep = list.filter(p => p !== cur && (p.to < from || p.from > to));
+  try { await savePauses([...keep, {from, to, why, by: cid ? "trainer" : "member"}], cid); }
+  catch(e){ return toast("Couldn't save the pause: " + (e.code || "error")); }
+  S.sheet = null; S.forceRender = true; render(); toast(`Paused ${shortDate(from)} – ${shortDate(to)}`);
+}
+async function pauseEnd(){
+  const cid = S.sheet.cid, list = cid ? ((clientDoc(cid) || {}).pauses || []) : pauseList(), cur = curPause(list); if (!cur) return;
+  const y = addDays(today(), -1), rest = list.filter(p => p !== cur);
+  if (cur.from <= y) rest.push({...cur, to: y});
+  try { await savePauses(rest, cid); } catch(e){ return toast("Couldn't change the pause: " + (e.code || "error")); }
+  S.sheet = null; S.forceRender = true; render(); toast(cur.from > today() ? "Pause cancelled" : "Welcome back! The pause has ended");
+}
+function pauseBanner(){
+  const p = curPause(pauseList()); if (!p) return "";
+  return p.from <= today()
+    ? `<div class="banner info"><div><b>Training paused until ${shortDate(p.to)}.</b> Your streak and rings are on hold, so enjoy the break. <button class="btn ghost" data-act="pause-open">Change</button></div></div>`
+    : `<div class="banner info"><div><b>Pause planned</b> ${shortDate(p.from)} – ${shortDate(p.to)}. <button class="btn ghost" data-act="pause-open">Change</button></div></div>`;
+}
+
+/* ---- Comeback plan: after 10+ days off, the first 7 days back are lighter ---- */
+let CB = {arr: null, k: "", v: null};
+function comebackInfo(){
+  const ss = (S.data && S.data.sessions) || [], t = today(), off = (S.profile && set_().comebackOff) || "";
+  const k = ss.length + "|" + t + "|" + off;
+  if (CB.arr === ss && CB.k === k) return CB.v;
+  const ds = [...new Set(ss.map(s => s.date).filter(d => d && d <= t))].sort();
+  let v = null;
+  if (ds.length){
+    const lastD = ds[ds.length - 1], gapNow = daysBetween(lastD, t);
+    if (gapNow >= 10) v = {start: t, end: addDays(t, 6), gap: gapNow, after: lastD, waiting: true};
+    else for (let i = ds.length - 1; i >= 1; i--){
+      if (daysBetween(ds[i], t) > 6) break;
+      const g = daysBetween(ds[i - 1], ds[i]);
+      if (g >= 10){ v = {start: ds[i], end: addDays(ds[i], 6), gap: g, after: ds[i - 1]}; break; }
+    }
+  }
+  if (v && off === v.after) v = null;
+  CB = {arr: ss, k, v};
+  return v;
+}
+// Lighter targets apply to the week being trained now, never in a deload (already light)
+const comebackFor = w => !S.profile || isDeload(w) || w !== Math.max(1, weekOf(today())) ? null : comebackInfo();
+const cbSets = n => n <= 2 ? n : n - Math.max(1, Math.round(n / 3));
+function comebackBanner(){
+  const cb = comebackInfo(); if (!cb || !hasProgram()) return "";
+  return `<div class="banner info"><div><b>Welcome back!</b> It's been ${cb.gap} days since your last workout, so ${cb.waiting ? "your next 7 days are" : `until ${shortDate(cb.end)} your workouts are`} lighter: fewer sets and about 10% less weight. Then your program carries on as normal. <button class="btn ghost" data-act="cb-off">Train as normal instead</button></div></div>`;
+}
+
+/* ---- Member since, anniversaries ---- */
+function memberSince(){
+  const c = [S.profile && S.profile.since, S.profile && S.profile.created, S.data.sessions.length ? ascSessions()[0].date : null].filter(Boolean).sort();
+  return c[0] || null;
+}
+const memberDays = () => { const m = memberSince(); return m ? daysBetween(m, today()) : 0; };
+
+/* ---- Personal risk score: each member against their own usual pattern ---- */
+// c is a public summary (weekCounts by Monday, lastWorkout, joined, pauses). wkBack > 0 looks at an earlier week, for trends.
+function riskOf(c, wkBack = 0){
+  const M0 = mondayOf(today()), M = addDays(M0, -7 * wkBack), D = wkBack ? addDays(M, 6) : today();
+  const wc = c.weekCounts || {}, wk = i => +wc[addDays(M, -7 * i)] || 0;
+  const pauses = c.pauses || [];
+  const since = c.joined || c.firstSession || null;
+  if (since && since > D) return {st: "none"};
+  const isNew = !!since && daysBetween(since, D) < 60;
+  const pz = pauseOn(pauses, D);
+  if (pz) return {st: "paused", why: `Paused until ${shortDate(pz.to)}`, isNew};
+  let last = !wkBack && c.lastWorkout && c.lastWorkout.date ? c.lastWorkout.date : null;
+  if (!last) for (let i = 0; addDays(M, -7 * i) >= addDays(M0, -49); i++) if (wk(i) > 0){ last = addDays(M, -7 * i + 3); if (last > D) last = D; break; }
+  if (!last && c.lastWorkout && c.lastWorkout.date && c.lastWorkout.date <= D) last = c.lastWorkout.date;
+  if (!last){
+    const d = since ? daysBetween(since, D) : 0;
+    return d >= 7 ? {st: "never", why: "No workout logged yet", isNew, days: d} : {st: "never", why: "Just joined", isNew, fresh: true};
+  }
+  const pEnd = pauses.filter(p => p.to < D).map(p => addDays(p.to, 1)).sort().pop();
+  const ref = pEnd && pEnd > last ? pEnd : last, days = Math.max(0, daysBetween(ref, D));
+  const norms = [];
+  for (let i = 2; i <= 7; i++){
+    const m = addDays(M, -7 * i), e = addDays(m, 6);
+    if (m < addDays(M0, -49) || (since && e < since) || pauseDaysIn(pauses, m, e) >= 3) continue;
+    norms.push(wk(i));
+  }
+  const norm = norms.length >= 2 ? norms.reduce((a, b) => a + b, 0) / norms.length : null;
+  const usual = norm ? `usually ${fmt(norm, 1)} a week` : "";
+  const out = (st, why) => ({st, why, days, norm, isNew});
+  if (days > 30) return out("inactive", `No workout for ${days} days`);
+  if (days >= (isNew ? 7 : 14)) return out("risk", `No workout for ${days} days${usual ? `; ${usual}` : ""}`);
+  if (norm != null && norm >= 1){
+    if (days >= Math.max(isNew ? 6 : 8, Math.round(7 / norm * 3))) return out("risk", `No workout for ${days} days; ${usual}`);
+    const k = isNew ? 0.67 : 0.5, recent = wk(1), cur = wk(0);
+    const lastPaused = pauseDaysIn(pauses, addDays(M, -7), addDays(M, -1)) >= 3;
+    if (!lastPaused && recent <= norm * k && norm - recent >= 1 && cur < Math.ceil(norm * k)) return out("risk", `${recent} workout${recent === 1 ? "" : "s"} last week; ${usual}`);
+  }
+  return out("active", usual ? `Training as usual (${usual.replace("usually ", "")})` : "Training");
+}
+const RISK_ORDER = {inactive: 0, risk: 1, never: 2, active: 3, paused: 4, none: 5};
+function riskPill(r){
+  const p = r.st === "active" ? `<span class="pill good">Active</span>` : r.st === "risk" ? `<span class="pill warn">At risk</span>` : r.st === "inactive" ? `<span class="pill bad">Inactive</span>` : r.st === "paused" ? `<span class="pill blue">Paused</span>` : `<span class="pill">No workouts</span>`;
+  return p + (r.isNew ? ` <span class="pill blue">New</span>` : "");
+}
+function memberEndPill(d){
+  if (!d) return "";
+  const left = daysBetween(today(), d);
+  return left < 0 ? `<span class="pill bad">Membership ended ${shortDate(d)}</span>` : left <= 30 ? `<span class="pill warn">Membership ends in ${left} day${left === 1 ? "" : "s"}</span>` : "";
+}
+
+/* ---- Trainer: weekly call list ---- */
+const callsRef = tid => Cloud.db.collection("trainers").doc(tid || Cloud.user.uid).collection("calls");
+const CALL_OUT = [["called", "Called"], ["back", "Back training"], ["lost", "Lost"]];
+const callLabel = k => (CALL_OUT.find(x => x[0] === k) || [, k])[1];
+function lastCall(calls, cid){ return (calls || []).filter(x => x.clientId === cid).sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.week || "").localeCompare(a.week || ""))[0] || null; }
+function waLink(c, r){
+  const s = (c && c.settings) || {}, first = ((c && c.name) || "").split(/\s+/)[0], me = ((Cloud.me && Cloud.me.name) || "your coach").split(/\s+/)[0];
+  let ph = String(s.phone || "").replace(/[^\d]/g, "");
+  if (ph.length === 10 && (!s.loc || s.loc.country === "IN")) ph = "91" + ph;
+  const msg = `Hi ${first || "there"}, it's ${me}${Cloud.me && Cloud.me.gymName ? " from " + Cloud.me.gymName : ""}. ${r && r.st === "never" ? "Just checking in: shall we get your first workout booked?" : "Haven't seen you training for a bit. Everything OK? If it helps, I can make your first week back a lighter one."} When suits you for the next session?`;
+  return `https://wa.me/${ph}?text=${encodeURIComponent(msg)}`;
+}
+function callList(){
+  const wk = weekKey(), calls = Social.calls || [];
+  return (Social.tBoard || []).map(c => ({c, r: riskOf(c), call: lastCall(calls, c.id)}))
+    .filter(x => ["risk", "inactive"].includes(x.r.st) || (x.r.st === "never" && !x.r.fresh))
+    .filter(x => !(x.call && x.call.outcome === "lost" && !(x.c.lastWorkout && x.c.lastWorkout.date > x.call.date)))
+    .filter(x => !(x.call && x.call.week === wk && x.call.outcome === "back"))
+    .sort((a, b) => (b.r.isNew ? 1 : 0) - (a.r.isNew ? 1 : 0) || RISK_ORDER[a.r.st] - RISK_ORDER[b.r.st] || (b.r.days || 0) - (a.r.days || 0));
+}
+function callListCard(){
+  if (!(Social.tBoard || []).length) return "";
+  const list = callList(), wk = weekKey(), calls = Social.calls || [];
+  const lost = (Social.tBoard || []).filter(c => { const k = lastCall(calls, c.id); return k && k.outcome === "lost" && !(c.lastWorkout && c.lastWorkout.date > k.date); }).length;
+  let out = `<section class="card"><div class="row between"><h3>Members to contact this week</h3>${list.length ? `<span class="pill warn">${list.length}</span>` : ""}</div>
+  <span class="small muted">Picked by comparing each member with their own usual training. Message them, then record what happened.</span>`;
+  out += list.length ? list.map(({c, r, call}) => {
+    const u = clientDoc(c.id), mine = call && call.week === wk ? call.outcome : null;
+    return `<div style="border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:6px" data-call="${c.id}">
+      <div class="row between" style="flex-wrap:nowrap;gap:8px"><div style="min-width:0"><b>${esc(c.name || "Member")}</b> ${riskPill(r)}<div class="small muted">${esc(r.why || "")}${call && !mine ? ` · last follow-up: ${esc(callLabel(call.outcome))} ${shortDate(call.date)}` : ""}</div></div>
+      <a class="btn" href="${esc(waLink(u, r))}" target="_blank" rel="noopener" style="flex:none">WhatsApp</a></div>
+      <div class="chips">${CALL_OUT.map(([k, l]) => `<button class="chip ${mine === k ? "on" : ""}" data-act="call-out" data-id="${c.id}" data-v="${k}">${l}</button>`).join("")}</div></div>`;
+  }).join("") : `<div class="empty">Nobody needs a call this week. Everyone is training at their usual pace, or is paused.</div>`;
+  out += `<div class="row between small"><span class="muted">${lost ? `${lost} marked lost. They reappear here if they train again.` : ""}</span><button class="btn ghost" data-act="ttab" data-v="tretention">Retention dashboard</button></div></section>`;
+  return out;
+}
+async function saveCall(cid, outcome){
+  const wk = weekKey(), id = `${cid}_${wk}`, cur = (Social.calls || []).find(x => x.id === id);
+  const c = (Social.tBoard || []).find(x => x.id === cid) || clientDoc(cid) || {};
+  try {
+    if (cur && cur.outcome === outcome) await callsRef().doc(id).delete();
+    else await callsRef().doc(id).set(clean({clientId: cid, clientName: c.name || "", week: wk, date: today(), outcome, why: (riskOf(c).why || "").slice(0, 200), ts: ts()}));
+  } catch(e){ return toast("Couldn't save: " + (e.code || "error")); }
+  toast(cur && cur.outcome === outcome ? "Cleared" : `Recorded: ${callLabel(outcome)}`);
+}
+
+/* ---- Monthly report card ---- */
+const monthStart = m => m + "-01", monthEnd = m => addDays(monthKey(addDays(m + "-01", 31)) + "-01", -1);
+const prevMonth = (m = monthKey(today())) => monthKey(addDays(m + "-01", -1));
+function monthReport(m){
+  const a = monthStart(m), b = monthEnd(m), inM = r => r.date >= a && r.date <= b;
+  const ss = S.data.sessions.filter(inM), pbs = pbScan().events.filter(inM);
+  const logs = sportLogs().filter(inM);
+  const kg = ss.reduce((x, s) => x + sessionVolume(s), 0);
+  const km = logs.filter(l => l.m === "run").reduce((x, l) => x + (+l.km || 0), 0);
+  const cmin = Math.round(S.data.cardio.filter(inM).reduce((x, c) => x + (+c.minutes || 0), 0) + ss.reduce((x, s) => x + sessionCardioMin(s), 0));
+  const change = f => {
+    const rows = S.data.body.filter(r => r[f] != null && r[f] !== "" && r.date <= b).sort((x, y) => x.date.localeCompare(y.date));
+    const end = rows.filter(inM).pop(), start = rows.filter(r => r.date < a).pop() || rows.filter(inM)[0];
+    return end && start && end !== start ? +end[f] - +start[f] : null;
+  };
+  const weeks = [...new Set(ss.map(s => mondayOf(s.date)))].length;
+  return {m, workouts: ss.length, days: new Set(ss.map(s => s.date)).size, weeks, pbs, kg, km, cmin, dW: change("weight"), dWaist: change("waist"), streak: streakInfo().cur};
+}
+function reportCardHTML(r, {share = true, close = false} = {}){
+  const sign = v => (v > 0 ? "+" : "") + fmt(v, 1);
+  const tile = (v, l) => `<div class="stat"><b class="num">${v}</b><span>${l}</span></div>`;
+  let out = `<section class="card" style="border-color:var(--accent)"><div class="row between"><div><span class="eyebrow">Monthly report card</span><h2>${esc(monthName(r.m))}</h2></div>${close ? `<button class="btn ghost" data-act="mr-seen" data-v="${r.m}" aria-label="Close">×</button>` : ""}</div>`;
+  if (!r.workouts && !r.cmin) return out + `<div class="empty">No training logged in ${esc(monthName(r.m))}.</div></section>`;
+  out += `<div class="grid3">${tile(r.workouts, "Workouts")}${tile(r.pbs.length, "Personal bests")}${tile(r.kg ? kfmt(Math.round(wOut(r.kg))) : "–", `Total ${wUnit()} lifted`)}
+  ${tile(r.km ? fmt(dOut(r.km), 1) : "–", `${dUnit()} run`)}${tile(r.cmin || "–", "Cardio min")}${tile(r.streak ? "🔥" + r.streak : "–", "Week streak now")}</div>`;
+  const body = [r.dW != null ? `Weight ${sign(wOut(r.dW))} ${wUnit()}` : "", r.dWaist != null ? `Waist ${sign(lenOut(r.dWaist))} ${lenUnit()}` : ""].filter(Boolean);
+  if (body.length) out += `<span class="small"><b>Body:</b> ${esc(body.join(" · "))}</span>`;
+  if (r.pbs.length) out += `<span class="small"><b>Best moments:</b> ${r.pbs.slice(-3).reverse().map(e => `${esc(e.n)} ${esc(e.text)}`).join(" · ")}</span>`;
+  if (share) out += `<button class="btn blue block" data-act="mr-share" data-v="${r.m}">Share as image</button>`;
+  return out + `</section>`;
+}
+function reportCardToday(){
+  const t = today(); if (+t.slice(8) > 7) return "";
+  const m = prevMonth(); if (set_().reportSeen === m) return "";
+  if (!S.data.sessions.some(s => s.date >= monthStart(m) && s.date <= monthEnd(m))) return "";
+  return reportCardHTML(monthReport(m), {close: true});
+}
+function reportCardProgress(){
+  const months = [prevMonth(), prevMonth(prevMonth()), prevMonth(prevMonth(prevMonth()))];
+  const cur = monthKey(today()), opts = [cur, ...months], m = opts.includes(S.ui.mrMonth) ? S.ui.mrMonth : (+today().slice(8) <= 7 ? months[0] : cur);
+  return `<div class="chips">${opts.map(k => `<button class="chip ${k === m ? "on" : ""}" data-act="mr-month" data-v="${k}">${esc(monthName(k).split(" ")[0])}${k === cur ? " (so far)" : ""}</button>`).join("")}</div>` + reportCardHTML(monthReport(m), {share: !S.cctx});
+}
+async function shareReport(m){
+  const r = monthReport(m), cv = document.createElement("canvas"); cv.width = 1080; cv.height = 1350;
+  let g = null; try { g = cv.getContext("2d"); } catch(e){}
+  if (!g) return toast("Sharing images isn't supported on this device.");
+  g.fillStyle = "#0E2A3B"; g.fillRect(0, 0, 1080, 1350);
+  g.fillStyle = "#F5C518"; g.fillRect(0, 0, 1080, 14);
+  g.textBaseline = "top"; g.fillStyle = "#9FC3D6"; g.font = "600 40px sans-serif"; g.fillText("PRIMAL STRENGTH · MONTHLY REPORT CARD", 70, 70);
+  g.fillStyle = "#FFFFFF"; g.font = "800 92px sans-serif"; g.fillText(monthName(m), 70, 130);
+  const nm = firstName(); if (nm){ g.font = "500 46px sans-serif"; g.fillStyle = "#D7E6EE"; g.fillText(nm, 70, 240); }
+  const tiles = [[r.workouts, "workouts"], [r.pbs.length, "personal bests"], [r.kg ? kfmt(Math.round(wOut(r.kg))) : "–", `${wUnit()} lifted`], [r.km ? fmt(dOut(r.km), 1) : "–", `${dUnit()} run`], [r.cmin || "–", "cardio minutes"], [r.streak || "–", "week streak"]];
+  tiles.forEach(([v, l], i) => {
+    const x = 70 + (i % 2) * 480, y = 340 + Math.floor(i / 2) * 250;
+    g.fillStyle = "#16384C"; g.fillRect(x, y, 450, 220);
+    g.fillStyle = "#F5C518"; g.font = "800 100px sans-serif"; g.fillText(String(v), x + 36, y + 30);
+    g.fillStyle = "#D7E6EE"; g.font = "500 38px sans-serif"; g.fillText(l, x + 36, y + 150);
+  });
+  g.fillStyle = "#FFFFFF"; g.font = "500 38px sans-serif";
+  const lines = r.pbs.slice(-2).reverse().map(e => `PB · ${e.n} ${e.text}`.slice(0, 44));
+  lines.forEach((t, i) => g.fillText(t, 70, 1110 + i * 54));
+  g.fillStyle = "#9FC3D6"; g.font = "500 32px sans-serif"; g.fillText("Trained with Primal Strength 🦍", 70, 1250);
+  const blob = await new Promise(res => cv.toBlob(res, "image/png"));
+  if (!blob) return toast("Couldn't make the image.");
+  const name = `primal-strength-${m}.png`;
+  if (!NATIVE && navigator.canShare && typeof File === "function"){
+    const f = new File([blob], name, {type: "image/png"});
+    if (navigator.canShare({files: [f]})){ try { await navigator.share({files: [f], title: `My ${monthName(m)} report card`}); return; } catch(e){ if (/abort|cancel/i.test(String(e && (e.name || e.message)))) return; } }
+  }
+  if (NATIVE) return saveFile(name, blob, "Monthly report card");
+  openSheet({kind: "img", title: `${monthName(m)} report card`, src: cv.toDataURL("image/png")});
+}
+
+/* ---- Retention dashboard (owner and trainer) ---- */
+const joinedOf = c => c.joined || c.firstSession || null;
+function retainedAt(c, n){ const j = joinedOf(c); if (!j || addDays(j, n) > today()) return null; return !!(c.lastWorkout && c.lastWorkout.date >= addDays(j, n)); }
+function retCells(list){
+  return [30, 90, 180].map(n => { const el = list.map(c => retainedAt(c, n)).filter(v => v != null); return el.length ? {p: Math.round(el.filter(Boolean).length / el.length * 100), n: el.length} : null; });
+}
+const retCell = x => x ? `<b>${x.p}%</b> <span class="muted">of ${x.n}</span>` : `<span class="muted">–</span>`;
+function retentionHTML(members, splits){
+  let out = "";
+  const now = members.map(c => riskOf(c));
+  const cnt = st => now.filter(r => r.st === st).length;
+  out += `<section class="grid3"><div class="stat"><b class="num">${members.length}</b><span>Members</span></div><div class="stat"><b class="num">${cnt("active")}</b><span>Active</span></div><div class="stat"><b class="num">${cnt("risk") + cnt("inactive")}</b><span>At risk or inactive</span></div>
+  <div class="stat"><b class="num">${cnt("paused")}</b><span>Paused</span></div><div class="stat"><b class="num">${now.filter(r => r.isNew).length}</b><span>New (first 60 days)</span></div><div class="stat"><b class="num">${retCells(members)[0] ? retCells(members)[0].p + "%" : "–"}</b><span>Still training at 30 days</span></div></section>`;
+  const months = [...new Set(members.map(c => (joinedOf(c) || "").slice(0, 7)).filter(Boolean))].sort().reverse().slice(0, 12);
+  out += `<section class="card"><h3>By month joined</h3><span class="small muted">Share of members who joined that month and logged a workout on or after day 30, 90 and 180. "–" means it's too early to tell.</span>
+  ${months.length ? `<div class="tbl"><table><tr><th>Joined</th><th>Members</th><th>30 days</th><th>90 days</th><th>180 days</th></tr>${months.map(m => { const l = members.filter(c => (joinedOf(c) || "").startsWith(m)), r = retCells(l); return `<tr><td>${esc(monthName(m))}</td><td>${l.length}</td>${r.map(x => `<td>${retCell(x)}</td>`).join("")}</tr>`; }).join("")}</table></div>` : `<div class="empty">No join dates yet. They appear once members open the latest app.</div>`}</section>`;
+  const keys = Object.keys(splits), k = keys.includes(S.ui.retSplit) ? S.ui.retSplit : keys[0];
+  const groups = {};
+  members.forEach(c => { let g = splits[k].of(c); g = Array.isArray(g) ? g : [g]; if (!g.length) g = [splits[k].none]; g.forEach(x => (groups[x] = groups[x] || []).push(c)); });
+  out += `<section class="card"><h3>Compare</h3><div class="chips">${keys.map(x => `<button class="chip ${x === k ? "on" : ""}" data-act="ret-split" data-v="${x}">${esc(splits[x].l)}</button>`).join("")}</div>
+  <div class="tbl"><table><tr><th>${esc(splits[k].l.replace(/^By /, "").replace(/^./, s => s.toUpperCase()))}</th><th>Members</th><th>At risk</th><th>30 days</th><th>90 days</th><th>180 days</th></tr>
+  ${Object.entries(groups).sort((a, b) => b[1].length - a[1].length).map(([g, l]) => `<tr><td style="white-space:normal;min-width:110px">${esc(g)}</td><td>${l.length}</td><td>${l.filter(c => ["risk", "inactive"].includes(riskOf(c).st)).length}</td>${retCells(l).map(x => `<td>${retCell(x)}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="6" class="muted">No members yet.</td></tr>`}</table></div></section>`;
+  const wks = [5, 4, 3, 2, 1, 0], lab = k2 => k2 ? `−${k2}w` : "Now";
+  const series = wks.map(k2 => { const rs = members.map(c => riskOf(c, k2)); return {k: k2, a: rs.filter(r => r.st === "active").length, r: rs.filter(r => r.st === "risk" || r.st === "inactive").length}; });
+  out += `<section class="card"><h3>Active members per week</h3>${barChart(series.map(s => ({label: lab(s.k), v: s.a})))}<h3>At risk or inactive per week</h3>${barChart(series.map(s => ({label: lab(s.k), v: s.r})))}<span class="small muted">Worked out from each member's weekly workout counts, so earlier weeks are approximate.</span></section>`;
+  return out;
+}
+function viewTrainerRetention(){
+  const squads = Social.squads || [], classes = Social.classes || [];
+  const splits = {
+    class: {l: "By class", none: "No class", of: c => classes.filter(k => !k.members || k.members.includes(c.id)).map(k => k.title)},
+    troop: {l: "By troop", none: "No troop", of: c => squads.filter(q => (q.members || []).includes(c.id)).map(q => q.name)},
+    program: {l: "By program", none: "No program", of: c => c.program ? c.program.name || "Program" : "No program"}
+  };
+  return `<div class="row" style="flex-wrap:nowrap"><button class="iconbtn" data-act="ttab" data-v="clients" aria-label="Back">${I.back}</button><div><span class="eyebrow">Coach</span><h1 style="font-size:26px">Retention</h1></div></div>` + retentionHTML(Social.tBoard || [], splits);
+}
+function viewOwnerRetention(){
+  const T = Owner.trainers, members = T.flatMap(t => (Owner.clients[t.id] || []).map(c => ({...c, _t: t.name || t.email || "Trainer", _tid: t.id})));
+  const splits = {
+    trainer: {l: "By trainer", none: "No trainer", of: c => c._t},
+    class: {l: "By class", none: "No class", of: c => (Owner.cls[c._tid] || []).filter(k => !k.members || k.members.includes(c.id)).map(k => k.title)},
+    program: {l: "By program", none: "No program", of: c => c.program ? c.program.name || "Program" : "No program"}
+  };
+  let out = `<div><span class="eyebrow">${esc(Cloud.me.gymName || "Your gym")}</span><h1>Retention</h1><span class="small muted">Statuses and counts only: no weights, health data or trainer notes.</span></div>`;
+  if (!T.length) return out + `<div class="empty">No trainers yet. Share your gym code with your trainers.</div>`;
+  out += retentionHTML(members, splits);
+  const rows = T.map(t => { const cl = Owner.clients[t.id] || [], calls = Owner.calls[t.id] || [], r = retCells(cl);
+    return `<tr><td>${esc(t.name || t.email)}</td><td>${cl.length}</td><td>${cl.filter(c => ["risk", "inactive"].includes(riskOf(c).st)).length}</td><td>${calls.length}</td><td>${calls.filter(x => x.outcome === "back").length}</td><td>${calls.filter(x => x.outcome === "lost").length}</td>${r.map(x => `<td>${retCell(x)}</td>`).join("")}</tr>`; }).join("");
+  out += `<section class="card"><h3>Trainer follow-ups</h3><span class="small muted">Calls logged from each trainer's weekly list, last 8 weeks, and how long their clients keep training.</span>
+  <div class="tbl"><table><tr><th>Trainer</th><th>Clients</th><th>At risk</th><th>Follow-ups</th><th>Back training</th><th>Lost</th><th>30 days</th><th>90 days</th><th>180 days</th></tr>${rows}</table></div></section>`;
+  return out;
+}
+
 /* ---- metrics from client summaries (no private data) ---- */
-function clientStatus(c){ const d = c.lastWorkout && c.lastWorkout.date; if (!d) return "never"; const ago = daysBetween(d, today()); return ago <= 14 ? "active" : ago <= 30 ? "risk" : "inactive"; }
+function clientStatus(c){ return riskOf(c).st; }
 function last4(c){ const wk = c.weekCounts || {}; let n = 0; for (let i = 0; i < 4; i++) n += +wk[addDays(mondayOf(today()), -7 * i)] || 0; return n; }
 function trainerStats(tid){
   const cl = Owner.clients[tid] || [], n = cl.length;
-  const st = {n, active: 0, risk: 0, inactive: 0, never: 0, w4: 0, planned4: 0, streak: 0, pbs30: 0, week: 0};
-  cl.forEach(c => { st[clientStatus(c)]++; const w = last4(c); st.w4 += w; st.planned4 += (+c.planned || 0) * 4; st.streak += +c.streak || 0; st.pbs30 += +c.pbs30 || 0; st.week += fresh(c, "weekSessions"); });
+  const st = {n, active: 0, risk: 0, inactive: 0, never: 0, paused: 0, none: 0, isNew: 0, w4: 0, planned4: 0, streak: 0, pbs30: 0, week: 0};
+  cl.forEach(c => { const r = riskOf(c); st[r.st]++; if (r.isNew) st.isNew++; const w = last4(c); st.w4 += w; st.planned4 += (+c.planned || 0) * 4; st.streak += +c.streak || 0; st.pbs30 += +c.pbs30 || 0; st.week += fresh(c, "weekSessions"); });
   st.perWeek = n ? st.w4 / n / 4 : 0;
   st.adherence = st.planned4 ? Math.min(100, Math.round(st.w4 / st.planned4 * 100)) : null;
   st.avgStreak = n ? st.streak / n : 0;
@@ -5081,9 +5454,9 @@ function ownerHeader(){
   return `<header class="top"><div class="wrap"><img class="mark lt" src="${MARK_NAVY}" alt=""><img class="mark dk" src="${MARK_WHITE}" alt=""><div class="brand"><b>Primal Strength</b><span>Gym owner · ${esc(Cloud.me.gymName || "")}</span></div></div></header>`;
 }
 function ownerNav(){
-  const t = [["owner", "Dashboard", I.chart], ["oaccount", "Account", I.gear]];
+  const t = [["owner", "Dashboard", I.chart], ["oretention", "Retention", I.squad], ["oaccount", "Account", I.gear]];
   const cur = S.view === "otrainer" ? "owner" : S.view;
-  return `<nav class="tabs" aria-label="Sections"><div class="wrap" style="grid-template-columns:repeat(2,1fr)">${t.map(([k, l, ic]) => `<button data-act="otab" data-v="${k}" class="${cur === k ? "on" : ""}">${ic}${l}</button>`).join("")}</div></nav>`;
+  return `<nav class="tabs" aria-label="Sections"><div class="wrap" style="grid-template-columns:repeat(3,1fr)">${t.map(([k, l, ic]) => `<button data-act="otab" data-v="${k}" class="${cur === k ? "on" : ""}">${ic}${l}</button>`).join("")}</div></nav>`;
 }
 function viewOwner(){
   const nm = firstName(), T = Owner.trainers;
@@ -5095,14 +5468,16 @@ function viewOwner(){
   const sum = k => all.reduce((a, s) => a + (s[k] || 0), 0);
   const n = sum("n"), p4 = sum("planned4");
   out += `<section class="grid3">
-  <div class="stat"><b class="num">${T.length}</b><span>Trainers</span></div><div class="stat"><b class="num">${n}</b><span>Clients</span></div><div class="stat"><b class="num">${sum("active")}</b><span>Active (14 days)</span></div>
-  <div class="stat"><b class="num">${sum("week")}</b><span>Workouts this week</span></div><div class="stat"><b class="num">${p4 ? Math.min(100, Math.round(sum("w4") / p4 * 100)) + "%" : "–"}</b><span>Adherence, 4 weeks</span></div><div class="stat"><b class="num">${sum("pbs30")}</b><span>PBs, 30 days</span></div></section>`;
+  <div class="stat"><b class="num">${T.length}</b><span>Trainers</span></div><div class="stat"><b class="num">${n}</b><span>Clients</span></div><div class="stat"><b class="num">${sum("active")}</b><span>Active</span></div>
+  <div class="stat"><b class="num">${sum("week")}</b><span>Workouts this week</span></div><div class="stat"><b class="num">${p4 ? Math.min(100, Math.round(sum("w4") / p4 * 100)) + "%" : "–"}</b><span>Adherence, 4 weeks</span></div><div class="stat"><b class="num">${sum("pbs30")}</b><span>PBs, 30 days</span></div>
+  <div class="stat"><b class="num">${sum("risk") + sum("inactive")}</b><span>At risk or inactive</span></div><div class="stat"><b class="num">${sum("paused")}</b><span>Paused</span></div><div class="stat"><b class="num">${sum("isNew")}</b><span>New (first 60 days)</span></div></section>
+  <button class="btn block" data-act="otab" data-v="oretention">Retention dashboard: who stays, by trainer, class and program</button>`;
   const weeks = Array.from({length: 8}, (_, i) => addDays(mondayOf(today()), -7 * (7 - i)));
   const rows = weeks.map(m => ({label: shortDate(m).replace(/\s.*/, "") + "·", v: T.reduce((a, t) => a + (Owner.clients[t.id] || []).reduce((b, c) => b + (+((c.weekCounts || {})[m]) || 0), 0), 0)}));
   out += `<section class="card"><h3>Workouts per week, whole gym</h3>${barChart(rows.map((r, i) => ({...r, label: i === 7 ? "Now" : `−${7 - i}w`})))}<span class="small muted">Last 8 weeks. "now" is this week so far.</span></section>`;
   out += `<section class="card"><h3>Trainers</h3><div class="tbl"><table><tr><th>Trainer</th><th>Clients</th><th>Active</th><th>Workouts / client / wk</th><th>Adherence</th><th>Avg streak</th><th>PBs 30d</th><th>Live challenges</th></tr>
   ${T.map((t, i) => { const s = all[i]; return `<tr><td><button class="btn ghost" style="padding:0" data-act="otrainer" data-id="${t.id}">${esc(t.name || t.email)}</button></td><td>${s.n}</td><td>${s.active}${s.n ? ` (${s.retention}%)` : ""}</td><td>${s.n ? fmt(s.perWeek, 1) : "–"}</td><td>${pct(s.adherence)}</td><td>${s.n ? fmt(s.avgStreak, 1) : "–"}</td><td>${s.pbs30}</td><td>${s.liveChals}${s.inChallenges ? ` · ${s.inChallenges} in` : ""}</td></tr>`; }).join("")}</table></div>
-  <span class="small muted">Active = workout in the last 14 days. Adherence = workouts logged ÷ planned sessions over the last 4 weeks. Clients appear once they open the latest app.</span></section>`;
+  <span class="small muted">Active = training at their own usual pace. At risk = well below their usual pace, or no workout for 14 days (7 for new members). Adherence = workouts logged ÷ planned sessions over the last 4 weeks. Clients appear once they open the latest app.</span></section>`;
   const board = T.flatMap(t => (Owner.clients[t.id] || []).map(c => ({id: c.id, name: c.name, v: fresh(c, "weekPoints"), s: fresh(c, "weekSessions"), k: c.streak || 0, tr: t.name}))).sort((a, b) => b.v - a.v || b.s - a.s).slice(0, 10);
   out += `<section class="card"><div class="row between"><h3>Gym leaderboard</h3><span class="small muted">This week</span></div>${boardTable(board, null, {extra: [["Workouts", r => r.s], ["Trainer", r => esc(r.tr || "")]], empty: "No activity this week yet."})}</section>`;
   return out;
@@ -5110,14 +5485,13 @@ function viewOwner(){
 function viewOwnerTrainer(){
   const t = Owner.trainers.find(x => x.id === Owner.sel); if (!t){ S.view = "owner"; return viewOwner(); }
   const s = trainerStats(t.id), cl = [...(Owner.clients[t.id] || [])];
-  const order = {active: 0, risk: 1, inactive: 2, never: 3};
-  cl.sort((a, b) => order[clientStatus(a)] - order[clientStatus(b)] || (a.name || "").localeCompare(b.name || ""));
+  cl.sort((a, b) => RISK_ORDER[clientStatus(a)] - RISK_ORDER[clientStatus(b)] || (a.name || "").localeCompare(b.name || ""));
   let out = `<div class="row" style="flex-wrap:nowrap"><button class="iconbtn" data-act="otab" data-v="owner" aria-label="Back">${I.back}</button><div style="min-width:0"><span class="eyebrow">Trainer</span><h1 style="font-size:26px">${esc(t.name || t.email)}</h1></div></div>
-  <section class="grid3"><div class="stat"><b class="num">${s.n}</b><span>Clients</span></div><div class="stat"><b class="num">${pct(s.retention)}</b><span>Active (14 days)</span></div><div class="stat"><b class="num">${pct(s.adherence)}</b><span>Adherence, 4 weeks</span></div>
+  <section class="grid3"><div class="stat"><b class="num">${s.n}</b><span>Clients</span></div><div class="stat"><b class="num">${pct(s.retention)}</b><span>Active</span></div><div class="stat"><b class="num">${pct(s.adherence)}</b><span>Adherence, 4 weeks</span></div>
   <div class="stat"><b class="num">${s.n ? fmt(s.perWeek, 1) : "–"}</b><span>Workouts / client / week</span></div><div class="stat"><b class="num">${s.pbs30}</b><span>PBs, 30 days</span></div><div class="stat"><b class="num">${s.risk + s.inactive + s.never}</b><span>At risk or inactive</span></div></section>`;
-  const pill = st => st === "active" ? `<span class="pill good">Active</span>` : st === "risk" ? `<span class="pill warn">At risk</span>` : st === "inactive" ? `<span class="pill bad">Inactive</span>` : `<span class="pill">No workouts</span>`;
-  out += `<section class="card"><h3>Clients</h3>${cl.length ? `<div class="tbl"><table><tr><th>Client</th><th>Status</th><th>Program</th><th>Last workout</th><th>This week</th><th>4 weeks</th><th>Streak</th><th>PBs 30d</th></tr>
-  ${cl.map(c => { const pr = c.program; return `<tr><td>${esc(c.name)}</td><td>${pill(clientStatus(c))}</td><td style="white-space:normal;min-width:140px">${pr ? `${esc(pr.name)} · ${pr.days} d/wk${pr.weeks ? ` · wk ${Math.max(0, Math.min(pr.week, pr.weeks))} of ${pr.weeks}` : ""}${pr.event ? ` · ${esc(pr.event.name || "event")} ${shortDate(pr.event.date)}` : ""}` : "None"}</td><td>${c.lastWorkout ? shortDate(c.lastWorkout.date) : "–"}</td><td>${fresh(c, "weekSessions")}${c.planned ? ` / ${c.planned}` : ""}</td><td>${last4(c)}</td><td>${c.streak ? "🔥" + c.streak : "–"}</td><td>${c.pbs30 || 0}</td></tr>`; }).join("")}</table></div>` : `<div class="empty">No clients yet, or clients haven't opened the latest app.</div>`}</section>`;
+  const calls = Owner.calls[t.id] || [];
+  out += `<section class="card"><h3>Clients</h3>${cl.length ? `<div class="tbl"><table><tr><th>Client</th><th>Status</th><th>Follow-up</th><th>Membership</th><th>Program</th><th>Last workout</th><th>This week</th><th>4 weeks</th><th>Streak</th><th>PBs 30d</th></tr>
+  ${cl.map(c => { const pr = c.program, r = riskOf(c), k = lastCall(calls, c.id); return `<tr><td>${esc(c.name)}</td><td style="white-space:normal;min-width:150px">${riskPill(r)}${r.st !== "active" && r.why ? `<div class="small muted">${esc(r.why)}</div>` : ""}</td><td>${k ? `${esc(callLabel(k.outcome))}, ${shortDate(k.date)}` : "–"}</td><td>${c.memberEnd ? (memberEndPill(c.memberEnd) || `ends ${shortDate(c.memberEnd)}`) : "–"}</td><td style="white-space:normal;min-width:140px">${pr ? `${esc(pr.name)} · ${pr.days} d/wk${pr.weeks ? ` · wk ${Math.max(0, Math.min(pr.week, pr.weeks))} of ${pr.weeks}` : ""}${pr.event ? ` · ${esc(pr.event.name || "event")} ${shortDate(pr.event.date)}` : ""}` : "None"}</td><td>${c.lastWorkout ? shortDate(c.lastWorkout.date) : "–"}</td><td>${fresh(c, "weekSessions")}${c.planned ? ` / ${c.planned}` : ""}</td><td>${last4(c)}</td><td>${c.streak ? "🔥" + c.streak : "–"}</td><td>${c.pbs30 || 0}</td></tr>`; }).join("")}</table></div>` : `<div class="empty">No clients yet, or clients haven't opened the latest app.</div>`}</section>`;
   { const att = Owner.att[t.id] || [], months = [...new Set([monthKey(today()), monthKey(addDays(today().slice(0, 8) + "01", -1))])], m = S.ui.oattMonth && months.includes(S.ui.oattMonth) ? S.ui.oattMonth : months[0];
     out += `<section class="card"><div class="row between"><h3>Attendance</h3><button class="btn ghost" data-act="oatt-csv" data-v="${m}">Export .csv</button></div><span class="small muted">Workouts the trainer approved and classes they took a roll call for. Use it for billing.</span>
     <div class="chips">${months.map(k => `<button class="chip ${k === m ? "on" : ""}" data-act="oatt-month" data-v="${k}">${esc(monthName(k))}</button>`).join("")}</div>${attendanceTable(att, m)}</section>`; }

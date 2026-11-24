@@ -15,7 +15,7 @@ Builds in order. Each groups items that share setup; later builds depend on earl
 - Classes: recurring sessions for a troop (e.g. Mon/Wed/Fri 7 am); clients see their class schedule.
 - Coach challenges by sport (swim metres, rounds, HYROX time and more).
 
-**2. Retention — agreed 24 Nov 2026, next to build (details under Retention features)**
+**2. Retention — BUILT 24 Nov 2026 (see Built, retention build)**
 - Personal risk score (each member against their own usual pattern).
 - Trainer weekly call list with WhatsApp link and outcomes (Called / Back training / Lost).
 - Pause / holiday mode.
@@ -64,7 +64,7 @@ Builds in order. Each groups items that share setup; later builds depend on earl
 
 Goal: spot members slipping earlier, get trainers and owners to act, give members reasons to stay, and show owners what works. Most of this runs on the free Firebase plan; exceptions are marked.
 
-### Next build (agreed 24 Nov 2026: items 1–6 plus 8, 9 and 15)
+### Built in the retention build (items 1–6 plus 8, 9 and 15)
 1. **Personal risk score.** Compare each member with their own usual pattern (average workouts per week over the last 4–8 weeks), not a fixed 14 days. Flag when this week falls clearly below their norm (e.g. 3/week → 1/week). Show the reason on the owner and trainer views.
 2. **Trainer weekly call list.** Each trainer sees "members to contact this week" from the risk score. A one-tap WhatsApp button opens a wa.me link with a ready-made message (free, no WhatsApp API). Trainer records the outcome: Called / Back training / Lost. Owner sees the outcomes.
 3. **Pause / holiday mode.** Member (or trainer) pauses for travel or illness with a start and end date. Streaks, rings and the risk status freeze during the pause.
@@ -179,6 +179,19 @@ Goal: spot members slipping earlier, get trainers and owners to act, give member
 - Privacy documents: terms for gyms using the app, a data-breach response plan (72-hour reporting), a data-retention rule for inactive accounts.
 - Health report files on all devices: files uploaded to Firebase Storage so they appear on every signed-in device; trainer sees a file only when the report is shared. Needs Firebase's Blaze plan.
 - Push notifications for trainer alerts and buddy high-fives (needs Firebase Cloud Messaging).
+
+## Built (November 2026, retention build)
+- Personal risk score: each member is compared with their own usual training (average workouts a week over up to 6 earlier weeks, skipping paused weeks). At risk = last week clearly below their norm (e.g. 3 → 1), or a long gap for them, or 14 days with no workout; inactive after 30 days. The reason is shown ("1 workout last week; usually 3 a week"). Replaces the fixed 14-day rule on the owner dashboard.
+- First-60-days watch: new members are flagged sooner (7 days, smaller drops) and tagged "New" for trainers and owners; new members with no workout after a week are listed too.
+- Trainer weekly call list on Clients: "Members to contact this week", newest members first, with the reason, a one-tap WhatsApp link with a ready message (uses the member's number if they added one; Indian numbers get +91), and Called / Back training / Lost buttons. "Back training" drops them for the week; "Lost" hides them until they train again. Owner sees the outcomes.
+- Pause / holiday: member (Settings → Pause / holiday) or trainer (client overview → Pause training) sets first and last day off and a reason. Streaks don't break, rings shrink for paused days, the risk status shows "Paused", and paused weeks don't count in the usual pattern. Owner sees only the dates. "Illness"/"Injury" reasons are offered only with health consent and are cleared if health data is switched off.
+- Comeback week: after 10+ days off, the next 7 days are lighter (about a third fewer sets, about 10% less weight, 20% shorter runs/cardio). Banner on Today with "Train as normal instead"; trainer sees it on the client overview.
+- Monthly report card: workouts, personal bests, total kg lifted, km run, cardio minutes, streak, weight/waist change. Shows on Today in the first week of the month, and on Progress for this and the last 3 months; "Share as image" (WhatsApp/Instagram on Android; on the web the image opens to long-press and save). Trainers see it on the client's Progress tab; owners don't.
+- Retention dashboard: owner gets a new Retention tab; trainers open it from the call list. Members still training at 30/90/180 days by month joined; compare by trainer, class, troop (trainer only) and program; active and at-risk members per week for the last 6 weeks; trainer follow-up table for the owner.
+- Membership end date: member (Edit profile) or trainer (client overview) enters it; trainers see "Membership ends in N days" for the last 30 days, owners see it in the client table.
+- Anniversary badges: 3 months, 6 months and one year as a member.
+- WhatsApp number (optional) in Edit profile, seen only by the trainer.
+- Database rules changed: trainers may set a client's pauses and membership end date (and copy them to the client's summary); new trainers/{tid}/calls collection (trainer writes, gym owner reads). 149 rule checks pass. Privacy policy v1.2 and Play Data safety notes updated (optional phone number, pauses, follow-ups); no new consent needed.
 
 ## Built (November 2026, coach tools build)
 - Workout timers: AMRAP (tap +1 round), EMOM, Tabata and For Time (Done button, optional time cap), with a 10-second countdown, beeps at every change and 3-2-1, pause, full screen and landscape (numbers fill the screen sideways). Open from Workouts → Timer, the rest-timer button in a workout, a "Timer" button on metcon/race-simulation groups, and the gym big screen. Result can be added to the workout notes.

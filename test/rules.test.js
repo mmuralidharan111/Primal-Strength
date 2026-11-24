@@ -198,6 +198,29 @@ const allow = (l, f) => expect("allow", l, f), deny = (l, f) => expect("deny", l
   await deny("trainer joins a gym through a code that points elsewhere", () => updateDoc(doc(coach2, "users/coach2"), {gymId: "mallory", gymCode: "GYM123"}));
   await allow("gym owner deletes their own join code", () => deleteDoc(doc(olga, "gymcodes/OLG123")));
 
+  console.log("Retention: pauses, membership end, call list");
+  await allow("client pauses their own training", () => updateDoc(doc(asha, "users/asha"), {pauses: [{from: "2026-12-01", to: "2026-12-07", why: "travel", by: "member"}]}));
+  await allow("trainer pauses their client", () => updateDoc(doc(coach, "users/asha"), {pauses: [{from: "2026-12-01", to: "2026-12-10", why: "ill", by: "trainer"}]}));
+  await allow("trainer sets their client's membership end date", () => updateDoc(doc(coach, "users/asha"), {memberEnd: "2027-01-31"}));
+  await deny("trainer changes their client's settings", () => updateDoc(doc(coach, "users/asha"), {settings: {phone: "123"}}));
+  await deny("trainer sets a malformed membership end", () => updateDoc(doc(coach, "users/asha"), {memberEnd: "x".repeat(40)}));
+  await deny("another trainer pauses someone else's client", () => updateDoc(doc(coach2, "users/asha"), {pauses: []}));
+  await deny("stranger pauses a client", () => updateDoc(doc(mallory, "users/asha"), {pauses: []}));
+  await allow("trainer copies pause dates to the client's summary", () => updateDoc(doc(coach, "public/asha"), {pauses: [{from: "2026-12-01", to: "2026-12-10"}], memberEnd: "2027-01-31"}));
+  await deny("trainer changes other fields of the client's summary", () => updateDoc(doc(coach, "public/asha"), {streak: 99}));
+  await deny("another trainer edits the client's summary", () => updateDoc(doc(coach2, "public/asha"), {memberEnd: "2027-01-31"}));
+  await allow("trainer records a follow-up call", () => setDoc(doc(coach, "trainers/coach/calls/asha_2026-11-23"), {clientId: "asha", clientName: "Asha", week: "2026-11-23", date: "2026-11-24", outcome: "called", why: "No workout for 15 days"}));
+  await allow("trainer changes the outcome", () => updateDoc(doc(coach, "trainers/coach/calls/asha_2026-11-23"), {outcome: "back"}));
+  await deny("trainer records an unknown outcome", () => setDoc(doc(coach, "trainers/coach/calls/asha_x"), {clientId: "asha", week: "2026-11-23", outcome: "shouted"}));
+  await deny("trainer adds extra data to a call", () => setDoc(doc(coach, "trainers/coach/calls/asha_y"), {clientId: "asha", week: "2026-11-23", outcome: "called", weight: 61}));
+  await deny("trainer records a call about someone else's client", () => setDoc(doc(coach, "trainers/coach/calls/bob_1"), {clientId: "bob", week: "2026-11-23", outcome: "called"}));
+  await deny("someone writes into another trainer's call list", () => setDoc(doc(coach2, "trainers/coach/calls/asha_z"), {clientId: "asha", week: "2026-11-23", outcome: "lost"}));
+  await allow("gym owner reads the trainer's follow-up outcomes", () => getDocs(collection(gita, "trainers/coach/calls")));
+  await deny("another gym's owner reads the follow-ups", () => getDocs(collection(as("olga"), "trainers/coach/calls")));
+  await deny("a client reads the trainer's call list", () => getDocs(collection(asha, "trainers/coach/calls")));
+  await deny("gym owner writes a follow-up", () => setDoc(doc(gita, "trainers/coach/calls/asha_w"), {clientId: "asha", week: "2026-11-23", outcome: "lost"}));
+  await allow("trainer deletes a follow-up", () => deleteDoc(doc(coach, "trainers/coach/calls/asha_2026-11-23")));
+
   console.log("Deleting an account");
   await deny("stranger deletes a client's account", () => deleteDoc(doc(bob, "users/asha")));
   await deny("trainer deletes their client's account", () => deleteDoc(doc(coach, "users/asha")));

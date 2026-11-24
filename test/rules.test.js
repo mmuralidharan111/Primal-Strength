@@ -115,6 +115,12 @@ const allow = (l, f) => expect("allow", l, f), deny = (l, f) => expect("deny", l
   await allow("client sends their trainer a workout alert", () => addDoc(collection(asha, "trainers/coach/alerts"), {clientId: "asha", title: "Day B"}));
   await deny("client sends an alert pretending to be someone else", () => addDoc(collection(asha, "trainers/coach/alerts"), {clientId: "bob", title: "Day B"}));
   await deny("client sends an alert to a trainer they don't have", () => addDoc(collection(bob, "trainers/coach/alerts"), {clientId: "bob", title: "Day B"}));
+  await allow("client sends a full workout alert", () => addDoc(collection(asha, "trainers/coach/alerts"), {clientId: "asha", clientName: "Asha", sessionId: "s2", title: "Day B", day: "B", date: "2026-11-03", week: 2, sets: 14, durationMin: 52, backPain: null, result: null, weight: 61, notes: "Felt strong", read: false}));
+  await allow("client sends a profile-change alert", () => addDoc(collection(asha, "trainers/coach/alerts"), {clientId: "asha", clientName: "Asha", kind: "profile", title: "updated their profile", text: "Changed: goal. Review their program.", date: "2026-11-03", read: false}));
+  await deny("client sends an alert with extra fields", () => addDoc(collection(asha, "trainers/coach/alerts"), {clientId: "asha", title: "Day B", approved: true}));
+  await deny("client sends a very long alert", () => addDoc(collection(asha, "trainers/coach/alerts"), {clientId: "asha", title: "Day B", notes: "x".repeat(2001)}));
+  await deny("client sends an alert of an unknown kind", () => addDoc(collection(asha, "trainers/coach/alerts"), {clientId: "asha", kind: "message", text: "Hi"}));
+  await deny("client sends an alert marked as already read", () => addDoc(collection(asha, "trainers/coach/alerts"), {clientId: "asha", title: "Day B", read: true}));
   await allow("client finds their own alerts", () => getDocs(query(collection(asha, "trainers/coach/alerts"), where("clientId", "==", "asha"))));
   await deny("client lists all of the trainer's alerts", () => getDocs(collection(asha, "trainers/coach/alerts")));
 

@@ -21,7 +21,7 @@ A workout app for **clients, trainers and gym owners**, built by Manas (Bengalur
 | `docs/play-data-safety.md` | Ready-to-paste Play Console Data safety answers; keep in step with the privacy policy. |
 | `firestore.rules` | Source of truth for the database rules. **Manas pastes these into Firebase console → Firestore → Rules → Publish** after every change — always remind him and give him the full file. |
 | `test/smoke.js` | jsdom end-to-end test against a fake Firestore/Auth (offline, client, trainer, owner, buddies, challenges, consent, deletion…). Failures print `::error` annotations. |
-| `test/rules.test.js` | 122 security-rule checks on the official Firestore emulator, including a security-audit section (cross-account reads/writes, trainer and gym-owner scope, gym codes). |
+| `test/rules.test.js` | 128 security-rule checks on the official Firestore emulator, including a security-audit section (cross-account reads/writes, trainer and gym-owner scope, gym codes). |
 | `.github/workflows/build-apk.yml` | On push to `main` (or a manual run on any branch): `npm ci` → bundle Firebase compat SDK into `www/vendor/` → smoke test → rules tests → Capacitor 7 Android build (keep-screen-on patch, VIBRATE + COARSE_LOCATION permissions, backups and phone-to-phone transfer off) → signed **release** APK, checked not debuggable → then, only on `main`: GitHub release `build-N` (separate `release` job) and Pages deploy. The build job is read-only; only those two jobs can publish. |
 | `.github/workflows/rules-check.yml` | Same tests on `test/**` branches without releasing — use it to try risky changes. |
 | `BACKLOG.md` | Agreed next build, priority tiers, everything requested, and what's been built. |

@@ -6,6 +6,8 @@ service cloud.firestore {
     function userData(uid) { return get(/databases/$(database)/documents/users/$(uid)).data; }
     function isTrainerOf(uid) { return signedIn() && userData(uid).get('trainerId', null) == request.auth.uid; }
     // A gym's id is its owner's user id, so "owns gym X" is simply X == request.auth.uid
+    // A text field that is absent, empty (null) or a string of at most n characters
+    function textUpTo(d, f, n) { return d.get(f, null) == null || (d[f] is string && d[f].size() <= n); }
     function ownsGymOfTrainer(tid) { return signedIn() && tid != null && userData(tid).get('gymId', null) == request.auth.uid; }
 
     // A person's profile, settings and program
@@ -172,8 +174,17 @@ service cloud.firestore {
       allow read, update, delete: if isMe(tid);
       // A client can see and remove the alerts about their own workouts (used when deleting their account)
       allow read, delete: if signedIn() && resource.data.clientId == request.auth.uid;
+      // Only the fields a real alert has (workout finished, profile changed, account deleted), with length limits
       allow create: if signedIn() && request.resource.data.clientId == request.auth.uid
-        && userData(request.auth.uid).get('trainerId', null) == tid;
+        && userData(request.auth.uid).get('trainerId', null) == tid
+        && request.resource.data.keys().hasOnly(['clientId', 'clientName', 'kind', 'sessionId', 'title', 'text', 'day', 'date',
+             'week', 'sets', 'durationMin', 'backPain', 'result', 'weight', 'notes', 'read', 'ts'])
+        && request.resource.data.get('kind', 'workout') in ['workout', 'profile', 'deleted']
+        && request.resource.data.get('read', false) == false
+        && textUpTo(request.resource.data, 'clientName', 120) && textUpTo(request.resource.data, 'title', 200)
+        && textUpTo(request.resource.data, 'text', 500) && textUpTo(request.resource.data, 'result', 300)
+        && textUpTo(request.resource.data, 'notes', 2000) && textUpTo(request.resource.data, 'day', 20)
+        && textUpTo(request.resource.data, 'sessionId', 80) && textUpTo(request.resource.data, 'date', 10);
     }
   }
 }

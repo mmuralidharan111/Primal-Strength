@@ -1787,7 +1787,7 @@ function getStartedCard(){
     <button class="btn primary block" data-act="ob-retake">Answer the questionnaire</button>
   </div>
   <div style="display:flex;flex-direction:column;gap:10px;border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--sunk)">
-    <div class="row" style="flex-wrap:nowrap;align-items:flex-start;gap:12px"><div class="dayblock sm" style="background:var(--accent);color:#fff">2</div><div><b>Start with a trainer</b><div class="small muted">${canTrainer ? "Enter your trainer's 6-character invite code. They'll build your program and follow your progress." : "Create an account in the Primal Strength app, then enter your trainer's invite code."}</div></div></div>
+    <div class="row" style="flex-wrap:nowrap;align-items:flex-start;gap:12px"><div class="dayblock sm" style="background:var(--accent);color:#fff">2</div><div><b>Start with a trainer</b><div class="small muted">${canTrainer ? "Enter your trainer's invite code. They'll build your program and follow your progress." : "Create an account in the Primal Strength app, then enter your trainer's invite code."}</div></div></div>
     ${canTrainer ? `<div class="row" style="flex-wrap:nowrap"><input id="e-tcode" placeholder="Invite code" autocapitalize="characters" style="flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:16px;background:var(--surface);color:var(--ink)"><button class="btn blue" data-act="connect-trainer-e">Connect</button></div>` : ""}
   </div>
   ${personal ? `<button class="btn ghost" data-act="selftpl" style="align-self:center">Or browse ready-made programs</button>` : ""}
@@ -3196,7 +3196,7 @@ async function uploadLocal(){
 async function makeInviteCode(name){
   const A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   for (let i = 0; i < 6; i++){
-    const code = Array.from({length:6}, () => A[Math.floor(Math.random()*A.length)]).join("");
+    const code = Array.from({length: 8}, () => A[Math.floor(Math.random() * A.length)]).join("");
     try { await Cloud.db.collection("codes").doc(code).set({trainerId: Cloud.user.uid, name: name || ""}); await uref().update({inviteCode: code}); return code; } catch(e){}
   }
   toast("Couldn't create an invite code. Try again from Account.");
@@ -3236,14 +3236,14 @@ function sendWorkoutAlert(session){
   if (!isCloudClient() || !Cloud.me.trainerId) return;
   const sets = session.exercises.reduce((a, e) => a + e.sets.filter(s => s.done).length, 0);
   Cloud.db.collection("trainers").doc(Cloud.me.trainerId).collection("alerts").add({...clean({
-    clientId: Cloud.user.uid, clientName: Cloud.me.name || Cloud.me.email, sessionId: session.id, title: session.title, day: session.day,
-    date: session.date, week: session.week, sets, durationMin: session.durationMin, backPain: session.backPain, result: session.event ? (EVENT_KINDS[session.event.kind] || {}).l + (eventSummary(session.event) ? " · " + eventSummary(session.event) : "") : null,
-    weight: session.pre ? session.pre.weight : null, notes: session.notes || "", read: false
+    clientId: Cloud.user.uid, clientName: String(Cloud.me.name || Cloud.me.email || "").slice(0, 120), sessionId: session.id, title: String(session.title || "").slice(0, 200), day: session.day,
+    date: session.date, week: session.week, sets, durationMin: session.durationMin, backPain: session.backPain, result: session.event ? ((EVENT_KINDS[session.event.kind] || {}).l + (eventSummary(session.event) ? " · " + eventSummary(session.event) : "")).slice(0, 300) : null,
+    weight: session.pre ? session.pre.weight : null, notes: String(session.notes || "").slice(0, 2000), read: false
   }), ...{ts: ts()}}).catch(() => {});
 }
 async function connectTrainer(code){
   code = (code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if (code.length !== 6) return toast("Invite codes are 6 letters and numbers.");
+  if (code.length !== 6 && code.length !== 8) return toast("Invite codes are 8 letters and numbers (older ones have 6).");
   try {
     const d = await Cloud.db.collection("codes").doc(code).get();
     if (!d.exists) return toast("No trainer has that code. Check it and try again.");
@@ -3529,7 +3529,7 @@ function accountSection(){
   if (!Cloud.user) return `<span class="muted small">Create an account to keep your log safe online, use it on more than one device, and connect with a trainer.</span><div class="grid2"><button class="btn blue" data-act="auth" data-v="up">Create account</button><button class="btn" data-act="auth" data-v="in">Sign in</button></div>`;
   const me = Cloud.me || {};
   return `<span class="muted small">Signed in as ${esc(Cloud.user.email)}. Your log syncs to your account.</span>
-  <h3>Trainer</h3>${me.trainerId ? `<span class="small">Connected to <b>${esc(me.trainerName || "your trainer")}</b>. They can see your workouts and set your program.</span><button class="btn danger block" data-act="ask-disconnect">Disconnect from trainer</button>` : `<label class="f">Trainer's invite code<input id="t-code" autocapitalize="characters" placeholder="6 letters and numbers"></label><button class="btn blue block" data-act="connect-trainer">Connect</button>`}
+  <h3>Trainer</h3>${me.trainerId ? `<span class="small">Connected to <b>${esc(me.trainerName || "your trainer")}</b>. They can see your workouts and set your program.</span><button class="btn danger block" data-act="ask-disconnect">Disconnect from trainer</button>` : `<label class="f">Trainer's invite code<input id="t-code" autocapitalize="characters" placeholder="8 letters and numbers"></label><button class="btn blue block" data-act="connect-trainer">Connect</button>`}
   <button class="btn block" data-act="signout">Sign out</button>`;
 }
 
@@ -4161,7 +4161,7 @@ function syncBuddyListeners(){
 async function makeBuddyCode(){
   const A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   for (let i = 0; i < 6; i++){
-    const code = Array.from({length: 6}, () => A[Math.floor(Math.random() * A.length)]).join("");
+    const code = Array.from({length: 8}, () => A[Math.floor(Math.random() * A.length)]).join("");
     try { await Cloud.db.collection("buddycodes").doc(code).set({uid: Cloud.user.uid}); await uref().update({buddyCode: code}); return code; } catch(e){}
   }
 }
@@ -4201,7 +4201,7 @@ async function joinChallenge(id, on){
 }
 async function addBuddy(code){
   code = (code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if (code.length !== 6) return toast("Buddy codes are 6 letters and numbers.");
+  if (code.length !== 6 && code.length !== 8) return toast("Buddy codes are 8 letters and numbers (older ones have 6).");
   if (code === Cloud.me.buddyCode) return toast("That's your own code — share it with a friend.");
   try {
     const d = await Cloud.db.collection("buddycodes").doc(code).get();
@@ -5046,14 +5046,14 @@ async function setupGym(gymName){
   await Cloud.db.collection("gyms").doc(me).set({ownerId: me, name});
   const A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   for (let i = 0; i < 6; i++){
-    const code = Array.from({length: 6}, () => A[Math.floor(Math.random() * A.length)]).join("");
+    const code = Array.from({length: 8}, () => A[Math.floor(Math.random() * A.length)]).join("");
     try { await Cloud.db.collection("gymcodes").doc(code).set({gymId: me, name}); await uref().update({gymId: me, gymCode: code, gymName: name}); return; } catch(e){}
   }
   toast("Couldn't create a gym code. Try again from Account.");
 }
 async function joinGym(code){
   code = (code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if (code.length !== 6) return toast("Gym codes are 6 letters and numbers.");
+  if (code.length !== 6 && code.length !== 8) return toast("Gym codes are 8 letters and numbers (older ones have 6).");
   try {
     const d = await Cloud.db.collection("gymcodes").doc(code).get();
     if (!d.exists) return toast("No gym has that code. Check it and try again.");

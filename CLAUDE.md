@@ -65,6 +65,6 @@ Open `www/index.html` in a browser for a quick look: without `www/vendor/` Fireb
 ## Current state (24 Nov 2026)
 
 - Latest release: coach tools build (after build-48). Release = push to `main`.
-- Next build: number 2 in `BACKLOG.md` → Build plan (events and community). Not started; ask Manas before starting, and ask where race listings should come from.
+- Next build: number 2 in `BACKLOG.md` → Build plan (retention: risk score, call list, pause, comeback plan, report card, retention dashboard, plus membership end date, first-60-days watch, anniversary badges). Agreed 24 Nov 2026; not started — wait for Manas's go. Events and community is number 3; ask where race listings should come from.
 - Parallel: iPhone app is his priority — needs his Apple Developer Program account first.
 - See `BACKLOG.md` for the build plan and full details.

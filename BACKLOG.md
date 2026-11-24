@@ -15,7 +15,16 @@ Builds in order. Each groups items that share setup; later builds depend on earl
 - Classes: recurring sessions for a troop (e.g. Mon/Wed/Fri 7 am); clients see their class schedule.
 - Coach challenges by sport (swim metres, rounds, HYROX time and more).
 
-**2. Events and community**
+**2. Retention — agreed 24 Nov 2026, next to build (details under Retention features)**
+- Personal risk score (each member against their own usual pattern).
+- Trainer weekly call list with WhatsApp link and outcomes (Called / Back training / Lost).
+- Pause / holiday mode.
+- Comeback plan (lighter first week after 10+ days off).
+- Monthly report card, shareable as an image.
+- Retention dashboard for owner and trainer (30/90/180-day cohorts, trends).
+- Also: membership end date entered by hand (item 8), first-60-days watch (item 9), anniversary badges (item 15).
+
+**3. Events and community**
 - Event calendar of races, filtered city → state → region → country → part of a continent → continent → world.
 - Same-event community: find people targeting the same event (HYROX, CrossFit…), compare prep, option to share event-prep progress.
 - Event leaderboard not limited by location.
@@ -23,26 +32,26 @@ Builds in order. Each groups items that share setup; later builds depend on earl
 - Buddies by email (with permission).
 - Decision needed: where race listings come from (added by trainers/users, or a paid race-data source).
 
-**3. Play Store and phone features**
+**4. Play Store and phone features**
 - Play Store readiness: signed release bundle (.aab), target Android 16 (API 36), final app ID decision, store listing, Data safety and health declarations, 12-tester / 14-day closed test.
 - Firebase App Check.
 - Wearables via Health Connect (steps, heart rate, sleep, workouts, VO2 max; covers Fitbit, Samsung, Oura, Whoop, Strava, Ultrahuman and others).
 - Wearable data on the gym big screen (coach chooses what to show).
 - Email verification back on, after Firebase emails are sent through your own Gmail (SMTP).
 
-**4. Blaze plan: storage, notifications, AI** (switch on Firebase's paid Blaze plan once)
+**5. Blaze plan: storage, notifications, AI** (switch on Firebase's paid Blaze plan once)
 - Health report files on all devices (shared with the trainer only when the report is shared).
 - Progress photos for bodybuilding/physique.
 - Push notifications for trainer alerts and buddy high-fives.
 - AI insights for trainers and AI coaching (Claude API key).
 - Age verification and parental consent for under-18s (DPDP Act).
 
-**5. Video coaching**
+**6. Video coaching**
 - Scheduled call links per session (Google Meet / Jitsi), logged against the client.
-- Form-check videos: client records a set, trainer replies later (needs storage from build 4).
+- Form-check videos: client records a set, trainer replies later (needs storage from build 5).
 - In-app video calls through a provider (100ms, Agora, Daily).
 
-**6. Payments and gym management**
+**7. Payments and gym management**
 - Paid client plans: app only / weekly check-in without or with video / video every workout.
 - Billing and payouts for independent trainers (Razorpay Route, trainer KYC).
 - Gym management desktop app + backend: views (clients needing a new program, new clients without a program, defaulters, memberships ending), monthly/quarterly/6-monthly/yearly memberships.
@@ -55,7 +64,7 @@ Builds in order. Each groups items that share setup; later builds depend on earl
 
 Goal: spot members slipping earlier, get trainers and owners to act, give members reasons to stay, and show owners what works. Most of this runs on the free Firebase plan; exceptions are marked.
 
-### Proposed for the next build (Manas to confirm)
+### Next build (agreed 24 Nov 2026: items 1–6 plus 8, 9 and 15)
 1. **Personal risk score.** Compare each member with their own usual pattern (average workouts per week over the last 4–8 weeks), not a fixed 14 days. Flag when this week falls clearly below their norm (e.g. 3/week → 1/week). Show the reason on the owner and trainer views.
 2. **Trainer weekly call list.** Each trainer sees "members to contact this week" from the risk score. A one-tap WhatsApp button opens a wa.me link with a ready-made message (free, no WhatsApp API). Trainer records the outcome: Called / Back training / Lost. Owner sees the outcomes.
 3. **Pause / holiday mode.** Member (or trainer) pauses for travel or illness with a start and end date. Streaks, rings and the risk status freeze during the pause.
@@ -75,7 +84,7 @@ Goal: spot members slipping earlier, get trainers and owners to act, give member
 15. **Anniversary badges.** 3, 6 and 12 months as a member.
 16. **Exit reason.** One question when a member goes inactive or deletes their account: cost, time, injury, moved, lost interest, other. Owner sees totals.
 17. **Trainer retention ranking.** Owner view ranking trainers by how long their clients keep training.
-18. **Member reminders by push**, e.g. "You planned Mon/Wed/Fri, missed Wednesday", plus a streak-saver reminder. Needs push notifications (Blaze plan, build 4).
+18. **Member reminders by push**, e.g. "You planned Mon/Wed/Fri, missed Wednesday", plus a streak-saver reminder. Needs push notifications (Blaze plan, build 5).
 19. **WhatsApp automated reminders** through the WhatsApp Business API. Charged per message; later.
 20. **Revenue at risk.** At-risk members × membership fee. Needs membership fees (payments build) or a fee entered by hand.
 

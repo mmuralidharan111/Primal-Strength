@@ -66,7 +66,11 @@ service cloud.firestore {
     }
     match /gymcodes/{code} {
       allow get: if signedIn();   // look up one code; listing all codes is not allowed
-      allow create, update: if signedIn() && request.resource.data.gymId == request.auth.uid;
+      // Only a gym owner creates a code, for their own gym; only that owner can change or delete it later
+      allow create: if signedIn() && request.resource.data.gymId == request.auth.uid
+        && userData(request.auth.uid).role == 'owner';
+      allow update: if signedIn() && resource.data.gymId == request.auth.uid
+        && request.resource.data.gymId == request.auth.uid;
       allow delete: if signedIn() && resource.data.gymId == request.auth.uid;
     }
 

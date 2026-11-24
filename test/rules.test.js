@@ -184,6 +184,10 @@ const allow = (l, f) => expect("allow", l, f), deny = (l, f) => expect("deny", l
   await deny("another gym owner takes over a gym's join code", () => setDoc(doc(olga, "gymcodes/GYM123"), {gymId: "olga", name: "Other gym"}));
   await deny("a client (not a gym owner) creates a gym join code", () => setDoc(doc(mallory, "gymcodes/MAL999"), {gymId: "mallory", name: "Not a gym"}));
   await allow("gym owner creates their own gym join code", () => setDoc(doc(olga, "gymcodes/OLG123"), {gymId: "olga", name: "Other gym"}));
+  await allow("gym owner renames their own gym join code", () => updateDoc(doc(gita, "gymcodes/GYM123"), {name: "Primal Gym HSR"}));
+  await deny("gym owner hands their join code to another gym", () => updateDoc(doc(gita, "gymcodes/GYM123"), {gymId: "olga"}));
+  await deny("trainer joins a gym through a code that points elsewhere", () => updateDoc(doc(coach2, "users/coach2"), {gymId: "mallory", gymCode: "GYM123"}));
+  await allow("gym owner deletes their own join code", () => deleteDoc(doc(olga, "gymcodes/OLG123")));
 
   console.log("Deleting an account");
   await deny("stranger deletes a client's account", () => deleteDoc(doc(bob, "users/asha")));

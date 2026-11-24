@@ -66,6 +66,6 @@ Open `www/index.html` in a browser for a quick look: without `www/vendor/` Fireb
 
 - Latest release: build-52 (24 Nov 2026): security and privacy audit fixes 1–8, self-hosted fonts. Release = push to `main`.
 - Waiting on Manas: paste build-52 rules into Firebase; restrict the API key in Google Cloud; decide on App Check (reCAPTCHA); new app name and logo (options board: https://claude.ai/artifact/GQhWsLacR2fYJbZKFTLyss). Signing key upgrade waits for Play Store readiness (Build 3).
-- Next build: number 2 in `BACKLOG.md` → Build plan (events and community). Not started; ask Manas before starting, and ask where race listings should come from.
+- Next build: number 2 in `BACKLOG.md` → Build plan (events and community). Scope and race-listing source (weekly web search) agreed; **on hold until Manas says go**. The weekly search runs as a scheduled Claude task on his account; show him the first list before it goes live.
 - Parallel: iPhone app is his priority — needs his Apple Developer Program account first.
 - See `BACKLOG.md` for the build plan and full details.

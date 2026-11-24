@@ -15,7 +15,7 @@ Builds in order. Each groups items that share setup; later builds depend on earl
 - Classes: recurring sessions for a troop (e.g. Mon/Wed/Fri 7 am); clients see their class schedule.
 - Coach challenges by sport (swim metres, rounds, HYROX time and more).
 
-**2. Events and community — AGREED 24 Nov 2026 (all items below), not started**
+**2. Events and community — scope agreed 24 Nov 2026 (all items below); on hold until Manas says go**
 - Event calendar of races, filtered city → state → region → country → part of a continent → continent → world.
 - Same-event community: find people targeting the same event (HYROX, CrossFit…), compare prep, option to share event-prep progress.
 - Event leaderboard not limited by location.

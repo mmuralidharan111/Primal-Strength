@@ -20,7 +20,7 @@ A workout app for **clients, trainers and gym owners**, built by Manas (Bengalur
 | `www/download.html`, `privacy.html`, `delete-account.html` | Static web pages. Privacy policy v1.0 names Manas as data fiduciary, contact mmuralidharan111@gmail.com. Update it when data handling changes. |
 | `firestore.rules` | Source of truth for the database rules. **Manas pastes these into Firebase console → Firestore → Rules → Publish** after every change — always remind him and give him the full file. |
 | `test/smoke.js` | jsdom end-to-end test against a fake Firestore/Auth (offline, client, trainer, owner, buddies, challenges, consent, deletion…). Failures print `::error` annotations. |
-| `test/rules.test.js` | 57 security-rule checks on the official Firestore emulator. |
+| `test/rules.test.js` | 78 security-rule checks on the official Firestore emulator. |
 | `.github/workflows/build-apk.yml` | On push to `main`: npm install → bundle Firebase compat SDK into `www/vendor/` → smoke test → rules tests → Capacitor 7 Android build (keep-screen-on patch, VIBRATE + COARSE_LOCATION permissions) → signed debug APK → GitHub release `build-N` → Pages deploy. |
 | `.github/workflows/rules-check.yml` | Same tests on `test/**` branches without releasing — use it to try risky changes. |
 | `BACKLOG.md` | Agreed next build, priority tiers, everything requested, and what's been built. |
@@ -49,6 +49,7 @@ Open `www/index.html` in a browser for a quick look: without `www/vendor/` Fireb
 - Gamification: rings, streaks, ranks, badges, strength score, milestones (`PLACES`, local by city/country), Troop (renamed from Squad in the UI — code identifiers still say `squad`).
 - **Sports:** `SPORTS` (19 entries, `SPORTMAP`) drives everything sport-specific: `cats/allow/no/bwOnly` (exercise filter `sportFits`), `types` (Cardio tab session types, fields in `SESSION_TYPES`/`SFIELDS`), `tests` (`STESTS`, saved as body records with `source:"test"`), `events` (`EVENT_KINDS`, `SPLITS`), `week` (weekly targets, overrides in `settings.sportTargets`), `prog` (panels rendered by `sportPanel`), `tpls`/`tpl` (sport programs in `TEMPLATES`). Sport lives in `settings.intake.sport` / `sport2`; `curSport()` uses the trainer's open client when there is one.
 - **Events** are saved as sessions with `day:"🏁"`, `exercises:[]` and an `event` object (kind, finish seconds, place, splits…), so they count as workouts; `sessionCardioMin`/`sessionKm` include them.
+- **Coach tools:** workout timers `S.wt` / `wtState()` / `wtHTML()` (overlay rendered on every screen). One workout to many: builder with `S.builder.multi`, sheet `msend`, `personalEx()`; one-offs live in `program.oneoffs` (ids `o-…`, shown as ★ via `dayTag`, found by `dayById`). Approval: `session.approved` (only trainers may set it — rules), attendance docs in `trainers/{tid}/attendance` (`w_<sessionId>` for workouts, `c_<class>_<date>_<client>` for roll calls). Classes in top-level `classes` (like challenges). Sport challenge metrics in `SPORT_METRICS` / `sportMetricValue`.
 - Keep `test/smoke.js` passing; extend it for new flows.
 
 ## Working with Manas
@@ -60,7 +61,7 @@ Open `www/index.html` in a browser for a quick look: without `www/vendor/` Fireb
 
 ## Current state (24 Nov 2026)
 
-- Latest release: build-48 (sport build, 24 Nov 2026). Release = push to `main`.
-- Next build (agreed 24 Nov, in progress): coach tools — timers, one workout to many clients, approval = attendance, classes, challenges by sport. Build order in `BACKLOG.md` → Build plan.
+- Latest release: coach tools build (after build-48). Release = push to `main`.
+- Next build: number 2 in `BACKLOG.md` → Build plan (events and community). Not started; ask Manas before starting, and ask where race listings should come from.
 - Parallel: iPhone app is his priority — needs his Apple Developer Program account first.
-- See `BACKLOG.md` for the priority tiers and full details.
+- See `BACKLOG.md` for the build plan and full details.

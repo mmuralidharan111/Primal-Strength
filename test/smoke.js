@@ -73,7 +73,7 @@ function makeFirebase(){
     enablePersistence: async () => {},
     collection: c => query(c),
     doc: p => docRef(p),
-    batch: () => { const ops = []; return {set: (r, d) => ops.push(() => r.set(d)), update: (r, d) => ops.push(() => r.update(d)), commit: async () => { for (const o of ops) await o(); }}; }
+    batch: () => { const ops = []; return {set: (r, d) => ops.push(() => r.set(d)), update: (r, d) => ops.push(() => r.update(d)), delete: r => ops.push(() => r.delete()), commit: async () => { for (const o of ops) await o(); }}; }
   };
   let user = null; const authCbs = []; const accounts = SHARED.accounts;
   const emit = () => authCbs.forEach(cb => cb(user));
@@ -552,6 +552,98 @@ async function agree(X, {dob = "1985-04-12", health = true, staff = false} = {})
   check(T.text().includes("Long run"), "session detail opens from alert");
   await T.click('[data-act="sheet-close"]'); await T.click('[data-act="ctab"][data-v="progress"]'); check(T.text().includes("Running km per week"), "trainer sees client running progress");
   check(T.text().includes("Your sport") && T.text().includes("General fitness"), "trainer sees the client's sport progress");
+
+  /* ===== Coach tools: classes, roll call, approval = attendance, one workout to many, timers, sport challenges ===== */
+  step = "coach-classes";
+  const docsUnder = pre => [...fb._docs.entries()].filter(([k]) => k.startsWith(pre));
+  await T.click('[data-act="ttab"][data-v="tclasses"]', "trainer Classes tab");
+  check(T.text().includes("Classes") && T.text().includes("Attendance"), "classes view with attendance report");
+  await T.click('[data-act="cl-new"]', "new class");
+  await T.type("#cl-title", "Morning HIIT");
+  for (const d of ["0", "2", "4", "6"]) await T.click(`[data-act="cl-day"][data-v="${d}"]`);
+  check(T.$$('[data-act="cl-day"].on').length === 7, "class on every day");
+  await T.click('[data-act="cl-who"][data-v="squads"]', "class for a troop");
+  T.$("[data-clsq]").checked = true;
+  await T.click('[data-act="cl-save"]', "save class"); await sleep(300);
+  const cls = docsUnder("classes/").find(([, v]) => v.title === "Morning HIIT");
+  check(cls && cls[1].trainerId === "u_coach" && cls[1].days.length === 7 && cls[1].members.includes("u_asha") && cls[1].squadNames[0] === "6 am crew", "class saved for the troop");
+  await C.click('[data-act="tab"][data-v="today"]'); await sleep(200);
+  check(C.text().includes("Your classes") && C.text().includes("Morning HIIT") && C.text().includes("Today"), "client sees the class on Today");
+  await T.click('[data-act="cl-roll"]', "take attendance");
+  T.$('[data-roll="u_asha"]').checked = true;
+  await T.click('[data-act="roll-save"]', "save roll call"); await sleep(300);
+  check(docsUnder("trainers/u_coach/attendance/c_").some(([, v]) => v.clientId === "u_asha" && v.kind === "class"), "class attendance recorded");
+  check(T.text().includes("1 attended") && T.text().includes("Edit attendance"), "class shows who attended");
+
+  step = "coach-approve";
+  await T.click('[data-act="ttab"][data-v="alerts"]');
+  const apb = T.$('[data-act="approve"]'); check(!!apb, "approve button on a workout alert");
+  const apSid = apb && apb.dataset.id;
+  await T.click('[data-act="approve"]', "approve workout"); await sleep(300);
+  check(fb._docs.get(`users/u_asha/sessions/${apSid}`).approved && fb._docs.get(`users/u_asha/sessions/${apSid}`).approved.by === "u_coach", "workout marked approved");
+  check(!!fb._docs.get(`trainers/u_coach/attendance/w_${apSid}`), "approved workout counted as attendance");
+  check(T.text().includes("✓ Approved"), "alert shows it's approved");
+  check(docsUnder("trainers/u_coach/attendance/w_").some(([, v]) => v.clientId === "u_asha"), "gym-screen workouts count as attendance too");
+  await T.click('[data-act="ttab"][data-v="tclasses"]');
+  check(/Asha\s*\d+\s*1\s*\d+/.test(T.text().replace(/\s+/g, " ")) || (T.text().includes("Asha") && T.text().includes("All clients")), "attendance report lists the client");
+  await C.click('[data-act="tab"][data-v="workouts"]'); await sleep(200);
+  check(C.text().includes("✓ Approved"), "client sees the approval in their history");
+
+  step = "coach-send-many";
+  await T.click('[data-act="ttab"][data-v="clients"]');
+  await T.click('[data-act="mw-new"]', "send one workout to several clients");
+  check(T.text().includes("One workout, many clients") && !T.$('[data-act="b-addday"]'), "multi-client builder opens");
+  await T.type('[data-bp="days.0.title"]', "Saturday WOD");
+  const mx = T.$('[data-bp="days.0.ex.0.n"]'); mx.value = "Back squat"; mx.dispatchEvent(new T.w.Event("input", {bubbles: true})); await sleep(150);
+  await T.type('[data-bp="days.0.ex.0.reps"]', "5");
+  await T.click('[data-act="b-save"]', "next: choose clients");
+  check(T.text().includes("Send to clients"), "client picker shown");
+  const mwc = T.$('[data-mwc="u_asha"]'); mwc.checked = true; mwc.dispatchEvent(new T.w.Event("change", {bubbles: true}));
+  await T.click('[data-act="mw-preview"]', "preview loads"); await sleep(400);
+  check(T.text().includes("Check and send") && T.text().includes("Back squat") && /from their back squat|no history/.test(T.text()), "preview shows each client's personalised load");
+  await T.click('[data-act="mw-send"]', "send workout"); await sleep(400);
+  const oo = (fb._docs.get("users/u_asha").program.oneoffs || [])[0];
+  check(oo && oo.title === "Saturday WOD" && oo.ex[0].n === "Back squat" && !("why" in oo.ex[0]), "one-off workout saved to the client's program");
+  await C.click('[data-act="tab"][data-v="today"]'); await sleep(300);
+  check(C.text().includes("From your trainer") && C.text().includes("Saturday WOD"), "client sees the trainer's workout on Today");
+  await C.click(`[data-act="openday"][data-d="${oo && oo.id}"]`, "open trainer's workout");
+  check(C.text().includes("From your trainer") && C.text().includes("Back squat") && !!C.$('[data-act="startday"]'), "one-off workout can be started");
+
+  step = "coach-timer";
+  await C.click('[data-act="tab"][data-v="workouts"]');
+  await C.click('[data-act="wt-open"]', "open workout timer");
+  check(C.$$('[data-act="wt-mode"]').length === 4, "AMRAP, EMOM, Tabata and For Time offered");
+  await C.click('[data-act="wt-mode"][data-v="fortime"]');
+  await C.click('[data-act="wt-start"]', "start For Time");
+  check(!!C.$("#wt") && C.text().includes("Get ready"), "full-screen timer starts with a countdown");
+  C.w.eval("S.wt.t0 -= 11000"); await sleep(250);
+  await C.click('[data-act="wt-round"]'); await C.click('[data-act="wt-round"]');
+  check(C.$("#wt-sub").textContent.includes("2 rounds"), "rounds counted");
+  await C.click('[data-act="wt-done"]', "finish For Time");
+  check(C.text().includes("For Time finished"), "result shown");
+  await C.click('[data-act="wt-close"]'); check(!C.$("#wt"), "timer closes");
+  const emom = C.w.eval(`(() => { S.wt = {mode:"emom", cfg:{every:60, rounds:3}, t0: Date.now() - 75000, pausedAt:null, pausedTotal:0, rounds:0, done:false, key:""}; const a = wtState(); S.wt.t0 = Date.now() - 300000; const b = wtState(); S.wt = {mode:"tabata", cfg:{work:20, rest:10, rounds:8}, t0: Date.now() - 45000, pausedAt:null, pausedTotal:0, rounds:0, done:false, key:""}; const c = wtState(); S.wt = null; return [a.phase, a.big, !!b.end, c.phase, c.sub]; })()`);
+  check(emom[0] === "Round 2 of 3" && emom[1] === "0:55" && emom[2] && emom[3] === "Work" && emom[4] === "Round 2 of 8", "EMOM and Tabata clocks count correctly");
+
+  step = "coach-sport-challenge";
+  await T.click('[data-act="ttab"][data-v="tsquad"]'); await T.click('[data-act="chal-new"]');
+  const t2 = T.$('[data-chf="title"]'); t2.value = "HYROX time trial"; t2.dispatchEvent(new T.w.Event("input", {bubbles: true}));
+  check([...T.$('[data-chf="metric"]').options].some(o => o.value === "swim") && [...T.$('[data-chf="metric"]').options].some(o => o.value === "rounds"), "sport metrics offered");
+  const m2 = T.$('[data-chf="metric"]'); m2.value = "evbest"; m2.dispatchEvent(new T.w.Event("change", {bubbles: true})); await sleep(100);
+  check(!!T.$('[data-chf="evkind"]'), "race picker shown for best race time");
+  const tg2 = T.$('[data-chf="target"]'); tg2.value = "1:20:00"; tg2.dispatchEvent(new T.w.Event("input", {bubbles: true}));
+  await T.click('[data-act="chal-save"]', "save race challenge"); await sleep(300);
+  const hc = docsUnder("challenges/").find(([, v]) => v.title === "HYROX time trial");
+  check(hc && hc[1].metric === "evbest" && hc[1].evkind === "hyrox" && hc[1].target === 4800, "race-time challenge saved with time target");
+  check(T.text().includes("Best time: HYROX"), "challenge card names the race");
+
+  step = "owner-attendance";
+  let O2 = await load(makeFirebase());
+  await O2.click('[data-act="auth-mode"][data-v="in"]'); await O2.type("#a-email", "gita@test.in"); await O2.type("#a-pass", "secret4");
+  await O2.click('[data-act="auth-go"]', "owner signs in"); await sleep(800);
+  await O2.click('[data-act="otrainer"]', "open trainer"); await sleep(300);
+  check(O2.text().includes("Attendance") && O2.text().includes("Asha") && O2.text().includes("All clients"), "gym owner sees the trainer's attendance for billing");
+  O2.w.close();
 
   report();
 })().catch(e => { errors.push("crash: " + (e && (e.stack || e.message) || e)); report(); });

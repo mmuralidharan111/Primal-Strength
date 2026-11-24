@@ -38,8 +38,14 @@ service cloud.firestore {
       match /{col}/{doc} {
         allow read: if isMe(uid)
           || (isTrainerOf(uid) && (col != 'reports' || resource.data.get('shared', false) == true));
-        allow write: if isMe(uid) && col in ['sessions', 'cardio', 'body', 'dexa', 'reports'];
-        // Trainer logging a client's workout on the gym screen
+        // The person themselves. Only their trainer can approve a workout (approval counts as attendance),
+        // so a client can't add, change or remove the approval on their own workouts.
+        allow create: if isMe(uid) && col in ['sessions', 'cardio', 'body', 'dexa', 'reports']
+          && (col != 'sessions' || request.resource.data.get('approved', null) == null);
+        allow update: if isMe(uid) && col in ['sessions', 'cardio', 'body', 'dexa', 'reports']
+          && (col != 'sessions' || request.resource.data.get('approved', null) == resource.data.get('approved', null));
+        allow delete: if isMe(uid) && col in ['sessions', 'cardio', 'body', 'dexa', 'reports'];
+        // Trainer logging a client's workout on the gym screen, or approving a logged workout
         allow create, update: if col == 'sessions' && isTrainerOf(uid);
       }
     }
@@ -122,6 +128,25 @@ service cloud.firestore {
           && (chal().get('members', null) == null || eid in chal().members);
         allow delete: if isMe(eid) || (signedIn() && chal().trainerId == request.auth.uid);
       }
+    }
+
+    // Recurring classes a trainer runs (e.g. Mon/Wed/Fri 7 am) for all their clients or selected troops
+    match /classes/{cid} {
+      allow read: if signedIn() && (resource.data.trainerId == request.auth.uid
+        || resource.data.trainerId == userData(request.auth.uid).get('trainerId', null)
+        || ownsGymOfTrainer(resource.data.trainerId));
+      allow create: if signedIn() && request.resource.data.trainerId == request.auth.uid
+        && userData(request.auth.uid).role == 'trainer';
+      allow update: if signedIn() && resource.data.trainerId == request.auth.uid
+        && request.resource.data.trainerId == request.auth.uid;
+      allow delete: if signedIn() && resource.data.trainerId == request.auth.uid;
+    }
+
+    // Attendance a trainer records (approved workouts and class roll calls); their gym owner reads it for billing
+    match /trainers/{tid}/attendance/{aid} {
+      allow read: if isMe(tid) || ownsGymOfTrainer(tid);
+      allow create, update: if isMe(tid) && isTrainerOf(request.resource.data.clientId);
+      allow delete: if isMe(tid);
     }
 
     // A trainer's squads (client groups)

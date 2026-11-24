@@ -8,7 +8,7 @@ Requested features, not yet built.
 
 Builds in order. Each groups items that share setup; later builds depend on earlier ones. Build numbers on GitHub follow the run count, so they're named here, not numbered.
 
-**1. Coach tools on the gym floor — IN PROGRESS (agreed 24 Nov 2026)**
+**1. Coach tools on the gym floor — BUILT 24 Nov 2026 (see Built, coach tools build)**
 - Workout timers: AMRAP, EMOM, Tabata, For Time, with a full-screen landscape mode.
 - One workout to many clients, with each client's weights and reps set from their own history.
 - Trainer approves a logged workout; an approved workout counts as attendance (for trainer and gym billing).
@@ -136,6 +136,15 @@ Builds in order. Each groups items that share setup; later builds depend on earl
 - Privacy documents: terms for gyms using the app, a data-breach response plan (72-hour reporting), a data-retention rule for inactive accounts.
 - Health report files on all devices: files uploaded to Firebase Storage so they appear on every signed-in device; trainer sees a file only when the report is shared. Needs Firebase's Blaze plan.
 - Push notifications for trainer alerts and buddy high-fives (needs Firebase Cloud Messaging).
+
+## Built (November 2026, coach tools build)
+- Workout timers: AMRAP (tap +1 round), EMOM, Tabata and For Time (Done button, optional time cap), with a 10-second countdown, beeps at every change and 3-2-1, pause, full screen and landscape (numbers fill the screen sideways). Open from Workouts → Timer, the rest-timer button in a workout, a "Timer" button on metcon/race-simulation groups, and the gym big screen. Result can be added to the workout notes.
+- One workout to many clients: Clients → "Send one workout to several clients". Build it once, pick clients (or a whole troop), preview each client's weights and reps from their last 4 months (estimated max → working weight; bodyweight and holds at 75–80% of their best), then send as a one-off for a date or as a new day in their weekly program. Clients see one-offs on Today under "From your trainer".
+- Approval = attendance: trainer approves a logged workout from the alert list or the workout itself; gym-screen workouts are approved automatically. Clients see "✓ Approved" but can't approve or un-approve themselves (database rule).
+- Classes: new Classes tab for trainers. Recurring classes (days, time, length, place, start/end, all clients or selected troops); this week's schedule; roll call ("Take attendance"). Clients see "Your classes" on Today.
+- Attendance report per month (workouts + classes per client), exported as .csv, for the trainer (Classes tab) and the gym owner (trainer detail) for billing.
+- Coach challenges by sport: swim metres, cycling km, rowing metres, swim/bike/run minutes, combat rounds, races, climbing sessions, yoga/mobility sessions, best race time (e.g. HYROX, with an h:mm:ss target) and best fitness-test result.
+- Database rules changed (classes, attendance, approval protection); 78 rule checks pass on the Firestore emulator. Privacy policy updated (gym owner sees attendance).
 
 ## Built (November 2026, sport build)
 - Sign-up by sport: 19 sports (main sport plus optional second sport), asked in the coach questionnaire and editable in Edit profile; trainer is alerted when it changes and sees it in intake answers and the client list.

@@ -40,6 +40,10 @@ const allow = (l, f) => expect("allow", l, f), deny = (l, f) => expect("deny", l
     await setDoc(doc(db, "challenges/c1"), {trainerId: "coach", title: "November blitz", members: null});
     await setDoc(doc(db, "trainers/coach/notes/n1"), {clientId: "asha", text: "Knee niggle"});
     await setDoc(doc(db, "trainers/coach/alerts/a1"), {clientId: "asha", title: "Day A"});
+    await setDoc(doc(db, "users/asha/sessions/ok1"), {date: "2026-11-04", title: "Day B", approved: {by: "coach", at: "2026-11-04"}});
+    await setDoc(doc(db, "users/asha/sessions/s9"), {date: "2026-11-05", title: "Day C"});
+    await setDoc(doc(db, "classes/k1"), {trainerId: "coach", title: "Morning HIIT", days: [1, 3, 5], members: null});
+    await setDoc(doc(db, "trainers/coach/attendance/w_ok1"), {clientId: "asha", date: "2026-11-04", kind: "workout"});
   });
   const as = uid => env.authenticatedContext(uid).firestore();
   const anon = env.unauthenticatedContext().firestore();
@@ -105,6 +109,29 @@ const allow = (l, f) => expect("allow", l, f), deny = (l, f) => expect("deny", l
   await deny("client sends an alert to a trainer they don't have", () => addDoc(collection(bob, "trainers/coach/alerts"), {clientId: "bob", title: "Day B"}));
   await allow("client finds their own alerts", () => getDocs(query(collection(asha, "trainers/coach/alerts"), where("clientId", "==", "asha"))));
   await deny("client lists all of the trainer's alerts", () => getDocs(collection(asha, "trainers/coach/alerts")));
+
+  console.log("Approval, attendance and classes");
+  await deny("client logs a workout that says it's approved", () => setDoc(doc(asha, "users/asha/sessions/s3"), {date: "2026-11-06", approved: {by: "coach", at: "2026-11-06"}}));
+  await deny("client approves their own workout", () => updateDoc(doc(asha, "users/asha/sessions/s9"), {approved: {by: "asha", at: "2026-11-05"}}));
+  await deny("client removes their trainer's approval", () => setDoc(doc(asha, "users/asha/sessions/ok1"), {date: "2026-11-04", title: "Day B"}));
+  await allow("client edits an approved workout and keeps the approval", () => setDoc(doc(asha, "users/asha/sessions/ok1"), {date: "2026-11-04", title: "Day B edited", approved: {by: "coach", at: "2026-11-04"}}));
+  await allow("trainer approves their client's workout", () => updateDoc(doc(coach, "users/asha/sessions/s9"), {approved: {by: "coach", at: "2026-11-05"}}));
+  await deny("another trainer approves the workout", () => updateDoc(doc(coach2, "users/asha/sessions/s2"), {approved: {by: "coach2", at: "2026-11-05"}}));
+  await allow("trainer records attendance for their client", () => setDoc(doc(coach, "trainers/coach/attendance/w_s9"), {clientId: "asha", date: "2026-11-05", kind: "workout"}));
+  await deny("trainer records attendance for someone else's client", () => setDoc(doc(coach, "trainers/coach/attendance/w_x"), {clientId: "bob", date: "2026-11-05", kind: "workout"}));
+  await deny("client writes their own attendance", () => setDoc(doc(asha, "trainers/coach/attendance/fake"), {clientId: "asha", date: "2026-11-05", kind: "class"}));
+  await deny("client reads the trainer's attendance", () => getDoc(doc(asha, "trainers/coach/attendance/w_ok1")));
+  await allow("gym owner reads their trainer's attendance", () => getDocs(collection(gita, "trainers/coach/attendance")));
+  await deny("another trainer reads the attendance", () => getDocs(collection(coach2, "trainers/coach/attendance")));
+  await allow("trainer creates a class", () => setDoc(doc(coach, "classes/k2"), {trainerId: "coach", title: "Evening strength", days: [2, 4]}));
+  await deny("client creates a class", () => setDoc(doc(asha, "classes/k3"), {trainerId: "asha", title: "Fake", days: [1]}));
+  await deny("trainer creates a class in another trainer's name", () => setDoc(doc(coach2, "classes/k4"), {trainerId: "coach", title: "Fake", days: [1]}));
+  await allow("client reads their trainer's classes", () => getDocs(query(collection(asha, "classes"), where("trainerId", "==", "coach"))));
+  await deny("other client reads the trainer's classes", () => getDoc(doc(bob, "classes/k1")));
+  await allow("gym owner reads their trainer's class", () => getDoc(doc(gita, "classes/k1")));
+  await deny("another trainer edits the class", () => updateDoc(doc(coach2, "classes/k1"), {title: "Mine now"}));
+  await deny("trainer hands a class to another trainer", () => updateDoc(doc(coach, "classes/k1"), {trainerId: "coach2"}));
+  await allow("trainer deletes their class", () => deleteDoc(doc(coach, "classes/k2")));
 
   console.log("Deleting an account");
   await deny("stranger deletes a client's account", () => deleteDoc(doc(bob, "users/asha")));

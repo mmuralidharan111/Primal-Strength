@@ -47,6 +47,8 @@ Open `www/index.html` in a browser for a quick look: without `www/vendor/` Fireb
 - **Privacy:** consent screen (`viewConsent`, `CONSENT_V`) before anything; `healthOK()` gates DEXA, reports, screening, pain tracking. Date of birth optional. Age check and email verification are switched **off** (code for email verification is dormant: `needsVerify`, `viewVerify`).
 - Exercise library `LIB`/`LIBMAP` with categories; muscles in `CAT_MUSCLES`/`EX_MUSCLES`; swap suggestions `swapSuggestions()`. Cardio prescriptions `CARDIO_RX` / `cardioRx()`. Weight→reps adjustment `setRef()` (Brzycki).
 - Gamification: rings, streaks, ranks, badges, strength score, milestones (`PLACES`, local by city/country), Troop (renamed from Squad in the UI — code identifiers still say `squad`).
+- **Sports:** `SPORTS` (19 entries, `SPORTMAP`) drives everything sport-specific: `cats/allow/no/bwOnly` (exercise filter `sportFits`), `types` (Cardio tab session types, fields in `SESSION_TYPES`/`SFIELDS`), `tests` (`STESTS`, saved as body records with `source:"test"`), `events` (`EVENT_KINDS`, `SPLITS`), `week` (weekly targets, overrides in `settings.sportTargets`), `prog` (panels rendered by `sportPanel`), `tpls`/`tpl` (sport programs in `TEMPLATES`). Sport lives in `settings.intake.sport` / `sport2`; `curSport()` uses the trainer's open client when there is one.
+- **Events** are saved as sessions with `day:"🏁"`, `exercises:[]` and an `event` object (kind, finish seconds, place, splits…), so they count as workouts; `sessionCardioMin`/`sessionKm` include them.
 - Keep `test/smoke.js` passing; extend it for new flows.
 
 ## Working with Manas
@@ -58,7 +60,7 @@ Open `www/index.html` in a browser for a quick look: without `www/vendor/` Fireb
 
 ## Current state (24 Nov 2026)
 
-- Latest release: build 40.
-- **Next build (agreed, not started):** sign-up by sport (whole app adapts to the sport), progress by sport (all 19 sports listed in BACKLOG.md), events as workouts + event results in Body. Waiting for Manas to say go.
+- Latest release: build 40. **Sport build** (sign-up by sport, progress by sport, events as workouts) is coded and tested; see `BACKLOG.md` → Built (sport build). Release = push to `main`.
+- Next build: not agreed yet (Tier 1b: workout timers, one workout to many clients).
 - Parallel: iPhone app is his priority — needs his Apple Developer Program account first.
 - See `BACKLOG.md` for the priority tiers and full details.

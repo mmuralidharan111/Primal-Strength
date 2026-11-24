@@ -8,6 +8,7 @@ const html = fs.readFileSync(path.join(__dirname, "..", "www", "index.html"), "u
   .replace(/<script src="vendor\/[^"]+"><\/script>/g, "")      // real SDK not loaded in the test
   .replace(/<link[^>]+fonts[^>]+>/g, "");
 const errors = [];
+const pad2 = n => String(n).padStart(2, "0");
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let step = "boot";
 function check(cond, msg){ if (!cond){ errors.push(`[${step}] ${msg}`); console.log("  ✗", msg); } else console.log("  ✓", msg); }
@@ -110,10 +111,11 @@ async function load(fb){
     }});
   const w = dom.window; await sleep(400);
   const $ = sel => w.document.querySelector(sel);
+  const $$ = sel => [...w.document.querySelectorAll(sel)];
   const click = async (sel, msg) => { const el = typeof sel === "string" ? $(sel) : sel; check(!!el, msg || `found ${sel}`); if (el) el.dispatchEvent(new w.MouseEvent("click", {bubbles: true})); await sleep(150); return el; };
   const type = async (sel, v) => { const el = $(sel); check(!!el, `input ${sel}`); if (!el) return; el.value = v; el.dispatchEvent(new w.Event("input", {bubbles: true})); await sleep(30); };
   const text = () => w.document.getElementById("app").textContent;
-  return {w, $, click, type, text};
+  return {w, $, $$, click, type, text};
 }
 
 // The privacy screen every new user sees before anything else
@@ -137,6 +139,10 @@ async function agree(X, {dob = "1985-04-12", health = true, staff = false} = {})
   check(A.text().includes("I'm your Primal Strength coach"), "after consent the coach questionnaire opens");
   await A.type("#ob-name", "Manas");
   await A.click('[data-act="ob-next"]', "start questionnaire");
+  check(A.text().includes("What's your sport?") && A.$$('[data-act="ob-sport"]').length === 19, "sport step lists all 19 sports");
+  check(A.$('[data-act="ob-next"]').disabled, "can't continue without picking a sport");
+  await A.click('[data-act="ob-sport"][data-v="general"]', "pick general fitness");
+  await A.click('[data-act="ob-next"]');
   await A.click('[data-act="ob-pick"][data-k="goal"][data-v="strength"]', "pick goal");
   await A.click('[data-act="ob-next"]');
   await A.click('[data-act="ob-pick"][data-k="experience"][data-v="experienced"]', "pick experience");
@@ -224,7 +230,124 @@ async function agree(X, {dob = "1985-04-12", health = true, staff = false} = {})
   await A.click('[data-act="rep-new"]'); const rtSel = A.$("#rp-type"); rtSel.value = "vo2"; rtSel.dispatchEvent(new A.w.Event("change", {bubbles: true})); await sleep(100);
   check(!!A.$("#rp-vo2"), "switching type shows VO2 max fields");
   await A.click('[data-act="sheet-close"]');
+
+  /* ===== Sport: change sport, sport logging, races, tests, progress, exercise list ===== */
+  step = "sport-triathlon";
+  const setSel = async (X, sel, v) => { const el = X.$(sel); check(!!el, `select ${sel}`); if (!el) return; el.value = v; el.dispatchEvent(new X.w.Event("change", {bubbles: true})); await sleep(120); };
+  await A.click('[data-act="settings"]'); await A.click('[data-act="profile-edit"]', "edit profile");
+  check(!!A.$("#pf-sport") && A.$("#pf-sport").options.length === 19, "profile offers all 19 sports");
+  A.$("#pf-sport").value = "triathlon"; A.$("#pf-sport2").value = "running";
+  await A.click('[data-act="profile-save"]', "save sport"); await sleep(200);
+  if (A.$('[data-act="sheet-close"]')) await A.click('[data-act="sheet-close"]');
+  await A.click('[data-act="tab"][data-v="today"]');
+  check(A.text().includes("Triathlon this week") && A.text().includes("Swim") && A.text().includes("Bike"), "Today shows swim, bike and run targets for a triathlete");
+  check(A.text().includes("Swim + bike + run"), "weekly ring is labelled for the sport");
+  await A.click('[data-act="tab"][data-v="cardio"]');
+  check(A.text().includes("Training log") && [...A.$("#c-type").options].some(o => o.value === "Swimming") && [...A.$("#c-type").options].some(o => o.value === "Brick (bike then run)"), "Cardio tab offers triathlon session types");
+  await A.type("#c-min", "30");
+  await setSel(A, "#c-type", "Swimming");
+  check(!!A.$("#c-metres") && !!A.$("#c-stroke") && !A.$("#c-incline"), "swim log asks for metres and stroke, not incline");
+  check(A.$("#c-min").value === "30", "minutes kept when the session type changes");
+  await A.type("#c-metres", "1500"); A.$("#c-stroke").value = "Freestyle";
+  A.$("#cardioForm").dispatchEvent(new A.w.Event("submit", {bubbles: true, cancelable: true})); await sleep(250);
+  check(A.text().includes("1,500 m") && A.text().includes("2:00 /100 m") && A.text().includes("Freestyle"), "swim saved with distance, pace per 100 m and stroke");
+  await setSel(A, "#c-type", "Cycling");
+  check(!!A.$("#c-power") && !!A.$("#c-cadence") && !!A.$("#c-elev"), "ride log asks for power, cadence and climb");
+  await A.type("#c-min", "60"); await A.type("#c-dist", "30"); await A.type("#c-power", "180");
+  A.$("#cardioForm").dispatchEvent(new A.w.Event("submit", {bubbles: true, cancelable: true})); await sleep(250);
+  check(A.text().includes("30 km/h") && A.text().includes("180 W"), "ride saved with speed and power");
+
+  step = "sport-events";
+  await A.click('[data-act="tab"][data-v="body"]');
+  check(A.text().includes("Event results") && A.text().includes("Triathlon tests"), "Body tab has event results and sport tests");
+  await A.click('[data-act="ev-new"]', "log a race");
+  check(A.$("#ev-kind").value === "tri-sprint", "race picker starts with the athlete's sport");
+  await setSel(A, "#ev-kind", "tri-olympic");
+  check(!!A.$('[data-evs="t1"]') && !!A.$('[data-evs="swim"]'), "triathlon result asks for swim, T1, bike, T2 and run splits");
+  await A.type("#ev-name", "Goa Olympic Tri"); await A.type("#ev-date", "2026-11-01"); await A.type("#ev-finish", "2:45:10"); await A.type("#ev-place", "42"); await A.type("#ev-field", "300");
+  A.$('[data-evs="swim"]').value = "28:30"; A.$('[data-evs="bike"]').value = "1:20:00"; A.$('[data-evs="run"]').value = "52:10";
+  await A.click('[data-act="ev-save"]', "save race"); await sleep(250);
+  const race = A.w.eval("S.data.sessions.find(s => s.event)");
+  check(race && race.event.finish === 9910 && race.event.splits.swim === 1710 && race.day === "🏁" && race.durationMin === 165, "race saved as a workout with finish time and splits");
+  check(A.text().includes("Goa Olympic Tri") && A.text().includes("2:45:10") && A.text().includes("#42 of 300"), "race listed under Event results");
+  await A.click('[data-act="viewsession"]', "open race");
+  check(A.text().includes("counted as a workout") && A.text().includes("28:30") && A.text().includes("1:20:00") && A.text().includes("52:10"), "race detail shows the splits");
+  await A.click('[data-act="sheet-close"]');
+  await A.click('[data-act="test-new"]', "add test results");
+  await A.type("#tst-css", "1:55"); await A.type("#tst-ftp", "210");
+  await A.click('[data-act="test-save"]', "save tests"); await sleep(200);
+  check(A.text().includes("Swim pace per 100 m (CSS)") && A.text().includes("1:55") && A.text().includes("210 W"), "test results listed");
+  check(!A.text().includes("source"), "tests kept out of the check-in table");
+
+  step = "sport-progress";
+  await A.click('[data-act="tab"][data-v="progress"]');
+  const pt = A.text();
+  check(pt.includes("Your sport") && pt.includes("Triathlon") && pt.includes("Second sport: Running"), "progress names the sport and second sport");
+  check(pt.includes("Swim pace per 100 m") && pt.includes("Riding") && pt.includes("Weekly minutes by sport") && pt.includes("Race results") && pt.includes("Goa Olympic Tri"), "triathlon progress: swim pace, riding, minutes by sport, races");
+  check(pt.includes("All stats") && pt.includes("Lifts"), "general stats still below");
+
+  step = "sport-exercises";
+  await A.click('[data-act="tab"][data-v="workouts"]'); await A.click('[data-act="openday"][data-d="B"]');
+  await A.click('[data-act="swap-prog"]', "swap in a triathlete's program");
+  const opts = () => [...A.$("#swap-sel").options].map(o => o.value);
+  check(!opts().includes("Back squat") && opts().includes("Swim intervals") && opts().includes("Goblet squat"), "triathlete's exercise list leaves out back squats");
+  check(!A.$$('[data-act="swap-pick"]').some(b => b.dataset.v === "Back squat"), "swap suggestions fit the sport");
+  await A.type("#swap-q", "back squat");
+  check(opts().includes("Back squat"), "searching finds exercises from any sport");
+  await A.click('[data-act="swap-all"]', "show all sports");
+  check(opts().includes("Back squat"), "all-sports switch shows everything");
+  await A.click('[data-act="sheet-close"]');
+
+  step = "sport-hyrox";
+  await A.click('[data-act="settings"]'); await A.click('[data-act="profile-edit"]');
+  A.$("#pf-sport").value = "hyrox"; A.$("#pf-sport2").value = "";
+  await A.click('[data-act="profile-save"]'); await sleep(200); if (A.$('[data-act="sheet-close"]')) await A.click('[data-act="sheet-close"]');
+  await A.click('[data-act="tab"][data-v="body"]'); await A.click('[data-act="ev-new"]');
+  check(A.$("#ev-kind").value === "hyrox" && A.$$("[data-evs]").length === 18, "HYROX result asks for 8 runs, 8 stations, Roxzone and division");
+  await A.type("#ev-name", "HYROX Bengaluru");
+  ["r1","r2","r3","r4","r5","r6","r7","r8"].forEach((k, i) => A.$(`[data-evs="${k}"]`).value = `4:${pad2(10 + i)}`);
+  [["ski","4:30"],["push","3:05"],["pull","4:40"],["bbj","5:10"],["row","4:45"],["farm","2:05"],["lunge","4:50"],["wb","6:20"],["rox","7:30"]].forEach(([k, v]) => A.$(`[data-evs="${k}"]`).value = v);
+  await A.click('[data-act="ev-save"]', "save HYROX race with splits only"); await sleep(250);
+  const hx = A.w.eval('S.data.sessions.find(s => s.event && s.event.kind === "hyrox")');
+  check(hx && hx.event.finish === (8*250 + 28) + (270+185+280+310+285+125+290+380) + 450, "HYROX finish time added up from the splits");
+  await A.click('[data-act="tab"][data-v="progress"]');
+  check(A.text().includes("HYROX splits") && A.text().includes("Sled push 50 m") && A.text().includes("3:05"), "HYROX progress shows run splits and station times");
+  await A.click('[data-act="tab"][data-v="today"]');
+  check(A.text().includes("HYROX this week") && A.text().includes("Running"), "Today shows HYROX weekly targets");
+
+  step = "sport-strength";
+  await A.click('[data-act="settings"]'); await A.click('[data-act="profile-edit"]');
+  A.$("#pf-sport").value = "strength";
+  await A.click('[data-act="profile-save"]'); await sleep(200); if (A.$('[data-act="sheet-close"]')) await A.click('[data-act="sheet-close"]');
+  await A.click('[data-act="tab"][data-v="progress"]');
+  check(A.text().includes("Squat: estimated max") && A.text().includes("Powerlifting total") && A.text().includes("Rep PBs"), "strength progress: maxes, total, rep PBs");
+  await A.click('[data-act="tab"][data-v="cardio"]');
+  check(![...A.$("#c-type").options].some(o => o.value === "Swim intervals") && A.$("#c-type").options[0].value === "Zone 2 incline walk", "strength athlete isn't offered swim sessions they never logged");
+  for (const sp of ["general","strength","bodybuilding","weightlifting","hyrox","crossfit","running","triathlon","cycling","swimming","ocr","team","racquet","combat","calisthenics","rowing","climbing","yoga","rehab"]){
+    A.w.eval(`S.profile.settings.intake.sport = "${sp}"`);
+    await A.click('[data-act="tab"][data-v="progress"]'); await A.click('[data-act="tab"][data-v="today"]'); await A.click('[data-act="tab"][data-v="cardio"]'); await A.click('[data-act="tab"][data-v="body"]');
+    check(A.text().length > 200 && !A.text().includes("undefined") && !A.text().includes("NaN"), `${sp}: every tab renders cleanly`);
+  }
   A.w.close();
+
+  step = "sport-onboarding";
+  let SW = await load(null);
+  await agree(SW);
+  await SW.type("#ob-name", "Meera"); await SW.click('[data-act="ob-next"]');
+  await SW.click('[data-act="ob-sport"][data-v="swimming"]', "pick swimming");
+  check(!!SW.$("#ob-sport2"), "second sport offered once a main sport is picked");
+  await SW.click('[data-act="ob-next"]');
+  await SW.click('[data-act="ob-pick"][data-k="goal"][data-v="fitness"]'); await SW.click('[data-act="ob-next"]');
+  await SW.click('[data-act="ob-pick"][data-k="experience"][data-v="some"]'); await SW.click('[data-act="ob-next"]');
+  await SW.click('[data-act="ob-pick"][data-k="days"][data-v="4"]'); await SW.click('[data-act="ob-next"]');
+  await SW.click('[data-act="ob-pick"][data-k="equipment"][data-v="gym"]'); await SW.click('[data-act="ob-next"]');
+  await SW.click('[data-act="ob-next"]'); await SW.click('[data-act="ob-next"]'); await SW.click('[data-act="ob-next"]', "build swimmer's plan");
+  check(SW.text().includes("Swimming — 8 weeks") && SW.text().includes("Swim intervals") && SW.text().includes("Dryland strength"), "swimmer gets a swimming starter program");
+  await SW.click('[data-act="ob-start"]');
+  check(SW.w.eval("S.profile.settings.intake.sport") === "swimming", "sport saved to the profile");
+  await SW.click('[data-act="tab"][data-v="today"]');
+  check(SW.text().includes("Swimming this week") && SW.text().includes("/ 8,000 m"), "swimmer's weekly target is metres swum");
+  SW.w.close();
 
   /* ===== 2. Trainer + client with accounts ===== */
   step = "trainer-signup";
@@ -428,6 +551,7 @@ async function agree(X, {dob = "1985-04-12", health = true, staff = false} = {})
   await T.click('[data-act="open-alert"]', "open alert"); await sleep(1100);
   check(T.text().includes("Long run"), "session detail opens from alert");
   await T.click('[data-act="sheet-close"]'); await T.click('[data-act="ctab"][data-v="progress"]'); check(T.text().includes("Running km per week"), "trainer sees client running progress");
+  check(T.text().includes("Your sport") && T.text().includes("General fitness"), "trainer sees the client's sport progress");
 
   report();
 })().catch(e => { errors.push("crash: " + (e && (e.stack || e.message) || e)); report(); });

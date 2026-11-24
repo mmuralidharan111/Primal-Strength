@@ -14,10 +14,13 @@ Requested features, not yet built.
 **Tier 3b:** Video calls client ↔ trainer (start with scheduled call links, then in-app video) and form-check videos.
 **Tier 4:** Paid plans for clients (app only / weekly check-in with or without video / video every workout) and billing for independent trainers, together with gym management desktop app + backend (views, memberships, billing, payments, GST invoices) with privacy documents (gym terms, breach plan, retention) · Age verification · Health report files on all devices.
 
-## Next build (agreed)
-- Sign-up by sport, with the whole app environment adapting to the sport (see notes section).
-- Progress by sport, for every sport on the sign-up list.
-- Track events as workouts, and event result reports in the Body tab.
+## Next build
+Not agreed yet. Tier 1b is next in the priority order: workout timers (AMRAP/EMOM/Tabata/For Time, landscape) and one workout to many clients with personalised loads.
+
+## Still open from the sport build (November 2026)
+- Progress photos for bodybuilding/physique (needs file storage; on-device only unless the Blaze plan is switched on).
+- Challenge metrics by sport (e.g. swim metres, rounds, HYROX time) for coach challenges.
+- Event calendar, same-event community and event leaderboard (Tier 2).
 
 ## From Manas's notes (18 Nov 2026)
 
@@ -104,6 +107,16 @@ Requested features, not yet built.
 - Privacy documents: terms for gyms using the app, a data-breach response plan (72-hour reporting), a data-retention rule for inactive accounts.
 - Health report files on all devices: files uploaded to Firebase Storage so they appear on every signed-in device; trainer sees a file only when the report is shared. Needs Firebase's Blaze plan.
 - Push notifications for trainer alerts and buddy high-fives (needs Firebase Cloud Messaging).
+
+## Built (November 2026, sport build)
+- Sign-up by sport: 19 sports (main sport plus optional second sport), asked in the coach questionnaire and editable in Edit profile; trainer is alerted when it changes and sees it in intake answers and the client list.
+- The app adapts to the sport: exercise list and swap suggestions show exercises for the sport (search or "Show all sports" shows everything; trainers always see all); ready-made programs for the sport are listed first; 13 new sport programs (triathlon, cycling, swimming, weightlifting, obstacle racing, team sports, racquet sports, combat, calisthenics, rowing, climbing, yoga/mobility, older adults/rehab) and ~40 new exercises; the coach questionnaire builds a starter plan from the sport's program.
+- Sport log: the Cardio tab ("Training log") offers the sport's session types with matching fields (distance, pace, metres and stroke, power, cadence, climb, stroke rate, splits, rounds, grades, effort); average heart rate on cardio exercises inside workouts; pace shown for runs, swims and rows.
+- Weekly targets by sport on Today (e.g. swim/bike/run minutes, running km and long run, metres swum, rounds, sessions), editable in Settings; the ring is labelled for the sport.
+- Progress by sport for all 19 sports (estimated maxes, powerlifting total with DOTS, weightlifting total, rep PBs, sets per muscle, measurements, pace trends, distance per week, HYROX run/station splits, benchmarks, test trends, heart-rate zones, rounds, strength-to-weight, weight class, grades, consistency…), shown to the trainer too; general stats stay below.
+- Events as workouts: log races and competitions (HYROX with all run and station splits, running races, triathlon/duathlon splits, cycling, swimming, rowing, obstacle races, CrossFit Open, powerlifting/weightlifting meets, fights, matches, climbing comps). Each counts as a workout (streaks, rings, points, cardio minutes, running km) and alerts the trainer; results with PBs in Body → Event results; "Log your result" prompt after the event date.
+- Sport fitness tests in Body (e.g. CSS, FTP, 2 km row, 5-10-5, Yo-Yo, max pull-ups, sit-to-stand), with trends in Progress. VO2 max, resting heart rate and pain tests need health consent.
+- Privacy policy text updated for sport, race results and tests (no database rule change).
 
 ## Built (November 2026, privacy release)
 - Privacy and consent screen before anything else: privacy policy agreement, date of birth (optional), country and city; separate optional health-data consent.

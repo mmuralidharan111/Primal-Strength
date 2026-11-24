@@ -436,13 +436,57 @@ Olympic lifts|Clean and jerk|Barbell|load|
 Gymnastics|Toes-to-bar|Bodyweight|bw|
 Gymnastics|Handstand push-up|Bodyweight|bw|
 Gymnastics|Muscle-up|Bodyweight|bw|
-Gymnastics|Rope climb|Bodyweight|bw|`;
+Gymnastics|Rope climb|Bodyweight|bw|
+Olympic lifts|Snatch|Barbell|load|
+Olympic lifts|Clean|Barbell|load|
+Olympic lifts|Jerk|Barbell|load|
+Olympic lifts|Snatch pull|Barbell|load|
+Olympic lifts|Overhead squat|Barbell|load|
+Gymnastics|L-sit|Bodyweight|time|
+Gymnastics|Handstand hold|Bodyweight|time|
+Gymnastics|Front lever hold|Bar|time|
+Gymnastics|Dead hang|Bar|time|
+Gymnastics|Pistol squat|Bodyweight|bw|
+Gymnastics|Ring dip|Rings|bw|
+Swimming|Easy swim|Pool|cardio|
+Swimming|Swim intervals|Pool|dist|
+Swimming|Kick set|Pool|dist|
+Swimming|Pull buoy set|Pool|dist|
+Swimming|Open-water swim|Open water|cardio|
+Cycling|Easy ride|Bike|cardio|
+Cycling|Long ride|Bike|cardio|
+Cycling|Bike intervals|Bike|cardio|
+Cycling|Hill climbs (bike)|Bike|cardio|
+Conditioning|Steady-state row|Machine|cardio|
+Running|Brick run|Running|run|
+Sport skills|Skills practice|Sport|cardio|
+Sport skills|Agility ladder|Bodyweight|time|
+Sport skills|Shuttle runs|Running|dist|
+Sport skills|Lateral bound|Bodyweight|bw|
+Sport skills|Medicine-ball rotational throw|Medicine ball|bw|
+Sport skills|Shadow boxing|Bodyweight|time|
+Sport skills|Bag rounds|Heavy bag|time|
+Sport skills|Sparring rounds|Sport|time|
+Sport skills|Drilling / rolling|Sport|cardio|
+Climbing|Bouldering session|Climbing wall|cardio|
+Climbing|Hangboard hang|Hangboard|time|
+Climbing|Lock-off hold|Bar|time|
+Mobility|Yoga flow|Mat|cardio|
+Mobility|Hip mobility flow|Mat|time|
+Mobility|Couch stretch|Mat|time|
+Mobility|Deep squat hold|Bodyweight|time|
+Mobility|Thoracic rotation|Mat|bw|
+Mobility|Single-leg balance|Bodyweight|time|
+Mobility|Sit-to-stand|Chair|bw|
+Mobility|Heel-to-toe walk|Bodyweight|dist|`;
 const LIB = LIB_RAW.split("\n").map(l => { const [cat,n,equip,type,flag] = l.split("|"); return {cat,n,equip,type,back:flag==="b"}; });
 const LIBMAP = Object.fromEntries(LIB.map(e => [e.n, e]));
 const libCat = n => (LIBMAP[n] || {}).cat || null;
-function libOptions(q, current, firstCat){
+function libOptions(q, current, firstCat, all){
   const qq = (q || "").toLowerCase().trim();
-  const hit = e => !qq || (e.n + " " + e.cat + " " + e.equip).toLowerCase().includes(qq);
+  // An athlete sees exercises for their sport; searching (asking) or "all sports" shows everything. Trainers see every exercise.
+  const limit = !qq && !all && !(typeof isTrainer === "function" && isTrainer()) && S.profile;
+  const hit = e => (!limit || e.n === current || sportFits(e)) && (!qq || (e.n + " " + e.cat + " " + e.equip).toLowerCase().includes(qq));
   const cats = [...new Set(LIB.map(e => e.cat))].sort((a,b) => (b===firstCat) - (a===firstCat));
   const personal = S.profile && prog().kind === "personal";
   let html = "", n = 0;
@@ -471,12 +515,12 @@ function equipClass(n){
   return /Machine/.test(q) ? "Machine" : /Cable/.test(q) ? "Cable" : /Barbell|Trap bar/.test(q) ? "Barbell" : /Dumbbell|Kettlebell/.test(q) ? "Dumbbells" : /Bodyweight|Band/.test(q) ? "Bodyweight" : "Other";
 }
 const strengthType = t => !["cardio","run","dist"].includes(t);
-function swapSuggestions(def, current, eq){
+function swapSuggestions(def, current, eq, all){
   const cat = libCat(def.n), mus = musclesOf(def.n), alts = def.alts || [];
   const pain = new Set(((S.profile && set_().intake) || {}).pain || []);
   const backCare = pain.has("back") || (S.profile && trackPain());
   const cardioish = !strengthType(def.type);
-  return LIB.filter(c => c.n !== current && (eq ? equipClass(c.n) === eq : true) && (cardioish ? !strengthType(c.type) : strengthType(c.type)) && !(backCare && c.back))
+  return LIB.filter(c => c.n !== current && (all || sportFits(c)) && (eq ? equipClass(c.n) === eq : true) && (cardioish ? !strengthType(c.type) : strengthType(c.type)) && !(backCare && c.back))
     .map(c => {
       const cm = musclesOf(c.n), shared = cm.filter(m => mus.includes(m));
       let score = (c.cat === cat ? 6 : 0) + shared.length * 2 + (cm[0] && cm[0] === mus[0] ? 3 : 0) + (alts.includes(c.n) ? 3 : 0) + (c.type === def.type ? 2 : 0) + (equipClass(c.n) === equipClass(def.n) ? 1 : 0);
@@ -580,6 +624,662 @@ function templateProgram(key){
   return {name: t.name, byTrainer: true, startDate: mondayOf(addDays(today(), 7)), cardioWeekly: t.cardio, notes: [...t.notes],
     ...(EVENT_MIN[key] ? {eventKey: key, event: {name: t.goal, date: null}} : {}),
     block: {weeks: t.weeks, deload: [...t.deload], extra: [], builtin: false}, days: JSON.parse(JSON.stringify(t.days)).map((d, i) => ({...d, id: String.fromCharCode(65 + i)}))};
+}
+
+/* ---- Sport programs (sign-up by sport) ---- */
+TEMPLATES.push(
+  {key:"triathlon", name:"Triathlon (Olympic distance) — 12 weeks", goal:"Triathlon", weeks:12, deload:[4,8,12], cardio:0,
+   desc:"6 days: two swims, two rides, two runs, a weekly brick and one strength session. Week 12 tapers into race day.",
+   notes:["Most sessions are easy (Zone 2). Intervals are hard but controlled.", "Brick = ride, then run straight off the bike. Practise transitions.", "Open-water swims before race day if you can."],
+   days:[
+    DAY("Swim technique", 1, [T("Easy swim",1,"10",0,{cue:"Warm-up, mixed strokes"}), T("Swim intervals",8,100,20,{cue:"Smooth and strong; 20 s rest"}), T("Kick set",4,50,20), T("Easy swim",1,"5",0)]),
+    DAY("Bike intervals + core", 2, [T("Easy ride",1,"15",0), T("Bike intervals",1,"30",0,{repsInc:2.5, repsMax:45, cue:"5 × 4 min hard, 2 min easy"}), T("Dead bug",3,8,30,{each:true}), T("Side plank",2,"30–45",30)]),
+    DAY("Run intervals", 3, [T("Easy run",1,"2 km warm-up",0), T("Run intervals",6,800,90), T("Easy run",1,"1.5 km cool-down",0)]),
+    DAY("Swim endurance + strength", 4, [T("Swim intervals",4,400,30,{cue:"Steady, even pace"}), T("Goblet squat",3,10,90,{rir:2}), T("Single-leg RDL",3,8,60,{each:true}), T("Pull-up",3,"6–8",90)]),
+    DAY("Brick", 6, [T("Long ride",1,"60",0,{repsInc:10, repsMax:150}), T("Brick run",1,"3 km off the bike",0,{repsInc:0.5, repsMax:8})]),
+    DAY("Long run", 0, [T("Long run",1,"8 km easy",0,{repsInc:1, repsMax:16})])
+   ]},
+  {key:"cycling", name:"Cycling — 8 weeks", goal:"Cycling", weeks:8, deload:[4,8], cardio:0,
+   desc:"4 days: threshold intervals, strength for cyclists, hill work and a long ride building to 4 hours.",
+   notes:["Long rides in Zone 2; eat and drink every 20–30 minutes.", "Re-test FTP after week 8."],
+   days:[
+    DAY("Threshold intervals", 2, [T("Easy ride",1,"15",0), T("Bike intervals",1,"40",0,{cue:"4 × 8 min at threshold, 4 min easy"}), T("Easy ride",1,"10",0)]),
+    DAY("Strength for cyclists", 3, [T("Back squat",3,"6–8",150,{rir:2}), T("Romanian deadlift",3,8,120,{rir:2}), T("Bulgarian split squat",3,8,90,{each:true}), T("Standing calf raise",3,15,60), T("Side plank",2,"30–45",30)]),
+    DAY("Hills", 4, [T("Hill climbs (bike)",1,"60",0,{cue:"Seated climbs at a steady, hard effort"})]),
+    DAY("Long ride", 6, [T("Long ride",1,"120",0,{repsInc:15, repsMax:240, cue:"Zone 2; eat and drink every 20–30 min"})])
+   ]},
+  {key:"swimming", name:"Swimming — 8 weeks", goal:"Swimming", weeks:8, deload:[4,8], cardio:0,
+   desc:"3 pool sessions (speed, endurance, threshold) and 1 dryland strength day.",
+   notes:["Threshold sets at your CSS pace (Body → tests).", "Technique first: long, relaxed strokes."],
+   days:[
+    DAY("Technique + speed", 1, [T("Easy swim",1,"10",0), T("Swim intervals",10,50,20,{cue:"Fast, perfect form"}), T("Kick set",4,50,20), T("Easy swim",1,"5",0)]),
+    DAY("Dryland strength", 2, [T("Pull-up",3,"6–8",90), T("Single-arm DB row",3,10,60,{each:true}), T("Face pull",3,15,60), T("Goblet squat",3,10,90), T("Dead bug",3,8,30,{each:true})]),
+    DAY("Endurance", 3, [T("Easy swim",1,"10",0), T("Swim intervals",5,200,30,{cue:"Steady; hold the same pace"}), T("Pull buoy set",4,100,20)]),
+    DAY("Threshold", 5, [T("Easy swim",1,"10",0), T("Swim intervals",8,100,15,{cue:"Your CSS pace"}), T("Easy swim",1,"5",0)])
+   ]},
+  {key:"weightlifting", name:"Olympic weightlifting — 8 weeks", goal:"Weightlifting", weeks:8, deload:[4,8], cardio:0,
+   desc:"4 days: snatch, clean & jerk, technique with pulls, and heavy singles, with squats twice a week.",
+   notes:["Technique over load: stop a lift when the bar path breaks down.", "Heavy singles: work up to a smooth single, not a grinder."],
+   days:[
+    DAY("Snatch + squat", 1, [T("Snatch",6,2,120,{rir:2}), T("Snatch pull",4,3,120,{rir:2}), T("Back squat",4,5,150,{rir:2,kgInc:2.5}), T("Dead bug",3,8,30,{each:true})]),
+    DAY("Clean & jerk", 2, [T("Clean and jerk",6,"1+1",150,{rir:2}), T("Front squat",4,3,150,{rir:2}), T("Push press",3,5,120,{rir:2})]),
+    DAY("Technique + pulls", 4, [T("Power snatch",5,2,90,{rir:3}), T("Power clean",5,2,90,{rir:3}), T("Overhead squat",3,3,90), T("Romanian deadlift",3,6,120,{rir:2})]),
+    DAY("Heavy singles", 5, [T("Snatch",5,1,150,{rir:1}), T("Clean and jerk",5,1,180,{rir:1}), T("Back squat",3,3,180,{rir:2})])
+   ]},
+  {key:"ocr", name:"Obstacle racing — 8 weeks", goal:"Obstacle racing", weeks:8, deload:[4,8], cardio:0,
+   desc:"4 days: hill running with grip work, strength, obstacle skills with conditioning, and a long trail run.",
+   notes:["Grip fails most races: hang and carry every week.", "Practise burpees — they're the penalty for a failed obstacle."],
+   days:[
+    DAY("Hills + grip", 1, [T("Easy run",1,"2 km warm-up",0), T("Hill repeats",6,200,90), T("Dead hang",3,"30–45",60), T("Farmer carry",4,40,60)]),
+    DAY("Strength", 3, [T("Trap-bar deadlift",4,5,150,{rir:2,kgInc:2.5}), T("Pull-up",4,"5–8",120), T("Walking lunge",3,20,90), T("Sandbag carry",4,40,60), T("Burpee",3,15,60)]),
+    DAY("Obstacle skills + engine", 5, [T("Rope climb",4,1,90), T("Burpee broad jump",3,10,60), T("Box jump",3,8,60), T("Assault bike",6,40,80,{cue:"40 s hard, 80 s easy"})]),
+    DAY("Long trail run", 6, [T("Long run",1,"8 km easy",0,{repsInc:1, repsMax:16, cue:"Trails and hills if you can"})])
+   ]},
+  {key:"team", name:"Team sports — 8-week performance block", goal:"Team sports", weeks:8, deload:[4,8], cardio:0,
+   desc:"3 days around your practices and matches: speed and lower-body strength, agility and upper body, power and repeated sprints.",
+   notes:["Fit these around practice: never the heavy day before a match.", "Sprints are all-out with full recovery."],
+   days:[
+    DAY("Speed + lower strength", 1, [T("Strides",6,60,60,{cue:"Build to 90%"}), T("Shuttle runs",6,"40",60), T("Trap-bar deadlift",4,5,150,{rir:2,kgInc:2.5}), T("Bulgarian split squat",3,8,90,{each:true}), T("Nordic hamstring curl",3,5,90)]),
+    DAY("Agility + upper strength", 3, [T("Agility ladder",4,30,45), T("Lateral bound",3,6,60,{each:true}), T("Barbell bench press",4,6,150,{rir:2}), T("Pull-up",4,"6–8",120), T("Pallof press",3,10,45,{each:true})]),
+    DAY("Power + repeated sprints", 5, [T("Box jump",4,5,90), T("Power clean",4,3,120,{rir:2}), T("Medicine-ball rotational throw",3,6,60,{each:true}), T("Run intervals",8,200,60,{cue:"Repeated sprints, 60 s rest"})])
+   ]},
+  {key:"racquet", name:"Racquet sports — 8-week athletic block", goal:"Racquet sports", weeks:8, deload:[4,8], cardio:0,
+   desc:"3 days: footwork and lower body, shoulder health and rotational core, and court conditioning.",
+   notes:["Shoulder and core work protects the hitting arm.", "Court conditioning mimics rallies: short, sharp, repeated."],
+   days:[
+    DAY("Footwork + lower body", 1, [T("Agility ladder",4,30,45), T("Lateral bound",3,6,60,{each:true}), T("Goblet squat",3,8,90,{rir:2}), T("Single-leg RDL",3,8,60,{each:true}), T("Copenhagen plank",3,"20",45,{each:true})]),
+    DAY("Shoulders + core", 3, [T("Half-kneeling landmine press",3,8,60,{each:true}), T("Face pull",3,15,60), T("Single-arm cable row",3,10,60,{each:true}), T("Medicine-ball rotational throw",3,6,60,{each:true}), T("Pallof press",3,10,45,{each:true})]),
+    DAY("Court conditioning", 5, [T("Shuttle runs",8,"20",30,{cue:"Change direction fast; 30 s rest"}), T("Run intervals",6,200,60), T("Side plank",2,"30–45",30)])
+   ]},
+  {key:"combat", name:"Combat sports — 8-week fight camp", goal:"Combat sports", weeks:8, deload:[4,8], cardio:0,
+   desc:"4 days: strength, rounds on the bag, power with conditioning, and skills with an easy run.",
+   notes:["Strength sessions stay short and crisp so they don't steal from skill training.", "Track your weight against your class limit in Progress."],
+   days:[
+    DAY("Strength", 1, [T("Trap-bar deadlift",4,4,150,{rir:2,kgInc:2.5}), T("Pull-up",4,"5–8",120), T("Barbell bench press",3,5,150,{rir:2}), T("Pallof press",3,10,45,{each:true})]),
+    DAY("Rounds", 2, [T("Shadow boxing",3,180,60,{cue:"3-min rounds, 1 min rest"}), T("Bag rounds",6,180,60), T("Burpee",3,15,60)]),
+    DAY("Power + conditioning", 4, [T("Power clean",4,3,120,{rir:2}), T("Medicine-ball rotational throw",3,6,60,{each:true}), T("Assault bike",8,30,30,{cue:"30 s all-out, 30 s easy"}), T("Front-rack carry",3,40,60)]),
+    DAY("Skills + easy run", 6, [T("Drilling / rolling",1,"45",0), T("Easy run",1,"4 km easy",0)])
+   ]},
+  {key:"calisthenics", name:"Calisthenics — 8 weeks", goal:"Calisthenics", weeks:8, deload:[4,8], cardio:60,
+   desc:"3 days: pull, push, and legs with skills (L-sit, handstand, front lever, muscle-up progressions).",
+   notes:["Use the easiest version you can do with clean form, then progress.", "Skill holds: stop before form breaks."],
+   days:[
+    DAY("Pull", 1, [T("Pull-up",4,"5–8",120), T("Inverted row",3,"8–12",90), T("Front lever hold",4,"10",90,{cue:"Tuck or one-leg as needed"}), T("Hanging knee raise",3,10,60)]),
+    DAY("Push", 3, [T("Dip",4,"6–10",120), T("Push-up",3,"10–15",90), T("Pike push-up",3,8,90), T("Handstand hold",4,"20–30",60,{cue:"Against a wall to start"})]),
+    DAY("Legs + skills", 5, [T("Pistol squat",3,5,90,{each:true}), T("Split squat",3,10,90,{each:true}), T("L-sit",4,"10–20",60), T("Muscle-up",4,"2–3",120,{cue:"Use a band or jumping version until you have strict reps"})])
+   ]},
+  {key:"rowing", name:"Rowing — 8 weeks", goal:"Rowing", weeks:8, deload:[4,8], cardio:0,
+   desc:"4 days: steady-state rowing, 1 km intervals, strength and a long row.",
+   notes:["Steady rows at 18–22 strokes a minute, Zone 2.", "Re-test your 2 km after week 8."],
+   days:[
+    DAY("Steady state", 1, [T("Steady-state row",1,"40",0,{repsInc:5, repsMax:60, cue:"18–22 strokes a minute, Zone 2"})]),
+    DAY("Intervals", 3, [T("Steady-state row",1,"10",0), T("Row erg",4,1000,180,{cue:"2 km race pace, 3 min easy"}), T("Steady-state row",1,"5",0)]),
+    DAY("Strength", 4, [T("Conventional deadlift",4,5,150,{rir:2,kgInc:2.5}), T("Front squat",3,6,120,{rir:2}), T("Seated cable row",3,10,90), T("Dead bug",3,8,30,{each:true})]),
+    DAY("Long row", 6, [T("Steady-state row",1,"60",0,{repsInc:5, repsMax:90})])
+   ]},
+  {key:"climbing", name:"Climbing — 8 weeks", goal:"Climbing", weeks:8, deload:[4,8], cardio:0,
+   desc:"3 days: limit bouldering with hangboard, pulling strength with antagonists, and volume climbing.",
+   notes:["Fingers adapt slowly: add hangboard load in small steps.", "Push-ups and face pulls balance all the pulling."],
+   days:[
+    DAY("Limit bouldering", 1, [T("Bouldering session",1,"60",0,{cue:"Hard problems, full rest"}), T("Hangboard hang",6,10,180,{cue:"10 s on a 20 mm edge; add weight when easy"})]),
+    DAY("Pull + antagonist", 3, [T("Weighted pull-up",4,"4–6",150), T("Lock-off hold",3,"10",90,{each:true}), T("Push-up",3,"12–15",60), T("Face pull",3,15,60), T("Hanging knee raise",3,10,60)]),
+    DAY("Volume climbing", 5, [T("Bouldering session",1,"75",0,{cue:"Lots of moderate problems"}), T("Hip mobility flow",1,"300",0)])
+   ]},
+  {key:"mobility", name:"Yoga and mobility — 8 weeks", goal:"Mobility", weeks:8, deload:[], cardio:90,
+   desc:"4 days: two yoga flows, a hips-and-spine mobility session, and gentle strength.",
+   notes:["Breathe slowly; never force a stretch into pain.", "Re-test sit-and-reach and deep squat every 4 weeks."],
+   days:[
+    DAY("Yoga flow", 1, [T("Yoga flow",1,"45",0)]),
+    DAY("Hips + spine", 3, [T("Hip mobility flow",3,"60",30), T("Couch stretch",2,"60",15,{each:true}), T("Thoracic rotation",2,10,30,{each:true}), T("Deep squat hold",3,"45",30)]),
+    DAY("Yoga flow + balance", 5, [T("Yoga flow",1,"40",0), T("Single-leg balance",3,"30",15,{each:true})]),
+    DAY("Gentle strength", 6, [T("Bodyweight squat",3,12,60), T("Push-up",3,"8–12",60), T("Glute bridge",3,12,45), T("Bird dog",3,8,30,{each:true})])
+   ]},
+  {key:"rehab", name:"Strength and balance for older adults — 8 weeks", goal:"Healthy ageing", weeks:8, deload:[4,8], cardio:150,
+   desc:"3 days: two gentle strength-and-balance sessions and a progressive walk. Built for older adults and people returning from injury.",
+   notes:["Hold a support for balance work until you feel steady.", "Stop anything that causes sharp pain and tell your trainer or physio."],
+   days:[
+    DAY("Strength + balance A", 1, [T("Sit-to-stand",3,10,60,{cue:"From a chair; use your hands only if you need to"}), T("Seated cable row",3,10,60), T("Wall sit",2,"20–30",60), T("Single-leg balance",3,"20",30,{each:true, cue:"Hold a support at first"}), T("Farmer carry",3,20,60)]),
+    DAY("Walk", 3, [T("Incline walk",1,"25",0,{repsInc:2.5, repsMax:40, speed:"4–5", incline:2, inclineInc:0.5, inclineMax:6, effort:"Comfortable: you can talk in full sentences"})]),
+    DAY("Strength + balance B", 5, [T("Step-up",3,8,60,{each:true}), T("Machine chest press",3,10,60), T("Glute bridge",3,12,45), T("Heel-to-toe walk",3,"10",30), T("Bird dog",2,8,30,{each:true})])
+   ]}
+);
+
+/* ============ Sports: sign-up by sport, sport-specific logging, weekly targets, progress and event results ============ */
+// Session types for the Cardio tab. m = what it counts as (run, bike, swim...), f = the extra fields the log form shows.
+const SESSION_TYPES = {
+  "Zone 2 incline walk": {m:"walk", f:["speed","incline","hr"]}, "Easy walk": {m:"walk", f:["dist","hr"]}, "Post-meal walks": {m:"walk", f:[]},
+  "Hiking": {m:"walk", f:["dist","elev","hr"]},
+  "Easy run": {m:"run", f:["dist","hr","elev"]}, "Tempo run": {m:"run", f:["dist","hr"]}, "Interval run": {m:"run", f:["dist","splits","hr"]},
+  "Long run": {m:"run", f:["dist","hr","elev"]}, "Treadmill run": {m:"run", f:["dist","speed","incline","hr"]}, "Outdoor run": {m:"run", f:["dist","hr","elev"]},
+  "Trail run": {m:"run", f:["dist","elev","hr"]},
+  "Cycling": {m:"bike", f:["dist","power","cadence","elev","hr"]}, "Indoor cycling": {m:"bike", f:["dist","power","cadence","hr"]},
+  "Brick (bike then run)": {m:"brick", f:["dist","hr"]},
+  "Swimming": {m:"swim", f:["metres","stroke","hr"]}, "Open-water swim": {m:"swim", f:["metres","hr"]}, "Swim intervals": {m:"swim", f:["metres","splits","stroke"]},
+  "Rowing": {m:"row", f:["metres","spm","hr"]}, "On-water row": {m:"row", f:["metres","spm","hr"]}, "SkiErg": {m:"row", f:["metres","hr"]},
+  "Skills practice": {m:"skill", f:["rpe"]}, "Match / game": {m:"match", f:["hr","rpe"]}, "Sport": {m:"match", f:["hr","rpe"]},
+  "Sparring / rolling": {m:"combat", f:["rounds","roundMin","hr","rpe"]}, "Bag / pad work": {m:"combat", f:["rounds","roundMin","hr"]},
+  "Climbing / bouldering": {m:"climb", f:["grade","sends","rpe"]},
+  "Yoga / mobility": {m:"mobility", f:["rpe"]}, "Balance practice": {m:"mobility", f:[]},
+  "4×4 intervals": {m:"other", f:["hr"]}, "Other": {m:"other", f:["dist","hr"]}
+};
+const sessType = t => SESSION_TYPES[t] || SESSION_TYPES.Other;
+const SFIELDS = {
+  dist: () => `Distance ${dUnit()}`, metres: () => "Distance m", speed: () => `Speed ${spUnit()}`, incline: () => "Incline %", hr: () => "Avg heart rate",
+  elev: () => "Climb m", power: () => "Avg power W", cadence: () => "Cadence rpm", spm: () => "Stroke rate spm", stroke: () => "Stroke",
+  splits: () => "Splits (e.g. 4:05, 4:01)", rounds: () => "Rounds", roundMin: () => "Round length min", rpe: () => "Effort 1–10",
+  grade: () => "Hardest grade sent (V4, 6b…)", sends: () => "Problems / routes sent"
+};
+const STROKES = ["Freestyle","Breaststroke","Backstroke","Butterfly","Mixed / IM"];
+
+// Fitness tests a sport cares about. t = "time" (entered as m:ss, lower is better), lower = lower is better, health = needs health consent.
+const STESTS = {
+  steps:{l:"Daily steps (average)", u:"", d:0}, bf:{l:"Body fat %", u:"%", d:1}, rhr:{l:"Resting heart rate", u:" bpm", d:0, lower:true, health:true},
+  vo2:{l:"VO2 max", u:"", d:1, health:true},
+  chest:{l:"Chest", u:"len", d:1}, arm:{l:"Upper arm", u:"len", d:1}, thigh:{l:"Thigh", u:"len", d:1}, hips:{l:"Hips", u:"len", d:1},
+  run1k:{l:"1 km run", t:"time"}, t5k:{l:"5 km run", t:"time"}, t10k:{l:"10 km run", t:"time"}, thalf:{l:"Half marathon", t:"time"}, tmar:{l:"Marathon", t:"time"},
+  ski1k:{l:"1,000 m SkiErg", t:"time"}, row1k:{l:"1,000 m row", t:"time"}, wb100:{l:"100 wall balls", t:"time"},
+  fran:{l:"Fran", t:"time"}, grace:{l:"Grace", t:"time"}, helen:{l:"Helen", t:"time"}, murph:{l:"Murph", t:"time"},
+  rowcal:{l:"Max row calories in 1 min", u:" cal", d:0}, bikecal:{l:"Max bike calories in 1 min", u:" cal", d:0},
+  css:{l:"Swim pace per 100 m (CSS)", t:"time"}, t100:{l:"100 m swim", t:"time"}, t400:{l:"400 m swim", t:"time"},
+  ftp:{l:"FTP", u:" W", d:0}, t20:{l:"20-min power", u:" W", d:0},
+  row2k:{l:"2,000 m row", t:"time"}, row500:{l:"500 m row", t:"time"}, row5k:{l:"5,000 m row", t:"time"},
+  sprint20:{l:"20 m sprint", u:" s", d:2, lower:true}, agility:{l:"5-10-5 agility", u:" s", d:2, lower:true}, vjump:{l:"Vertical jump", u:"len", d:1}, bjump:{l:"Broad jump", u:"len", d:0},
+  yoyo:{l:"Yo-Yo IR1 level", u:"", d:1}, beep:{l:"Beep test level", u:"", d:1},
+  pullups:{l:"Max pull-ups", u:" reps", d:0}, dips:{l:"Max dips", u:" reps", d:0}, pushups:{l:"Max push-ups", u:" reps", d:0}, muscleups:{l:"Max muscle-ups", u:" reps", d:0},
+  handstand:{l:"Handstand hold", u:" s", d:0}, lsit:{l:"L-sit hold", u:" s", d:0}, flever:{l:"Front lever hold", u:" s", d:0}, plank:{l:"Front plank hold", u:" s", d:0},
+  deadhang:{l:"Dead hang", u:" s", d:0}, farmer:{l:"Farmer carry (2 × 24 kg) distance", u:" m", d:0}, burpee3:{l:"Burpees in 3 min", u:" reps", d:0},
+  hang:{l:"Max hang, 20 mm edge, 10 s (added kg)", u:"kg", d:1}, vgrade:{l:"Hardest boulder (V grade)", u:"", d:0},
+  sitreach:{l:"Sit-and-reach", u:"len", d:1}, squathold:{l:"Deep squat hold", u:" s", d:0}, toetouch:{l:"Toe-touch (fingertips to floor, cm short)", u:"len", d:1, lower:true},
+  balance:{l:"Single-leg stand, eyes open", u:" s", d:0}, sitstand:{l:"30-second sit-to-stand", u:" reps", d:0}, walk4:{l:"4 m walk", u:" s", d:1, lower:true},
+  grip:{l:"Grip strength", u:"kg", d:1}, pain:{l:"Pain today 0–10", u:"/10", d:0, lower:true, health:true}
+};
+const testOK = k => STESTS[k] && (!STESTS[k].health || healthOK());
+
+// Races and competitions. km = fixed distance; dist = ask for distance; time = has a finish time; sp = split template.
+const EVENT_KINDS = {
+  hyrox:{l:"HYROX", km:8, mode:"run", time:true, sp:"hyrox"},
+  "5k":{l:"5 km run", km:5, mode:"run", time:true}, "10k":{l:"10 km run", km:10, mode:"run", time:true}, half:{l:"Half marathon", km:21.0975, mode:"run", time:true},
+  marathon:{l:"Marathon", km:42.195, mode:"run", time:true}, ultra:{l:"Ultra / trail race", dist:"km", mode:"run", time:true},
+  "tri-sprint":{l:"Triathlon: sprint", mode:"tri", time:true, sp:"tri"}, "tri-olympic":{l:"Triathlon: Olympic", mode:"tri", time:true, sp:"tri"},
+  "tri-70":{l:"Triathlon: 70.3 / half", mode:"tri", time:true, sp:"tri"}, "tri-full":{l:"Triathlon: full distance", mode:"tri", time:true, sp:"tri"},
+  duathlon:{l:"Duathlon", mode:"tri", time:true, sp:"du"},
+  sportive:{l:"Cycling: sportive / gran fondo", dist:"km", mode:"bike", time:true, sp:"bike"}, tt:{l:"Cycling: time trial", dist:"km", mode:"bike", time:true, sp:"bike"},
+  swimrace:{l:"Swim race (pool)", dist:"m", mode:"swim", time:true}, openwater:{l:"Open-water swim", dist:"m", mode:"swim", time:true},
+  rowrace:{l:"Rowing race / erg test", dist:"m", mode:"row", time:true},
+  spartan:{l:"Spartan race", dist:"km", mode:"run", time:true, sp:"ocr"}, devils:{l:"Devil's Circuit", dist:"km", mode:"run", time:true, sp:"ocr"},
+  yoddha:{l:"Yoddha", dist:"km", mode:"run", time:true, sp:"ocr"}, ocr:{l:"Other obstacle race", dist:"km", mode:"run", time:true, sp:"ocr"},
+  cfopen:{l:"CrossFit Open", sp:"cfopen"}, cfcomp:{l:"Functional fitness competition", sp:"place"},
+  plmeet:{l:"Powerlifting meet", sp:"pl"}, wlmeet:{l:"Weightlifting meet", sp:"wl"}, physique:{l:"Physique / bodybuilding show", sp:"place"},
+  bout:{l:"Fight / bout (boxing, MMA, kickboxing)", sp:"bout"}, grappling:{l:"Grappling / BJJ tournament", sp:"bout"},
+  match:{l:"Match (team sport)", sp:"match"}, racquet:{l:"Racquet match / tournament", sp:"match"}, climbcomp:{l:"Climbing competition", sp:"place"},
+  other:{l:"Other event", time:true}
+};
+const HYROX_ST = [["ski","SkiErg 1,000 m"],["push","Sled push 50 m"],["pull","Sled pull 50 m"],["bbj","Burpee broad jumps 80 m"],["row","Row 1,000 m"],["farm","Farmers carry 200 m"],["lunge","Sandbag lunges 100 m"],["wb","Wall balls 100"]];
+// Split fields per template: [key, label, kind] kind: time | kg | num | text | sel:a/b/c
+const SPLITS = {
+  hyrox: [...[1,2,3,4,5,6,7,8].flatMap(i => [[`r${i}`, `Run ${i}`, "time"], [HYROX_ST[i-1][0], HYROX_ST[i-1][1], "time"]]), ["rox","Roxzone total","time"], ["division","Division","sel:Open/Pro/Doubles/Relay"]],
+  tri: [["swim","Swim","time"],["t1","T1","time"],["bike","Bike","time"],["t2","T2","time"],["run","Run","time"]],
+  du: [["run1","Run 1","time"],["t1","T1","time"],["bike","Bike","time"],["t2","T2","time"],["run2","Run 2","time"]],
+  bike: [["power","Avg power W","num"],["elev","Climb m","num"]],
+  ocr: [["failed","Obstacles failed (names)","text"],["penalty","Penalty burpees / laps","num"]],
+  cfopen: [["w1","Workout 1 score","text"],["w2","Workout 2 score","text"],["w3","Workout 3 score","text"],["rank","Overall rank","num"]],
+  pl: [["squat","Best squat kg","kg"],["bench","Best bench kg","kg"],["deadlift","Best deadlift kg","kg"],["bw","Body weight kg","kg"]],
+  wl: [["snatch","Best snatch kg","kg"],["cj","Best clean & jerk kg","kg"],["bw","Body weight kg","kg"]],
+  bout: [["result","Result","sel:Win/Loss/Draw/No contest"],["method","How (decision, KO, submission…)","text"],["rounds","Rounds","num"],["weighin","Weigh-in kg","kg"]],
+  match: [["result","Result","sel:Win/Loss/Draw"],["score","Score","text"],["mins","Minutes played","num"]],
+  place: []
+};
+
+// 19 sports. cats/allow/no shape the exercise list; types = Cardio tab session types; tests; events; week = weekly targets; prog = progress panels.
+const RUN_T = ["Easy run","Tempo run","Interval run","Long run","Treadmill run","Trail run"], WALK_T = ["Zone 2 incline walk","Easy walk","Hiking"];
+const STRENGTH_ALLOW = ["Goblet squat","Bodyweight squat","Wall sit","Romanian deadlift","DB Romanian deadlift","Kettlebell swing","Push-up","Single-arm DB row","Pull-up","Inverted row","Band pull-apart","Face pull","Box jump","Trap-bar deadlift"];
+const SPORTS = [
+  {k:"general", l:"General fitness / weight loss", g:"Fitness", d:"A mix of strength and cardio", ring:"Cardio",
+   types:["Zone 2 incline walk","Easy walk","Post-meal walks","Treadmill run","Outdoor run","Cycling","Rowing","Swimming","Hiking","Sport","4×4 intervals","Yoga / mobility","Other"],
+   tests:["steps","bf","rhr","vo2"], events:["5k","10k","hyrox","other"], week:[{m:"*", u:"min", t:150, l:"Cardio"}],
+   prog:[["workouts"],["body","weight"],["body","waist"],["test","bf"],["test","steps"],["weekmin","*","Cardio minutes per week"]], tpls:["fatloss","upperlower"]},
+  {k:"strength", l:"Strength / powerlifting", g:"Strength", d:"Squat, bench and deadlift", ring:"Cardio", plan:"strength",
+   no:["Running","Swimming","Cycling","Sport skills","Climbing","Gymnastics","Mobility"], types:[...WALK_T,"Cycling","Rowing","Other"],
+   tests:["bf"], events:["plmeet","other"], week:[{m:"*", u:"min", t:90, l:"Cardio"}],
+   prog:[["lift","squat"],["lift","bench"],["lift","deadlift"],["total"],["volume"],["reppbs"],["meets","plmeet"]], tpls:["upperlower","ppl"]},
+  {k:"bodybuilding", l:"Bodybuilding / physique", g:"Strength", d:"Muscle, symmetry and conditioning", ring:"Cardio", plan:"muscle",
+   no:["Running","Swimming","Cycling","Sport skills","Climbing","Gymnastics","Olympic lifts"], types:[...WALK_T,"Cycling","Other"],
+   tests:["bf","chest","arm","thigh","hips"], events:["physique","other"], week:[{m:"*", u:"min", t:120, l:"Cardio"}],
+   prog:[["musclevol"],["measure"],["body","weight"],["body","waist"],["test","bf"],["dexa"]], tpls:["ppl","upperlower"]},
+  {k:"weightlifting", l:"Olympic weightlifting", g:"Strength", d:"Snatch and clean & jerk", ring:"Cardio", tpl:"weightlifting",
+   cats:["Olympic lifts","Squat","Hinge","Shoulders (press)","Back (rows)","Back (pulldowns)","Core","Single leg","Glutes","Mobility"], types:[...WALK_T,"Cycling","Other"],
+   tests:["vjump","bjump"], events:["wlmeet","other"], week:[{m:"*", u:"min", t:60, l:"Cardio"}],
+   prog:[["lift","snatch"],["lift","cj"],["lift","fsquat"],["wltotal"],["techpbs"],["meets","wlmeet"]], tpls:["weightlifting"]},
+  {k:"hyrox", l:"HYROX", g:"Hybrid", d:"8 × 1 km runs and 8 stations", ring:"Run + stations", tpl:"hyrox",
+   no:["Swimming","Sport skills","Climbing","Gymnastics"], types:[...RUN_T,"Rowing","SkiErg","Cycling","Other"],
+   tests:["run1k","ski1k","row1k","wb100","t5k"], events:["hyrox","5k","10k","other"], week:[{m:"run", u:"km", t:20, l:"Running"},{m:"*", u:"min", t:180, l:"Cardio + stations"}],
+   prog:[["hyrox"],["pace","run"],["weekdist","run","Running per week"],["tests",["run1k","ski1k","row1k","wb100"]],["races",["hyrox"]]], tpls:["hyrox","crossfit"]},
+  {k:"crossfit", l:"CrossFit / functional fitness", g:"Hybrid", d:"Benchmarks, lifts, gymnastics, engine", ring:"Conditioning", tpl:"crossfit",
+   no:["Swimming","Sport skills","Climbing"], types:["Rowing","SkiErg","Indoor cycling","Easy run","Interval run","Other"],
+   tests:["fran","grace","helen","murph","rowcal","bikecal","pullups","muscleups"], events:["cfopen","cfcomp","hyrox","other"], week:[{m:"*", u:"min", t:90, l:"Engine"}],
+   prog:[["tests",["fran","grace","helen","murph"]],["lift","squat"],["lift","deadlift"],["lift","clean"],["bwbest",["Pull-up","Toes-to-bar","Muscle-up","Handstand push-up","Double-under"]],["tests",["rowcal","bikecal"]],["races",["cfopen","cfcomp"]]], tpls:["crossfit","hyrox"]},
+  {k:"running", l:"Running (5 km to marathon)", g:"Endurance", d:"Pace, distance and race times", ring:"Running",
+   cats:["Running","Core","Single leg","Glutes","Legs (isolation)","Mobility"], allow:STRENGTH_ALLOW, types:[...RUN_T,"Easy walk","Cycling","Other"],
+   tests:["t5k","t10k","thalf","tmar","vo2","rhr"], events:["5k","10k","half","marathon","ultra","other"], week:[{m:"run", u:"km", t:25, l:"Running"},{m:"run", u:"long", t:10, l:"Long run"}],
+   prog:[["pace","run"],["weekdist","run","Distance per week"],["longest","run"],["races",["5k","10k","half","marathon","ultra"]],["hrzones"],["test","vo2"]], tpls:["10k","half","marathon"]},
+  {k:"triathlon", l:"Triathlon", g:"Endurance", d:"Swim, bike, run", ring:"Swim + bike + run", tpl:"triathlon",
+   cats:["Running","Swimming","Cycling","Core","Single leg","Glutes","Legs (isolation)","Mobility"], allow:STRENGTH_ALLOW,
+   types:["Swimming","Open-water swim","Swim intervals","Cycling","Indoor cycling","Brick (bike then run)",...RUN_T,"Other"],
+   tests:["css","ftp","t5k","t10k"], events:["tri-sprint","tri-olympic","tri-70","tri-full","duathlon","5k","10k","half","openwater"],
+   week:[{m:"swim", u:"min", t:90, l:"Swim"},{m:"bike", u:"min", t:180, l:"Bike"},{m:"run", u:"min", t:120, l:"Run"}],
+   prog:[["pace","swim"],["bike"],["pace","run"],["volsport",["swim","bike","run"]],["bricks"],["races",["tri-sprint","tri-olympic","tri-70","tri-full","duathlon"]],["tests",["css","ftp"]]], tpls:["triathlon","half"]},
+  {k:"cycling", l:"Cycling", g:"Endurance", d:"Distance, speed, power and climbing", ring:"Riding", tpl:"cycling",
+   cats:["Cycling","Core","Single leg","Glutes","Legs (isolation)","Mobility"], allow:[...STRENGTH_ALLOW,"Leg press","Back squat","Bike erg","Assault bike"],
+   types:["Cycling","Indoor cycling","Easy walk","Easy run","Other"], tests:["ftp","t20"], events:["sportive","tt","other"], week:[{m:"bike", u:"km", t:150, l:"Riding"}],
+   prog:[["weekdist","bike","Distance per week"],["bike"],["tests",["ftp","t20"]],["climb"],["races",["sportive","tt"]]], tpls:["cycling"]},
+  {k:"swimming", l:"Swimming", g:"Endurance", d:"Pace per 100 m, distance, strokes", ring:"Swimming", tpl:"swimming",
+   cats:["Swimming","Core","Back (pulldowns)","Shoulders","Mobility","Glutes"], allow:["Push-up","Single-arm DB row","Seated cable row","Goblet squat","Box jump","Romanian deadlift","Band pull-apart"],
+   types:["Swimming","Swim intervals","Open-water swim","Other"], tests:["css","t100","t400"], events:["swimrace","openwater","other"], week:[{m:"swim", u:"m", t:8000, l:"Swimming"}],
+   prog:[["pace","swim"],["weekdist","swim","Distance per week"],["strokes"],["tests",["css","t100","t400"]],["races",["swimrace","openwater"]]], tpls:["swimming"]},
+  {k:"ocr", l:"Obstacle racing (Spartan, Devil's Circuit, Yoddha)", g:"Hybrid", d:"Running, grip, carries, obstacles", ring:"Run + conditioning", tpl:"ocr",
+   cats:["Running","Carries","Back (pulldowns)","Back (rows)","Core","Single leg","Conditioning","Gymnastics","Glutes","Hinge"], allow:["Goblet squat","Front squat","Push-up","Dip"],
+   types:[...RUN_T,"Hiking","Other"], tests:["deadhang","farmer","pullups","burpee3","t5k"], events:["spartan","devils","yoddha","ocr","5k","10k"],
+   week:[{m:"run", u:"km", t:20, l:"Running"},{m:"*", u:"min", t:150, l:"Cardio"}],
+   prog:[["pace","run"],["tests",["deadhang","farmer","pullups"]],["obstacles"],["races",["spartan","devils","yoddha","ocr"]]], tpls:["ocr","hyrox"]},
+  {k:"team", l:"Team sports (football, cricket, hockey, basketball, rugby)", g:"Sport", d:"Speed, agility, power, fitness", ring:"Training", tpl:"team",
+   cats:["Running","Sport skills","Squat","Hinge","Single leg","Glutes","Legs (isolation)","Core","Chest","Back (rows)","Back (pulldowns)","Shoulders (press)","Olympic lifts","Conditioning","Mobility","Carries"],
+   types:["Match / game","Skills practice","Interval run","Easy run","Other"], tests:["sprint20","agility","vjump","bjump","yoyo","beep"], events:["match","other"],
+   week:[{m:"match,skill", u:"sessions", t:3, l:"Practice + matches"},{m:"*", u:"min", t:150, l:"Training"}],
+   prog:[["tests",["sprint20","agility","vjump","yoyo","beep"]],["lift","squat"],["lift","bench"],["swr"],["matches"]], tpls:["team"]},
+  {k:"racquet", l:"Racquet sports (tennis, badminton, squash, padel, pickleball)", g:"Sport", d:"Agility, speed, shoulder and core", ring:"Training", tpl:"racquet",
+   cats:["Running","Sport skills","Single leg","Glutes","Core","Shoulders","Back (rows)","Back (pulldowns)","Legs (isolation)","Conditioning","Mobility"], allow:["Goblet squat","Trap-bar deadlift","Romanian deadlift","Push-up","Landmine press","Half-kneeling landmine press"],
+   types:["Match / game","Skills practice","Interval run","Easy run","Other"], tests:["agility","sprint20","vjump","plank","beep"], events:["racquet","other"],
+   week:[{m:"match,skill", u:"sessions", t:3, l:"Court sessions"},{m:"*", u:"min", t:150, l:"Training"}],
+   prog:[["tests",["agility","sprint20","vjump"]],["lift","ohp"],["tests",["plank","beep"]],["matches"]], tpls:["racquet"]},
+  {k:"combat", l:"Combat sports (boxing, MMA, BJJ, wrestling)", g:"Sport", d:"Rounds, conditioning, strength-to-weight", ring:"Rounds + conditioning", tpl:"combat",
+   cats:["Sport skills","Conditioning","Core","Hinge","Squat","Single leg","Back (rows)","Back (pulldowns)","Chest","Shoulders (press)","Carries","Running","Olympic lifts","Mobility","Glutes"],
+   types:["Sparring / rolling","Bag / pad work","Skills practice","Interval run","Easy run","Other"], tests:["burpee3","pullups","pushups","rhr"], events:["bout","grappling","other"],
+   week:[{m:"combat", u:"rounds", t:24, l:"Rounds"},{m:"*", u:"min", t:150, l:"Training"}],
+   prog:[["rounds"],["hrzones"],["swr"],["weightclass"],["tests",["burpee3","pullups"]],["bouts"]], tpls:["combat"]},
+  {k:"calisthenics", l:"Calisthenics", g:"Strength", d:"Pull-ups, dips, skills", ring:"Cardio", tpl:"calisthenics", bwOnly:true,
+   cats:["Gymnastics","Mobility","Core"], types:[...WALK_T,"Easy run","Other"], tests:["pullups","dips","pushups","muscleups","handstand","lsit","flever"], events:["other"],
+   week:[{m:"*", u:"min", t:90, l:"Cardio"}], prog:[["tests",["pullups","dips","pushups","muscleups"]],["tests",["handstand","lsit","flever"]],["bwbest",["Pull-up","Chin-up","Dip","Push-up","Muscle-up","Pistol squat","Handstand push-up"]]], tpls:["calisthenics"]},
+  {k:"rowing", l:"Rowing", g:"Endurance", d:"500 m split, 2 km time, stroke rate", ring:"Rowing", tpl:"rowing",
+   cats:["Core","Hinge","Squat","Back (rows)","Back (pulldowns)","Single leg","Glutes","Mobility"], allow:["Row erg","Steady-state row","Bike erg","Ski erg","Easy run"],
+   types:["Rowing","On-water row","Cycling","Easy run","Other"], tests:["row2k","row500","row5k"], events:["rowrace","other"], week:[{m:"row", u:"km", t:40, l:"Rowing"}],
+   prog:[["pace","row"],["tests",["row2k","row500","row5k"]],["spm"],["weekdist","row","Distance per week"],["races",["rowrace"]]], tpls:["rowing"]},
+  {k:"climbing", l:"Climbing / bouldering", g:"Sport", d:"Grades, finger strength, pulling", ring:"Training", tpl:"climbing",
+   cats:["Climbing","Back (pulldowns)","Back (rows)","Core","Shoulders","Mobility","Gymnastics"], allow:["Push-up","Dip","Hammer curl","Single-leg RDL","Goblet squat"],
+   types:["Climbing / bouldering","Yoga / mobility","Easy run","Other"], tests:["vgrade","hang","pullups","deadhang"], events:["climbcomp","other"],
+   week:[{m:"climb", u:"sessions", t:3, l:"Climbing sessions"}], prog:[["grades"],["tests",["hang","vgrade"]],["tests",["pullups","deadhang"]]], tpls:["climbing"]},
+  {k:"yoga", l:"Yoga / mobility", g:"Wellbeing", d:"Sessions, mobility, consistency", ring:"Practice", tpl:"mobility",
+   cats:["Mobility","Core","Glutes"], allow:["Bodyweight squat","Push-up","Split squat","Single-leg RDL","Easy run"],
+   types:["Yoga / mobility","Easy walk","Balance practice","Other"], tests:["sitreach","squathold","toetouch","balance"], events:["other"],
+   week:[{m:"mobility", u:"sessions", t:4, l:"Sessions"}], prog:[["sessions","mobility","Sessions per week"],["tests",["sitreach","squathold","toetouch","balance"]],["consistency"]], tpls:["mobility"]},
+  {k:"rehab", l:"Older adults / rehab", g:"Wellbeing", d:"Balance, strength, walking, pain", ring:"Walking", tpl:"rehab",
+   cats:["Mobility"], allow:["Bodyweight squat","Wall sit","Glute bridge","Step-up","Split squat","Incline walk","Standing calf raise","Side plank","Dead bug","Bird dog","Farmer carry","Suitcase carry","Seated cable row","Lat pulldown","Machine chest press","Leg press","Push-up","Band pull-apart","Goblet squat","Kettlebell deadlift from a step","Seated DB overhead press","Band Pallof press"],
+   types:["Easy walk","Post-meal walks","Zone 2 incline walk","Balance practice","Yoga / mobility","Swimming","Other"], tests:["balance","sitstand","walk4","grip","pain"], events:["5k","other"],
+   week:[{m:"walk", u:"min", t:150, l:"Walking"},{m:"mobility", u:"sessions", t:2, l:"Balance sessions"}],
+   prog:[["tests",["balance","sitstand"]],["tests",["walk4","grip"]],["test","pain"],["weekmin","walk","Walking minutes per week"]], tpls:["rehab"]}
+];
+const SPORTMAP = Object.fromEntries(SPORTS.map(s => [s.k, s]));
+// The sport of whoever is on screen: the trainer's open client, or this user
+function sportKeys(settings){ const it = (settings && settings.intake) || {}; return [it.sport || "general", it.sport2 || null]; }
+function curSport(){ const st = S.cctx ? (clientDoc(S.cctx.uid) || {}).settings : (S.profile && S.profile.settings); return SPORTMAP[sportKeys(st)[0]] || SPORTMAP.general; }
+function curSport2(){ const st = S.cctx ? (clientDoc(S.cctx.uid) || {}).settings : (S.profile && S.profile.settings); const k = sportKeys(st)[1]; return k && SPORTMAP[k] && k !== curSport().k ? SPORTMAP[k] : null; }
+const sportLabel = k => (SPORTMAP[k] || SPORTMAP.general).l;
+function sportFits1(sp, e){
+  if (!sp || sp.k === "general") return true;
+  if (sp.allow && sp.allow.includes(e.n)) return true;
+  if (sp.bwOnly) return /Bodyweight|Band|Rope|Rings|Bar\b|Mat|Chair/.test(e.equip) || (sp.cats || []).includes(e.cat);
+  if (sp.cats) return sp.cats.includes(e.cat);
+  if (sp.no) return !sp.no.includes(e.cat);
+  return true;
+}
+// An exercise fits if it suits the main or the second sport
+const sportFits = e => sportFits1(curSport(), e) || (curSport2() ? sportFits1(curSport2(), e) : false);
+// Session types for the Cardio tab: main sport first, then the second sport's, then the old types already in the log
+function sportTypes(){ const t = [...curSport().types, ...(curSport2() ? curSport2().types : [])]; (S.data.cardio || []).forEach(c => t.push(c.type)); return [...new Set(t.filter(Boolean))]; }
+
+/* ---- time helpers: "1:05:30", "4:05" or "245" (seconds) ---- */
+function parseTime(v){
+  const s = String(v ?? "").trim(); if (!s) return null;
+  if (/^\d+(\.\d+)?$/.test(s)) return +s;
+  const p = s.split(":").map(Number); if (p.some(isNaN) || p.length > 3) return null;
+  return p.reduce((a, x) => a * 60 + x, 0);
+}
+function fmtTime(sec){
+  if (sec == null || isNaN(sec)) return "–"; sec = Math.round(sec);
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+const GRADES = {"4":0,"5":1,"5+":2,"6a":3,"6a+":3,"6b":4,"6b+":4,"6c":5,"6c+":5,"7a":6,"7a+":7,"7b":8,"7b+":8,"7c":9,"7c+":10,"8a":11,"8a+":12,"8b":13,"8b+":14,"8c":15};
+function gradeNum(g){ const s = String(g || "").trim().toLowerCase(); if (!s) return null; const v = s.match(/^v(\d+)/); if (v) return +v[1]; if (s in GRADES) return GRADES[s]; return num(s) ? +s : null; }
+const gradeText = n => n == null ? "–" : "V" + n;
+
+/* ---- sport logs: cardio entries, cardio inside workouts and races, as one list ---- */
+const EX_MODE = {"Row erg":"row","Steady-state row":"row","Ski erg":"row","Bike erg":"bike","Assault bike":"bike","Incline walk":"walk"};
+function exMode(e){ const c = libCat(e.performedAs); return EX_MODE[e.performedAs] || (c === "Running" ? "run" : c === "Swimming" ? "swim" : c === "Cycling" ? "bike" : c === "Climbing" ? "climb" : c === "Mobility" ? "mobility" : c === "Sport skills" ? (/Bag|Sparring|Shadow|Drilling/.test(e.performedAs) ? "combat" : "skill") : null); }
+function sportLogs(){
+  const out = [];
+  S.data.cardio.forEach(c => { const t = sessType(c.type); out.push({date: c.date, src: "cardio", id: c.id, type: c.type, m: t.m, min: +c.minutes || 0, km: num(c.dist) ? +c.dist : null, hr: c.avgHr, power: c.power, cadence: c.cadence, elev: c.elev, spm: c.spm, stroke: c.stroke, rounds: c.rounds, roundMin: c.roundMin, grade: c.grade, sends: c.sends, rpe: c.rpe}); });
+  S.data.sessions.forEach(s => {
+    if (s.event){ const k = EVENT_KINDS[s.event.kind] || {}; if (k.mode) out.push({date: s.date, src: "event", id: s.id, type: k.l, m: k.mode, min: s.event.finish ? s.event.finish / 60 : (+s.durationMin || 0), km: eventKm(s.event), race: true}); return; }
+    s.exercises.forEach(e => {
+      const m = exMode(e); if (!m) return; const ds = doneSets(e); if (!ds.length) return;
+      let km = 0, min = 0, rounds = 0;
+      ds.forEach(x => {
+        if (e.type === "run"){ km += +x.reps || 0; min += +x.kg || 0; }
+        else if (e.type === "dist"){ km += (+x.reps || 0) / 1000; min += (+x.kg || 0) / 60; }
+        else if (e.type === "cardio"){ min += +x.reps || 0; km += +x.kg || 0; }
+        else if (e.type === "time"){ min += (+x.reps || 0) / 60; rounds++; }
+      });
+      out.push({date: s.date, src: "workout", id: s.id, type: e.performedAs, m, min, km: km || null, rounds: m === "combat" ? rounds : null, hr: e.hr || null});
+    });
+  });
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+const modeIs = (r, m) => m === "*" ? !["mobility","climb"].includes(r.m) : m.split(",").includes(r.m) || (r.m === "brick" && (m.includes("bike") || m.includes("run")));
+function eventKm(ev){ const k = EVENT_KINDS[ev.kind] || {}; if (k.km) return k.km; if (num(ev.dist)) return k.dist === "m" ? +ev.dist / 1000 : +ev.dist; return null; }
+// pace: run min per km/mi, swim sec per 100 m, row sec per 500 m; bike speed km/h
+function paceOf(r){
+  if (!(r.min > 0) || !(r.km > 0)) return null;
+  if (r.m === "swim") return r.min * 60 / (r.km * 10);
+  if (r.m === "row") return r.min * 60 / (r.km * 2);
+  if (r.m === "bike") return r.km / (r.min / 60);
+  return r.min / dOut(r.km);
+}
+function paceText(m, v){ if (v == null) return "–"; if (m === "swim") return fmtTime(v) + " /100 m"; if (m === "row") return fmtTime(v) + " /500 m"; if (m === "bike") return `${fmt(dOut(v))} ${spUnit()}`; return `${fmtPace(v)} /${dUnit()}`; }
+function cardioDetail(c){
+  const t = sessType(c.type), b = [];
+  if (num(c.dist)) b.push(t.f.includes("metres") ? `${Math.round(c.dist * 1000).toLocaleString()} m` : D(c.dist, 2));
+  const p = paceOf({m: t.m, min: +c.minutes, km: +c.dist}); if (p != null && ["run","swim","row","bike"].includes(t.m)) b.push(paceText(t.m, p));
+  if (num(c.speed)) b.push(`${fmt(dOut(c.speed))} ${spUnit()}`); if (num(c.incline)) b.push(`${fmt(c.incline)}%`);
+  if (num(c.power)) b.push(`${c.power} W`); if (num(c.cadence)) b.push(`${c.cadence} rpm`); if (num(c.elev)) b.push(`↑${c.elev} m`);
+  if (num(c.spm)) b.push(`${c.spm} spm`); if (c.stroke) b.push(c.stroke); if (c.splits) b.push(`splits ${c.splits}`);
+  if (num(c.rounds)) b.push(`${c.rounds} × ${num(c.roundMin) ? c.roundMin + " min" : "rounds"}`);
+  if (c.grade) b.push(`top ${c.grade}`); if (num(c.sends)) b.push(`${c.sends} sent`); if (num(c.rpe)) b.push(`RPE ${c.rpe}`);
+  return b.join(" · ");
+}
+
+/* ---- fitness tests (saved as Body check-ins with source "test") ---- */
+function testRows(k){ return S.data.body.filter(b => b.source === "test" && b.tests && b.tests[k] != null && b.tests[k] !== "").map(b => ({date: b.date, v: +b.tests[k]})).sort((a, b) => a.date.localeCompare(b.date)); }
+const testLower = k => STESTS[k].t === "time" || !!STESTS[k].lower;
+function testShow(k, v){
+  const T = STESTS[k]; if (v == null || isNaN(v)) return "–";
+  if (T.t === "time") return fmtTime(v);
+  if (T.u === "len") return L(v, T.d); if (T.u === "kg") return W(v, T.d);
+  return fmt(v, T.d) + (T.u || "");
+}
+const testIn = (k, v) => { const T = STESTS[k]; if (T.t === "time") return parseTime(v); if (!num(v)) return null; return T.u === "len" ? lenIn(v) : T.u === "kg" ? +wIn(v) : +v; };
+const testInputVal = (k, v) => { const T = STESTS[k]; if (v == null) return ""; return T.t === "time" ? fmtTime(v) : T.u === "len" ? rnd(lenOut(v), 1) : T.u === "kg" ? showW(v) : v; };
+const testUnitLbl = k => { const T = STESTS[k]; return T.t === "time" ? " (m:ss)" : T.u === "len" ? ` ${lenUnit()}` : T.u === "kg" ? ` ${wUnit()}` : T.u ? ` ${T.u.trim()}` : ""; };
+function sportTestKeys(){ return [...new Set([...curSport().tests, ...(curSport2() ? curSport2().tests : [])])].filter(testOK); }
+
+/* ---- events (races, competitions) are saved as workouts with an "event" record ---- */
+const eventSessions = (kinds) => S.data.sessions.filter(s => s.event && (!kinds || kinds.includes(s.event.kind))).sort((a, b) => a.date.localeCompare(b.date));
+function dotsScore(total, bw, sex){
+  if (!(total > 0) || !(bw > 0) || !sex) return null;
+  const c = sex === "female" ? [-57.96288, 13.6175032, -0.1126655495, 0.0005158568, -0.0000010706] : [-307.75076, 24.0900756, -0.1918759221, 0.0007391293, -0.000001093];
+  const b = Math.min(Math.max(bw, 40), sex === "female" ? 150 : 210);
+  return total * 500 / (c[0] + c[1] * b + c[2] * b ** 2 + c[3] * b ** 3 + c[4] * b ** 4);
+}
+const intakeSex = () => ((S.profile && set_().intake) || {}).sex || null;
+function eventSummary(ev){
+  const k = EVENT_KINDS[ev.kind] || EVENT_KINDS.other, sp = ev.splits || {}, b = [];
+  if (ev.finish) b.push(fmtTime(ev.finish));
+  const km = eventKm(ev); if (km && ev.finish && k.mode === "run") b.push(`${fmtPace(ev.finish / 60 / dOut(km))} /${dUnit()}`);
+  if (k.dist && num(ev.dist)) b.push(k.dist === "m" ? `${(+ev.dist).toLocaleString()} m` : D(ev.dist));
+  if (k.sp === "pl"){ const t = ["squat","bench","deadlift"].reduce((a, x) => a + (+sp[x] || 0), 0); if (t) b.push(`Total ${W(t)}`); const d = dotsScore(t, +sp.bw, intakeSex()); if (d) b.push(`DOTS ${fmt(d, 1)}`); }
+  if (k.sp === "wl"){ const t = (+sp.snatch || 0) + (+sp.cj || 0); if (t) b.push(`Total ${W(t)} (${W(sp.snatch)} + ${W(sp.cj)})`); }
+  if (sp.result) b.push(sp.result + (sp.method ? ` · ${sp.method}` : "") + (sp.score ? ` · ${sp.score}` : ""));
+  if (ev.place) b.push(`#${ev.place}${ev.field ? ` of ${ev.field}` : ""}`);
+  if (ev.division) b.push(ev.division); if (sp.division) b.push(sp.division);
+  return b.join(" · ");
+}
+function eventDetailHTML(s){
+  const ev = s.event, k = EVENT_KINDS[ev.kind] || EVENT_KINDS.other, sp = ev.splits || {};
+  const prev = eventSessions([ev.kind]).filter(x => x.id !== s.id && x.event.finish);
+  const best = prev.length ? Math.min(...prev.map(x => x.event.finish)) : null;
+  let out = `<div class="row" style="gap:8px"><span class="pill blue">🏁 ${esc(k.l)}</span>${ev.finish && (best == null || ev.finish < best) && prev.length ? `<span class="pill good">Personal best</span>` : best != null && ev.finish ? `<span class="pill">PB ${fmtTime(best)}</span>` : ""}</div>
+  <p style="margin:0"><b>${esc(eventSummary(ev)) || "No result entered"}</b></p>`;
+  const rows = (SPLITS[k.sp] || []).filter(([key]) => sp[key] != null && sp[key] !== "");
+  if (rows.length){
+    const bestOf = key => { const v = eventSessions([ev.kind]).map(x => (x.event.splits || {})[key]).filter(num).map(Number); return v.length ? Math.min(...v) : null; };
+    out += `<div class="tbl"><table><tr><th>Split</th><th>Result</th>${k.sp === "hyrox" ? "<th>Best</th>" : ""}</tr>${rows.map(([key, l, kind]) => `<tr><td>${esc(l)}</td><td class="num">${kind === "time" ? fmtTime(sp[key]) : kind === "kg" ? W(sp[key]) : esc(sp[key])}</td>${k.sp === "hyrox" ? `<td class="num">${kind === "time" ? fmtTime(bestOf(key)) : ""}</td>` : ""}</tr>`).join("")}</table></div>`;
+    if (k.sp === "hyrox"){ const runs = [1,2,3,4,5,6,7,8].map(i => sp["r" + i]).filter(num).map(Number), st = HYROX_ST.map(([key]) => sp[key]).filter(num).map(Number);
+      if (runs.length) out += `<span class="small">Running ${fmtTime(runs.reduce((a, b) => a + b, 0))} (avg ${fmtTime(runs.reduce((a, b) => a + b, 0) / runs.length)} per km) · stations ${fmtTime(st.reduce((a, b) => a + b, 0))}${num(sp.rox) ? ` · Roxzone ${fmtTime(sp.rox)}` : ""}</span>`; }
+  }
+  if (ev.notes) out += `<p class="small" style="margin:0">${esc(ev.notes)}</p>`;
+  return out;
+}
+function eventSheet(){
+  const st = S.sheet, s = st.id ? S.data.sessions.find(x => x.id === st.id) : null, ev = st.ev || (st.ev = s ? clean(s.event) : {kind: curSport().events[0], splits: {}}), k = EVENT_KINDS[ev.kind] || EVENT_KINDS.other;
+  const mine = [...new Set([...curSport().events, ...(curSport2() ? curSport2().events : [])])], others = Object.keys(EVENT_KINDS).filter(x => !mine.includes(x));
+  const field = ([key, l, kind]) => {
+    const v = (ev.splits || {})[key];
+    if (kind.startsWith("sel:")) return `<label class="f">${esc(l)}<select data-evs="${key}"><option value=""></option>${kind.slice(4).split("/").map(o => `<option ${v === o ? "selected" : ""}>${o}</option>`).join("")}</select></label>`;
+    return `<label class="f">${esc(kind === "kg" ? l.replace(/kg$/, wUnit()) : l)}${kind === "time" ? " (m:ss)" : ""}<input data-evs="${key}" ${kind === "text" || kind === "time" ? "" : `inputmode="${kind === "num" ? "numeric" : "decimal"}"`} value="${esc(v == null ? "" : kind === "time" ? fmtTime(v) : kind === "kg" ? showW(v) : v)}"></label>`;
+  };
+  return `<h2>${s ? "Edit result" : "Log a race or event"}</h2><span class="small muted">It counts as a workout this week, and the result goes into Body → Event results and your progress.</span>
+  <label class="f">Event<select id="ev-kind" data-evkind="1"><optgroup label="${esc(curSport().l)}">${mine.map(x => `<option value="${x}" ${x === ev.kind ? "selected" : ""}>${esc(EVENT_KINDS[x].l)}</option>`).join("")}</optgroup><optgroup label="Other events">${others.map(x => `<option value="${x}" ${x === ev.kind ? "selected" : ""}>${esc(EVENT_KINDS[x].l)}</option>`).join("")}</optgroup></select></label>
+  <div class="grid2"><label class="f">Name<input id="ev-name" value="${esc(ev.name || "")}" placeholder="e.g. HYROX Bengaluru"></label><label class="f">Date<input type="date" id="ev-date" value="${esc((s && s.date) || today())}"></label>
+  ${k.time ? `<label class="f">Finish time (h:mm:ss)<input id="ev-finish" autocomplete="off" value="${ev.finish ? fmtTime(ev.finish) : ""}" placeholder="1:15:30"></label>` : `<label class="f">Minutes active<input id="ev-mins" inputmode="numeric" value="${esc(ev.mins || "")}"></label>`}
+  ${k.dist ? `<label class="f">Distance ${k.dist === "m" ? "m" : dUnit()}<input id="ev-dist" inputmode="decimal" value="${esc(ev.dist == null ? "" : k.dist === "m" ? ev.dist : showD(ev.dist))}"></label>` : ""}
+  <label class="f">Place<input id="ev-place" inputmode="numeric" value="${esc(ev.place || "")}"></label><label class="f">Out of<input id="ev-field" inputmode="numeric" value="${esc(ev.field || "")}"></label>
+  <label class="f">Category / age group<input id="ev-div" value="${esc(ev.division || "")}"></label>${k.time && k.mode ? `<label class="f">Avg heart rate<input id="ev-hr" inputmode="numeric" value="${esc(ev.hr || "")}"></label>` : ""}</div>
+  ${(SPLITS[k.sp] || []).length ? `<h3>${k.sp === "hyrox" ? "Run and station splits" : k.sp === "tri" || k.sp === "du" ? "Splits" : "Results"}</h3><div class="grid2">${SPLITS[k.sp].map(field).join("")}</div>` : ""}
+  <label class="f">Notes<input id="ev-notes" value="${esc(ev.notes || "")}" placeholder="How it went, what to work on"></label>
+  <button class="btn primary block" data-act="ev-save">${s ? "Save changes" : "Save result"}</button>
+  ${s ? `<button class="btn danger block" data-act="ask-del-session" data-id="${s.id}">Delete result</button>` : ""}<button class="btn block" data-act="sheet-close">Cancel</button>`;
+}
+function eventCollect(){
+  const ev = S.sheet.ev, k = EVENT_KINDS[ev.kind] || EVENT_KINDS.other;
+  ev.name = val("ev-name"); ev.place = numOrNull(val("ev-place")); ev.field = numOrNull(val("ev-field")); ev.division = val("ev-div"); ev.notes = val("ev-notes");
+  if (document.getElementById("ev-finish")) ev.finish = parseTime(val("ev-finish"));
+  if (document.getElementById("ev-mins")) ev.mins = numOrNull(val("ev-mins"));
+  if (document.getElementById("ev-dist")) ev.dist = num(val("ev-dist")) ? (k.dist === "m" ? +val("ev-dist") : +dIn(val("ev-dist"))) : null;
+  if (document.getElementById("ev-hr")) ev.hr = numOrNull(val("ev-hr"));
+  ev.splits = ev.splits || {};
+  document.querySelectorAll("[data-evs]").forEach(el => {
+    const f = (SPLITS[k.sp] || []).find(x => x[0] === el.dataset.evs); if (!f) return; const v = el.value.trim();
+    ev.splits[f[0]] = !v ? null : f[2] === "time" ? parseTime(v) : f[2] === "kg" ? (num(v) ? +wIn(v) : null) : f[2] === "num" ? numOrNull(v) : v;
+  });
+  ev.date = val("ev-date") || today();
+}
+async function saveEvent(){
+  eventCollect(); const ev = clean(S.sheet.ev), k = EVENT_KINDS[ev.kind] || EVENT_KINDS.other, date = ev.date; delete ev.date;
+  if (k.time && ev.finish == null && !Object.values(ev.splits || {}).some(v => v != null && v !== "")) return toast("Enter your finish time (h:mm:ss).");
+  if (ev.splits && ev.kind === "hyrox" && ev.finish == null){ const t = Object.entries(ev.splits).filter(([key]) => key !== "division").reduce((a, [, v]) => a + (num(v) ? +v : 0), 0); if (t) ev.finish = t; }
+  const old = S.sheet.id ? S.data.sessions.find(x => x.id === S.sheet.id) : null;
+  const mins = ev.finish ? Math.round(ev.finish / 60) : ev.mins || (ev.splits && num(ev.splits.mins) ? +ev.splits.mins : num(ev.splits && ev.splits.rounds) ? +ev.splits.rounds * 3 : null);
+  const session = {id: old ? old.id : uid("e"), date, ts: old ? old.ts : String(Date.now()), week: weekOf(date), day: "🏁", title: ev.name || k.l, durationMin: mins, notes: ev.notes || "", exercises: [], event: ev};
+  const before = gameStats();
+  try { await saveRec("sessions", session); } catch(e){ return; }
+  if (!old) sendWorkoutAlert(session);
+  const after = gameStats();
+  S.sheet = null; S.forceRender = true; render();
+  if (!old && after.xp > before.xp) toast(`Result saved · counted as a workout · +${after.xp - before.xp} pts`); else toast("Result saved");
+  if (isCloudClient()) scheduleSync();
+}
+function eventsCard(){
+  const evs = eventSessions().reverse();
+  return `<section class="card"><div class="row between"><h3>Event results</h3><button class="btn blue" data-act="ev-new">Log a result</button></div>
+  <span class="muted small">Races and competitions: ${esc(curSport().events.slice(0, 4).map(x => EVENT_KINDS[x].l).join(", "))} and more. Each one counts as a workout.</span>
+  ${evs.length ? evs.map(s => `<button class="histitem" data-act="viewsession" data-id="${s.id}"><div class="dayblock sm">🏁</div><div style="flex:1;min-width:0;text-align:left"><b>${esc(s.title)}</b><div class="muted small">${shortDate(s.date)} ${parse(s.date).getFullYear()} · ${esc(eventSummary(s.event) || (EVENT_KINDS[s.event.kind] || {}).l || "")}</div></div></button>`).join("") : `<div class="empty">Your race and competition results appear here.</div>`}</section>`;
+}
+function testsCard(){
+  const keys = sportTestKeys(); if (!keys.length) return "";
+  const rows = keys.map(k => { const r = testRows(k), last = r[r.length - 1], best = r.length ? (testLower(k) ? Math.min(...r.map(x => x.v)) : Math.max(...r.map(x => x.v))) : null; return {k, last, best, n: r.length}; });
+  return `<section class="card"><div class="row between"><h3>${esc(curSport().l.split(" (")[0])} tests</h3><button class="btn blue" data-act="test-new">Add results</button></div>
+  <span class="muted small">Re-test every 4–8 weeks in the same conditions.</span>
+  <div class="tbl"><table><tr><th>Test</th><th>Latest</th><th>Best</th></tr>${rows.map(r => `<tr><td>${esc(STESTS[r.k].l)}</td><td class="num">${r.last ? testShow(r.k, r.last.v) + `<div class="small muted">${shortDate(r.last.date)}</div>` : "–"}</td><td class="num">${r.n > 1 ? testShow(r.k, r.best) : "–"}</td></tr>`).join("")}</table></div></section>`;
+}
+function testSheet(){
+  const keys = sportTestKeys();
+  return `<h2>Test results</h2><span class="small muted">Fill in the tests you did. Times as m:ss (for example 21:45).</span>
+  <label class="f">Date<input type="date" id="tst-date" value="${today()}"></label>
+  <div class="grid2">${keys.map(k => `<label class="f">${esc(STESTS[k].l)}${testUnitLbl(k)}<input id="tst-${k}" ${STESTS[k].t === "time" ? "" : `inputmode="decimal"`}></label>`).join("")}</div>
+  <button class="btn primary block" data-act="test-save">Save results</button><button class="btn block" data-act="sheet-close">Cancel</button>`;
+}
+async function saveTests(){
+  const tests = {}; sportTestKeys().forEach(k => { const v = testIn(k, val("tst-" + k)); if (v != null) tests[k] = v; });
+  if (!Object.keys(tests).length) return toast("Enter at least one result.");
+  await saveRec("body", {id: uid("t"), date: val("tst-date") || today(), source: "test", tests}).catch(() => {});
+  S.sheet = null; S.forceRender = true; render(); toast("Test results saved");
+}
+
+/* ---- weekly targets for the sport (Today) ---- */
+function sportTargets(sp){ const o = ((set_().sportTargets || {})[sp.k]) || {}; return sp.week.map((t, i) => ({...t, t: num(o[i]) ? +o[i] : t.t})); }
+function targetValue(t, logs){
+  const rows = logs.filter(r => modeIs(r, t.m));
+  if (t.u === "min") return Math.round(rows.reduce((a, r) => a + r.min, 0));
+  if (t.u === "km") return Math.round(dOut(rows.reduce((a, r) => a + (r.km || 0), 0)) * 10) / 10;
+  if (t.u === "m") return Math.round(rows.reduce((a, r) => a + (r.km || 0), 0) * 1000);
+  if (t.u === "long") return Math.round(dOut(Math.max(0, ...rows.map(r => r.km || 0))) * 10) / 10;
+  if (t.u === "rounds") return rows.reduce((a, r) => a + (+r.rounds || 0), 0);
+  return new Set(rows.map(r => r.date + r.src + r.id)).size;
+}
+const targetUnit = t => t.u === "km" || t.u === "long" ? " " + dUnit() : t.u === "m" ? " m" : t.u === "min" ? " min" : t.u === "rounds" ? " rounds" : "";
+function sportWeekCard(){
+  const sp = curSport(); if (sp.k === "general") return "";
+  const mon = mondayOf(today()), end = addDays(mon, 6), logs = sportLogs().filter(r => r.date >= mon && r.date <= end);
+  const ts = sportTargets(sp);
+  return `<section class="card"><div class="row between"><h3>${esc(sp.l.split(" (")[0])} this week</h3><span class="pill">${esc(sp.g)}</span></div>
+  ${ts.map(t => { const v = targetValue(t, logs); return `<div><div class="row between small"><span>${esc(t.l)}${t.u === "long" ? " (longest)" : ""}</span><b class="num">${v.toLocaleString()} / ${t.t.toLocaleString()}${targetUnit(t)}</b></div><div class="meter"><i style="width:${Math.min(100, t.t ? v / t.t * 100 : 0)}%"></i></div></div>`; }).join("")}
+  <div class="row" style="gap:8px"><button class="btn ghost" data-act="tab" data-v="cardio">Log a session</button><button class="btn ghost" data-act="ev-new">Log a race</button></div></section>`;
+}
+
+/* ---- progress panels by sport ---- */
+function bestLiftSeries(exMap){
+  const pts = {};
+  [...S.data.sessions].forEach(s => {
+    if (s.event){ return; }
+    s.exercises.forEach(e => { const f = exMap[e.performedAs]; if (!f) return; doneSets(e).forEach(x => { const v = e1rm(+x.kg, +x.reps); if (v && (!pts[s.date] || v * f > pts[s.date])) pts[s.date] = v * f; }); });
+  });
+  return Object.entries(pts).map(([x, y]) => ({x, y})).sort((a, b) => a.x.localeCompare(b.x));
+}
+const LIFT_FAM = {
+  squat: {lazy:"squat"}, bench: {lazy:"bench"}, deadlift: {lazy:"deadlift"}, ohp: {lazy:"ohp"},   // FAMILIES is defined further down
+  snatch: {label:"Snatch", ex:{"Snatch":1, "Power snatch":1/0.85}}, cj: {label:"Clean & jerk", ex:{"Clean and jerk":1, "Clean":0.95, "Power clean":1/0.85*0.95}},
+  fsquat: {label:"Front squat", ex:{"Front squat":1}}, clean: {label:"Clean", ex:{"Clean":1, "Power clean":1/0.85, "Hang clean":1/0.9, "Clean and jerk":1}}
+};
+const famOf = k => LIFT_FAM[k].lazy ? FAMILIES[LIFT_FAM[k].lazy] : LIFT_FAM[k];
+function liftBest(k, days = 120){ const from = addDays(today(), -days); const pts = bestLiftSeries(famOf(k).ex).filter(p => p.x >= from); return pts.length ? Math.max(...pts.map(p => p.y)) : null; }
+function weeksBack(n){ const out = [], m = mondayOf(today()); for (let i = n - 1; i >= 0; i--){ const s = addDays(m, -7 * i); out.push({s, e: addDays(s, 6), label: shortDate(s)}); } return out; }
+const pcard = (title, body, sub) => `<section class="card"><h3>${esc(title)}</h3>${sub ? `<span class="muted small">${sub}</span>` : ""}${body}</section>`;
+const emptyMsg = t => `<div class="empty">${esc(t)}</div>`;
+function testChart(k){
+  const r = testRows(k); if (!r.length) return "";
+  const T = STESTS[k], big = T.t === "time" && Math.max(...r.map(x => x.v)) >= 600;
+  const conv = v => T.t === "time" ? (big ? v / 60 : v) : T.u === "len" ? lenOut(v) : T.u === "kg" ? wOut(v) : v;
+  const last = r[r.length - 1], first = r[0];
+  return `<b class="small">${esc(T.l)} · ${testShow(k, last.v)}${r.length > 1 ? ` <span class="muted">(${testLower(k) ? (last.v <= first.v ? "better" : "slower") : (last.v >= first.v ? "up" : "down")} from ${testShow(k, first.v)})</span>` : ""}</b>
+  ${r.length > 1 ? lineChart([{pts: dedupe(r.map(x => ({x: x.date, y: +(+conv(x.v)).toFixed(2)})))}], {unit: T.t === "time" ? (big ? " min" : " s") : "", h: 140, dec: T.t === "time" && !big ? 0 : 1}) : ""}`;
+}
+function sportPanel(spec){
+  const [kind, a, b] = spec, logs = () => sportLogs();
+  if (kind === "workouts"){ const rows = weeksBack(8).map(w => ({label: w.label, v: S.data.sessions.filter(s => s.date >= w.s && s.date <= w.e).length})); return pcard("Workouts per week", barChart(rows)); }
+  if (kind === "body"){ const f = a, pts = S.data.body.filter(x => x[f]).map(x => ({x: x.date, y: +(f === "weight" ? wOut(x[f]) : lenOut(x[f])).toFixed(1)})); return pcard(f === "weight" ? "Body weight" : "Waist", pts.length > 1 ? lineChart([{pts: dedupe(pts)}], {unit: " " + (f === "weight" ? wUnit() : lenUnit()), h: 150}) : emptyMsg("Add check-ins in Body to see the trend.")); }
+  if (kind === "test"){ if (!testOK(a)) return ""; return pcard(STESTS[a].l, testChart(a) || emptyMsg("Add a result in Body → tests.")); }
+  if (kind === "tests"){ const ks = a.filter(testOK), body = ks.map(testChart).filter(Boolean).join(""); return pcard(ks.length > 2 ? "Tests" : ks.map(k => STESTS[k].l).join(" and "), body || emptyMsg(`No results yet. Add ${ks.map(k => STESTS[k].l).join(", ")} in Body.`)); }
+  if (kind === "weekmin" || kind === "weekdist" || kind === "sessions"){
+    const L0 = logs(), rows = weeksBack(8).map(w => { const r = L0.filter(x => x.date >= w.s && x.date <= w.e && modeIs(x, a)); return {label: w.label, v: kind === "weekmin" ? Math.round(r.reduce((s, x) => s + x.min, 0)) : kind === "sessions" ? new Set(r.map(x => x.date + x.id)).size : Math.round(dOut(r.reduce((s, x) => s + (x.km || 0), 0)) * (a === "swim" || a === "row" ? 1000 : 10)) / (a === "swim" || a === "row" ? 1 : 10)}; });
+    const unit = kind === "weekdist" ? (a === "swim" || a === "row" ? " (m)" : ` (${dUnit()})`) : kind === "weekmin" ? " (min)" : "";
+    return pcard((b || "Per week") + unit, rows.some(r => r.v) ? barChart(rows) : emptyMsg("Log sessions in the Cardio tab to fill this in."));
+  }
+  if (kind === "pace"){
+    const r = logs().filter(x => x.m === a).map(x => ({x: x.date, p: paceOf(x)})).filter(x => x.p != null);
+    const title = a === "swim" ? "Swim pace per 100 m" : a === "row" ? "500 m split" : `Run pace per ${dUnit()}`;
+    if (!r.length) return pcard(title, emptyMsg(`Log ${a === "swim" ? "swims" : a === "row" ? "rows" : "runs"} with distance and time to see your pace.`));
+    const best = Math.min(...r.map(x => x.p)), last = r[r.length - 1];
+    const conv = v => a === "run" ? v : v / 60;
+    return pcard(title, `<p class="small" style="margin:0">Latest <b>${paceText(a, last.p)}</b> · best <b>${paceText(a, best)}</b></p>${r.length > 1 ? lineChart([{pts: dedupe(r.map(x => ({x: x.x, y: +conv(x.p).toFixed(2)})))}], {unit: a === "run" ? " min" : " min", h: 150, dec: 2}) : ""}`, "Lower is faster.");
+  }
+  if (kind === "longest"){ const r = logs().filter(x => modeIs(x, a) && x.km); const wk = weeksBack(8).map(w => ({label: w.label, v: Math.round(dOut(Math.max(0, ...r.filter(x => x.date >= w.s && x.date <= w.e).map(x => x.km))) * 10) / 10})); return pcard(`Long run per week (${dUnit()})`, wk.some(x => x.v) ? barChart(wk) : emptyMsg("Your longest run each week shows here.")); }
+  if (kind === "races" || kind === "meets" || kind === "matches" || kind === "bouts"){
+    const kinds = kind === "meets" ? [a] : kind === "matches" ? ["match","racquet"] : kind === "bouts" ? ["bout","grappling"] : a;
+    const ev = eventSessions(kinds).reverse();
+    const title = kind === "meets" ? "Competitions" : kind === "matches" ? "Matches" : kind === "bouts" ? "Fights and tournaments" : "Race results";
+    let extra = "";
+    if (kind === "matches" || kind === "bouts"){ const res = ev.map(s => (s.event.splits || {}).result).filter(Boolean); if (res.length) extra = `<p class="small" style="margin:0">Record: <b>${["Win","Loss","Draw"].map(x => `${res.filter(r => r === x).length} ${x.toLowerCase()}${x === "Loss" ? (res.filter(r => r === x).length === 1 ? "" : "es") : "s"}`).join(" · ")}</b></p>`; }
+    const pb = {}; ev.forEach(s => { if (s.event.finish && (!pb[s.event.kind] || s.event.finish < pb[s.event.kind])) pb[s.event.kind] = s.event.finish; });
+    return pcard(title, extra + (ev.length ? ev.slice(0, 8).map(s => `<button class="histitem" data-act="viewsession" data-id="${s.id}"><div class="dayblock sm">🏁</div><div style="flex:1;min-width:0;text-align:left"><b class="small">${esc(s.title)}${s.event.finish && pb[s.event.kind] === s.event.finish && eventSessions([s.event.kind]).length > 1 ? ` <span class="pill good">PB</span>` : ""}</b><div class="muted small">${shortDate(s.date)} ${parse(s.date).getFullYear()} · ${esc(eventSummary(s.event))}</div></div></button>`).join("") : emptyMsg("Log a race or competition from Body → Event results.")));
+  }
+  if (kind === "hyrox"){
+    const ev = eventSessions(["hyrox"]); if (!ev.length) return pcard("HYROX splits", emptyMsg("Log a HYROX race with your run and station splits to see where to gain time."));
+    const last = ev[ev.length - 1].event.splits || {}, bestOf = key => { const v = ev.map(x => (x.event.splits || {})[key]).filter(num).map(Number); return v.length ? Math.min(...v) : null; };
+    const runs = [1,2,3,4,5,6,7,8].map(i => ({label: "R" + i, v: num(last["r" + i]) ? Math.round(+last["r" + i] / 6) / 10 : 0}));
+    return pcard("HYROX splits", `<p class="small" style="margin:0">Last race ${fmtTime(ev[ev.length - 1].event.finish)}${ev.length > 1 ? ` · best ${fmtTime(Math.min(...ev.filter(x => x.event.finish).map(x => x.event.finish)))}` : ""}${num(last.rox) ? ` · Roxzone ${fmtTime(last.rox)}` : ""}</p>
+      ${runs.some(r => r.v) ? `<b class="small">1 km run splits (min)</b>${barChart(runs, {h: 140})}` : ""}
+      <div class="tbl"><table><tr><th>Station</th><th>Last</th><th>Best</th></tr>${HYROX_ST.map(([key, l]) => `<tr><td>${esc(l)}</td><td class="num">${fmtTime(last[key])}</td><td class="num">${fmtTime(bestOf(key))}</td></tr>`).join("")}</table></div>`, "Run splits first, then each station.");
+  }
+  if (kind === "lift"){
+    const f = famOf(a), pts = bestLiftSeries(f.ex), best = pts.length ? Math.max(...pts.map(p => p.y)) : null;
+    return pcard(`${f.label}: estimated max`, pts.length ? `<p class="small" style="margin:0">Best <b>${W(best)}</b>${pts.length > 1 ? ` · latest ${W(pts[pts.length - 1].y)}` : ""}</p>${pts.length > 1 ? lineChart([{pts: pts.map(p => ({x: p.x, y: +wOut(p.y).toFixed(1)}))}], {unit: " " + wUnit(), h: 150}) : ""}` : emptyMsg(`Log ${f.label.toLowerCase()} sets to estimate your max.`), "From your best set of up to 12 reps.");
+  }
+  if (kind === "total" || kind === "wltotal"){
+    const parts = kind === "total" ? ["squat","bench","deadlift"] : ["snatch","cj"], v = parts.map(k => liftBest(k)), bw = bodyWeightAt(today());
+    if (v.some(x => x == null)) return pcard(kind === "total" ? "Powerlifting total" : "Weightlifting total", emptyMsg(`Log ${parts.map(k => famOf(k).label.toLowerCase()).join(", ")} in the last 4 months to see your total.`));
+    const t = v.reduce((a, x) => a + x, 0), d = kind === "total" ? dotsScore(t, bw, intakeSex()) : null;
+    return pcard(kind === "total" ? "Powerlifting total" : "Weightlifting total", `<section class="grid3">${parts.map((k, i) => `<div class="stat"><b class="num">${fmt(wOut(v[i]), 0)}</b><span>${esc(famOf(k).label)}</span></div>`).join("")}</section>
+      <p class="small" style="margin:0">Estimated total <b>${W(t, 0)}</b>${bw ? ` · ${fmt(t / bw, 2)} × body weight` : ""}${d ? ` · DOTS <b>${fmt(d, 1)}</b>` : kind === "total" && !intakeSex() ? " · add your sex in your profile for a DOTS score" : ""}</p>`, "Best estimated maxes from the last 4 months.");
+  }
+  if (kind === "volume"){
+    const rows = weeksBack(8).map(w => ({label: w.label, v: Math.round(wOut(S.data.sessions.filter(s => s.date >= w.s && s.date <= w.e).reduce((a, s) => a + sessionVolume(s), 0)) / 100) / 10}));
+    return pcard(`Weekly volume (tonnes${isLb() ? ", lb ÷ 1,000" : ""})`, rows.some(r => r.v) ? barChart(rows) : emptyMsg("Log lifting sessions to see your volume."));
+  }
+  if (kind === "reppbs" || kind === "techpbs"){
+    const names = kind === "reppbs" ? ["Back squat","Barbell bench press","Conventional deadlift","Sumo deadlift"] : ["Snatch","Power snatch","Clean","Power clean","Hang clean","Clean and jerk","Jerk","Front squat","Overhead squat","Snatch pull"];
+    const best = {};
+    S.data.sessions.forEach(s => s.exercises.forEach(e => { if (!names.includes(e.performedAs)) return; doneSets(e).forEach(x => { const r = +x.reps, k = +x.kg; if (!(k > 0) || !(r >= 1)) return; const key = kind === "reppbs" ? `${e.performedAs}|${[1,2,3,5,8,10].filter(n => n <= r).pop() || 1}` : e.performedAs; if (!best[key] || k > best[key].kg) best[key] = {kg: k, reps: r, date: s.date}; }); }));
+    const ks = Object.keys(best).sort();
+    return pcard(kind === "reppbs" ? "Rep PBs" : "Lift PBs", ks.length ? `<div class="tbl"><table><tr><th>Lift</th><th>Best</th><th>Date</th></tr>${ks.map(k => `<tr><td>${esc(k.replace("|", " · "))}${kind === "reppbs" ? " RM" : ""}</td><td class="num">${W(best[k].kg)} × ${best[k].reps}</td><td>${shortDate(best[k].date)}</td></tr>`).join("")}</table></div>` : emptyMsg("Your heaviest sets appear here."));
+  }
+  if (kind === "musclevol"){
+    const from = addDays(today(), -27), cnt = {};
+    S.data.sessions.filter(s => s.date >= from).forEach(s => s.exercises.forEach(e => { if (!strengthType(e.type)) return; const n = doneSets(e).length; musclesOf(e.performedAs).forEach((m, i) => cnt[m] = (cnt[m] || 0) + n * (i === 0 ? 1 : 0.5)); }));
+    const ks = Object.keys(cnt).sort((x, y) => cnt[y] - cnt[x]);
+    return pcard("Weekly sets per muscle", ks.length ? `<div class="tbl"><table><tr><th>Muscle</th><th>Sets a week</th><th></th></tr>${ks.map(k => { const v = cnt[k] / 4; return `<tr><td>${esc(k)}</td><td class="num">${fmt(v, 1)}</td><td>${v < 8 ? `<span class="pill warn">low</span>` : v > 22 ? `<span class="pill warn">high</span>` : `<span class="pill good">in range</span>`}</td></tr>`; }).join("")}</table></div>` : emptyMsg("Log workouts to see sets per muscle."), "Average over the last 4 weeks. Secondary muscles count half. 10–20 hard sets a week suits most lifters.");
+  }
+  if (kind === "measure"){ const ks = ["chest","arm","thigh","hips"]; return pcard("Measurements", ks.map(testChart).filter(Boolean).join("") || emptyMsg("Add chest, arm, thigh and hip measurements in Body → tests.")); }
+  if (kind === "dexa"){ const dx = S.data.dexa.filter(d => d.date && d.lean != null && d.lean !== "").sort((x, y) => x.date.localeCompare(y.date)); if (!healthOK() || dx.length < 2) return ""; return pcard("Lean mass (DEXA)", lineChart([{pts: dx.map(d => ({x: d.date, y: +d.lean}))}], {unit: " kg", h: 150})); }
+  if (kind === "bike"){
+    const r = logs().filter(x => x.m === "bike" && x.km && x.min); if (!r.length) return pcard("Riding", emptyMsg("Log rides with distance and time."));
+    const pw = S.data.cardio.filter(c => sessType(c.type).m === "bike" && num(c.power)).map(c => ({x: c.date, y: +c.power}));
+    return pcard("Riding", `<p class="small" style="margin:0">Avg speed latest <b>${paceText("bike", paceOf(r[r.length - 1]))}</b> · fastest ${paceText("bike", Math.max(...r.map(paceOf)))} · longest ${D(Math.max(...r.map(x => x.km)))}</p>${r.length > 1 ? lineChart([{pts: dedupe(r.map(x => ({x: x.date, y: +dOut(paceOf(x)).toFixed(1)})))}], {unit: " " + spUnit(), h: 140}) : ""}${pw.length > 1 ? `<b class="small">Average power (W)</b>${lineChart([{pts: dedupe(pw)}], {unit: " W", h: 130, dec: 0})}` : ""}`);
+  }
+  if (kind === "climb"){ const r = S.data.cardio.filter(c => sessType(c.type).m === "bike" && num(c.elev)); const rows = weeksBack(8).map(w => ({label: w.label, v: r.filter(c => c.date >= w.s && c.date <= w.e).reduce((a, c) => a + +c.elev, 0)})); const cad = S.data.cardio.filter(c => num(c.cadence)).map(c => ({x: c.date, y: +c.cadence}));
+    return pcard("Climbing and cadence", (rows.some(x => x.v) ? `<b class="small">Metres climbed per week</b>${barChart(rows)}` : "") + (cad.length > 1 ? `<b class="small">Cadence (rpm)</b>${lineChart([{pts: dedupe(cad)}], {unit: "", h: 130, dec: 0})}` : "") || emptyMsg("Add climb and cadence when you log rides.")); }
+  if (kind === "spm"){ const r = S.data.cardio.filter(c => num(c.spm)).map(c => ({x: c.date, y: +c.spm})); return pcard("Stroke rate", r.length > 1 ? lineChart([{pts: dedupe(r)}], {unit: " spm", h: 140, dec: 0}) : emptyMsg("Add stroke rate when you log rows.")); }
+  if (kind === "strokes"){ const r = S.data.cardio.filter(c => sessType(c.type).m === "swim"), by = {}; r.forEach(c => { const k = c.stroke || "Not set"; by[k] = by[k] || {n: 0, km: 0}; by[k].n++; by[k].km += +c.dist || 0; });
+    const ks = Object.keys(by); return pcard("Strokes", ks.length ? `<div class="tbl"><table><tr><th>Stroke</th><th>Swims</th><th>Distance</th></tr>${ks.map(k => `<tr><td>${esc(k)}</td><td class="num">${by[k].n}</td><td class="num">${Math.round(by[k].km * 1000).toLocaleString()} m</td></tr>`).join("")}</table></div>` : emptyMsg("Log swims with the stroke to see the mix.")); }
+  if (kind === "volsport"){
+    const L0 = logs(), wk = weeksBack(6);
+    return pcard("Weekly minutes by sport", `<div class="tbl"><table><tr><th>Week</th>${a.map(m => `<th>${m[0].toUpperCase() + m.slice(1)}</th>`).join("")}<th>Total</th></tr>${wk.reverse().map(w => { const v = a.map(m => Math.round(L0.filter(x => x.date >= w.s && x.date <= w.e && modeIs(x, m)).reduce((s, x) => s + x.min, 0))); return `<tr><td>${esc(w.label)}</td>${v.map(x => `<td class="num">${x}</td>`).join("")}<td class="num"><b>${v.reduce((s, x) => s + x, 0)}</b></td></tr>`; }).join("")}</table></div>`, "Bricks count toward bike and run.");
+  }
+  if (kind === "bricks"){ const r = S.data.cardio.filter(c => sessType(c.type).m === "brick").sort(byDateDesc); return pcard("Brick sessions", r.length ? `<p class="small" style="margin:0"><b>${r.length}</b> brick${r.length === 1 ? "" : "s"} logged · last ${shortDate(r[0].date)} (${r[0].minutes} min${num(r[0].dist) ? ", " + D(r[0].dist) : ""})</p>` : emptyMsg("Log a brick (bike straight into a run) in the Cardio tab.")); }
+  if (kind === "hrzones"){
+    const s = set_(), from = addDays(today(), -27), r = S.data.cardio.filter(c => c.date >= from && num(c.avgHr));
+    if (!s.zoneLow || !s.zoneHigh) return pcard("Heart-rate zones", emptyMsg("Set your Zone 2 heart-rate band in Settings to see time in each zone."));
+    const z = {below: 0, in: 0, above: 0}; r.forEach(c => { const m = +c.minutes || 0; if (+c.avgHr < s.zoneLow) z.below += m; else if (+c.avgHr > s.zoneHigh) z.above += m; else z.in += m; });
+    const tot = z.below + z.in + z.above;
+    return pcard("Heart-rate zones", tot ? `<div class="tbl"><table><tr><td>Below Zone 2</td><td class="num">${Math.round(z.below)} min</td><td class="num">${Math.round(z.below / tot * 100)}%</td></tr><tr><td>Zone 2 (${s.zoneLow}–${s.zoneHigh})</td><td class="num">${Math.round(z.in)} min</td><td class="num">${Math.round(z.in / tot * 100)}%</td></tr><tr><td>Above Zone 2</td><td class="num">${Math.round(z.above)} min</td><td class="num">${Math.round(z.above / tot * 100)}%</td></tr></table></div>` : emptyMsg("Add average heart rate when you log sessions."), "Last 4 weeks, by each session's average heart rate. Most endurance training should sit in Zone 2.");
+  }
+  if (kind === "rounds"){ const L0 = logs(), rows = weeksBack(8).map(w => ({label: w.label, v: L0.filter(x => x.date >= w.s && x.date <= w.e && x.m === "combat").reduce((a, x) => a + (+x.rounds || 0), 0)})); return pcard("Rounds per week", rows.some(r => r.v) ? barChart(rows) : emptyMsg("Log sparring, bag or pad rounds in the Cardio tab.")); }
+  if (kind === "swr"){ const sc = strengthScore(); return pcard("Strength-to-weight", sc ? `<div class="tbl"><table><tr><th>Lift</th><th>Est. max</th><th>× body weight</th></tr>${sc.parts.map(p => `<tr><td>${esc(p.label)}</td><td class="num">${W(p.e1)}</td><td class="num">${fmt(p.ratio, 2)}</td></tr>`).join("")}</table></div>` : emptyMsg("Log your body weight and squat, bench, deadlift or overhead press to see this.")); }
+  if (kind === "weightclass"){ const lw = latestBody("weight"), wc = set_().weightClass; return pcard("Weight class", wc ? (lw ? `<p style="margin:0">Now <b>${W(lw.weight)}</b> · class limit <b>${W(wc)}</b> · ${+lw.weight > +wc ? `<span class="pill warn">${W(+lw.weight - wc)} over</span>` : `<span class="pill good">${W(wc - +lw.weight)} under</span>`}</p>` : emptyMsg("Weigh in under Body.")) : emptyMsg("Set your weight-class limit in Edit profile.")); }
+  if (kind === "bwbest"){ const best = {}; S.data.sessions.forEach(s => s.exercises.forEach(e => { if (!a.includes(e.performedAs)) return; doneSets(e).forEach(x => { const r = +x.reps; if (r > 0 && (!best[e.performedAs] || r > best[e.performedAs].r)) best[e.performedAs] = {r, date: s.date}; }); }));
+    const ks = a.filter(k => best[k]); return pcard("Skills and rep bests", ks.length ? `<div class="tbl"><table><tr><th>Exercise</th><th>Best set</th><th>Date</th></tr>${ks.map(k => `<tr><td>${esc(k)}</td><td class="num">${best[k].r} reps</td><td>${shortDate(best[k].date)}</td></tr>`).join("")}</table></div>` : emptyMsg(`Log ${a.slice(0, 3).join(", ").toLowerCase()} and more to track your bests.`)); }
+  if (kind === "obstacles"){ const ev = eventSessions(["spartan","devils","yoddha","ocr"]), cnt = {}; ev.forEach(s => String((s.event.splits || {}).failed || "").split(/[,;]/).map(x => x.trim()).filter(Boolean).forEach(x => cnt[x.toLowerCase()] = (cnt[x.toLowerCase()] || 0) + 1));
+    const ks = Object.keys(cnt).sort((x, y) => cnt[y] - cnt[x]); return pcard("Obstacles to work on", ks.length ? `<div class="chips" style="flex-wrap:wrap">${ks.map(k => `<span class="pill warn">${esc(k)} × ${cnt[k]}</span>`).join("")}</div>` : emptyMsg("Note failed obstacles when you log a race; they collect here.")); }
+  if (kind === "grades"){ const r = S.data.cardio.filter(c => sessType(c.type).m === "climb" && gradeNum(c.grade) != null).map(c => ({x: c.date, y: gradeNum(c.grade)})); const best = r.length ? Math.max(...r.map(x => x.y)) : null;
+    return pcard("Grades sent", r.length ? `<p class="small" style="margin:0">Hardest <b>${gradeText(best)}</b> · sessions logged ${S.data.cardio.filter(c => sessType(c.type).m === "climb").length}</p>${r.length > 1 ? lineChart([{pts: dedupe(r)}], {unit: "", h: 140, dec: 0}) : ""}` : emptyMsg("Log climbing sessions with your hardest send (V grades or Font grades)."), "Font grades are converted to V grades."); }
+  if (kind === "consistency"){ const L0 = logs(), wk = weeksBack(12), done = wk.map(w => L0.some(x => x.date >= w.s && x.date <= w.e && (x.m === "mobility"))); let run = 0; for (let i = done.length - 1; i >= 0; i--){ if (done[i]) run++; else if (i !== done.length - 1) break; }
+    return pcard("Consistency", `<p style="margin:0"><b>${done.filter(Boolean).length} of 12</b> weeks with practice · current run <b>${run} week${run === 1 ? "" : "s"}</b></p><div class="strip">${wk.map((w, i) => `<div class="${done[i] ? "lift" : ""}"><span>${esc(w.label)}</span><b>${done[i] ? "✓" : "·"}</b></div>`).join("")}</div>`); }
+  return "";
+}
+function sportProgressHTML(){
+  const sp = curSport(), sp2 = curSport2();
+  let out = `<section class="card" style="border-color:var(--accent)"><span class="eyebrow">Your sport</span><h2>${esc(sp.l)}</h2>${sp2 ? `<span class="small muted">Second sport: ${esc(sp2.l)}</span>` : ""}<span class="small muted">${esc(sp.d)}.${isTrainer() ? "" : " Change your sport in Settings → Edit my profile."}</span></section>`;
+  out += sp.prog.map(sportPanel).join("");
+  if (sp2) out += `<h2 style="margin-top:6px">${esc(sp2.l.split(" (")[0])}</h2>` + sp2.prog.filter(p => !sp.prog.some(q => JSON.stringify(q) === JSON.stringify(p))).slice(0, 4).map(sportPanel).join("");
+  return out;
 }
 
 /* ============ Block structure ============ */
@@ -1001,7 +1701,7 @@ function viewToday(){
 
   if (!hasProgram()){
     out += `<div class="row" style="gap:8px">${streakChip(G)}${rankBadge(G)}</div>` + countdownCard() + fives + banners.join("");
-    out += getStartedCard(); return out + todayStatsBlock();
+    out += sportWeekCard() + getStartedCard(); return out + todayStatsBlock();
   }
   // 1. Your program: today's / next workout
   const W = Math.max(1, blk().weeks || 1);
@@ -1027,6 +1727,7 @@ function viewToday(){
   const cardioLine = cp[0] ? `<b>Cardio today:</b> ${esc(cp[0])}${cp[1] ? ` · ${cp[1]} min` : ""}` : st.plan ? `<b>Cardio this week:</b> ${st.cardio} of ${st.plan} min` : `<b>Cardio:</b> ${st.cardio} min this week`;
   out += `<div class="row between small"><span>${I.walk.replace("<svg", '<svg width="18" height="18" style="vertical-align:-4px"')} ${cardioLine}</span><button class="btn ghost" data-act="tab" data-v="cardio">Log</button></div></section>`;
 
+  out += sportWeekCard();
   // 2. Rings and rewards
   const mon = mondayOf(t);
   out += `<section class="card"><div class="row between"><h3>This week</h3><span class="muted small">${G.weekPts} points</span></div>${ringsCard(G)}<div class="strip">`;
@@ -1174,7 +1875,10 @@ function viewLog(){
     });
     if (CARDIO_TYPES.includes(x.type)){
       const rx = cardioRx(e), inc = targetIncline(e, w);
-      out += `</div><div class="grid2"><label class="f">Speed ${spUnit()}<input inputmode="decimal" data-xin="speed" data-x="${xi}" value="${esc(showSp(x.speed || ""))}" placeholder="${esc(rx.speed != null ? spText(rx.speed) : "")}"></label><label class="f">Incline %<input inputmode="decimal" data-xin="incline" data-x="${xi}" value="${esc(x.incline || "")}" placeholder="${inc != null ? esc(fmt(inc)) : ""}"></label>`;
+      const walky = exMode({performedAs: x.performedAs}) === "walk" || x.type === "run" && /Treadmill/.test(x.performedAs);
+      out += `</div><div class="grid2">${walky || exMode({performedAs: x.performedAs}) == null ? `<label class="f">Speed ${spUnit()}<input inputmode="decimal" data-xin="speed" data-x="${xi}" value="${esc(showSp(x.speed || ""))}" placeholder="${esc(rx.speed != null ? spText(rx.speed) : "")}"></label><label class="f">Incline %<input inputmode="decimal" data-xin="incline" data-x="${xi}" value="${esc(x.incline || "")}" placeholder="${inc != null ? esc(fmt(inc)) : ""}"></label>` : ""}<label class="f">Avg heart rate<input inputmode="numeric" data-xin="hr" data-x="${xi}" value="${esc(x.hr || "")}" placeholder="bpm"></label>`;
+    } else if (x.type === "dist" && ["run","swim","row"].includes(exMode({performedAs: x.performedAs}))){
+      out += `</div><div class="grid2"><label class="f">Avg heart rate<input inputmode="numeric" data-xin="hr" data-x="${xi}" value="${esc(x.hr || "")}" placeholder="bpm"></label>`;
     }
     out += `</div>${x.type === "load" ? `<div class="hint" id="adj-${xi}" ${adjNote(x, e, w, prev) ? "" : "hidden"}>${esc(adjNote(x, e, w, prev))}</div>` : ""}${sd ? `<div class="cue">${sd.order.map(k => `${k} = ${esc(sd.names[k])}`).join(" · ")}</div>` : ""}
     <div class="row"><button class="btn ghost" data-act="addset" data-x="${xi}">${I.plus.replace("<svg",'<svg width="20" height="20"')} Add new set</button>${x.sets.length > 1 ? `<button class="btn ghost" data-act="rmset" data-x="${xi}" style="color:var(--muted)">Remove last</button>` : ""}</div>
@@ -1474,6 +2178,10 @@ function profileSheet(){
   <button class="btn ghost" data-act="locate" style="align-self:flex-start">Use my location to fill in my city</button>
   <span class="small muted">Your city and country set your units and local milestones. Only the city is saved, never your exact location.</span>
   ${!it.dob && it.age ? `<span class="small muted">You gave your age as ${esc(it.age)}. Add your date of birth so it stays up to date.</span>` : ""}
+  <div class="grid2"><label class="f">Main sport${sel("pf-sport", SPORTS.map(x => [x.k, x.l]), it.sport || "general")}</label>
+  <label class="f">Second sport${sel("pf-sport2", [["","None"], ...SPORTS.filter(x => x.k !== "general").map(x => [x.k, x.l])], it.sport2 || "")}</label></div>
+  ${(it.sport === "combat" || it.sport2 === "combat") ? `<label class="f">Weight-class limit ${wUnit()} (optional)<input id="pf-wclass" inputmode="decimal" value="${esc(set_().weightClass ? showW(set_().weightClass) : "")}"></label>` : ""}
+  <span class="small muted">Your sport shapes the exercise list, logging, weekly targets and progress.</span>
   <label class="f">Main goal${sel("pf-goal", [["","Not set"], ...GOALS.map(g => [g[0], g[1]])], it.goal)}</label>
   <div class="grid2"><label class="f">Experience${sel("pf-exp", [["","Not set"], ...EXPERIENCE.map(g => [g[0], g[1]])], it.experience)}</label>
   <label class="f">Where you train${sel("pf-eq", [["","Not set"], ...EQUIPMENT.map(g => [g[0], g[1]])], it.equipment)}</label>
@@ -1487,12 +2195,14 @@ async function saveProfileSheet(){
   const old = set_().intake || {}, P = S.sheet.p;
   const name = val("pf-name"), dob = val("pf-dob") || old.dob || null, weight = num(val("pf-weight")) ? +wIn(val("pf-weight")) : null;
   const it = {...old, dob, age: ageFromDob(dob) ?? old.age ?? null, sex: val("pf-sex"), height: lenIn(val("pf-height")), weight: weight ?? old.weight ?? null,
+    sport: val("pf-sport") || "general", sport2: val("pf-sport2") && val("pf-sport2") !== val("pf-sport") ? val("pf-sport2") : null,
     goal: val("pf-goal") || null, experience: val("pf-exp") || null, equipment: val("pf-eq") || null, days: +val("pf-days") || old.days || 3, mins: +val("pf-mins") || old.mins || 60,
     pain: healthOK() ? [...P.pain] : [], other: healthOK() ? val("pf-other") : "", updated: today(), skipped: null};
   if (it.height != null && (it.height < 100 || it.height > 250)) return toast(`Height looks off: enter it in ${isLb() ? "inches" : "centimetres"}.`);
   if (weight != null && (weight < 25 || weight > 300)) return toast(`Weight looks off: enter it in ${isLb() ? "pounds" : "kilograms"}.`);
   setLoc(val("pf-country"), val("pf-city"));
-  const planKeys = ["goal","experience","equipment","days","mins"], changed = planKeys.filter(k => String(old[k] ?? "") !== String(it[k] ?? ""));
+  if (document.getElementById("pf-wclass")) S.profile.settings.weightClass = num(val("pf-wclass")) ? +wIn(val("pf-wclass")) : null;
+  const planKeys = ["sport","sport2","goal","experience","equipment","days","mins"], changed = planKeys.filter(k => String(old[k] ?? "") !== String(it[k] ?? ""));
   const painChanged = [...(old.pain || [])].sort().join() !== [...it.pain].sort().join();
   S.profile.settings.intake = clean(it);
   if (it.pain.includes("back")) S.profile.settings.trackBack = true;
@@ -1501,7 +2211,7 @@ async function saveProfileSheet(){
   const lw = latestBody("weight");
   if (weight != null && (!lw || +lw.weight !== weight)) await saveRec("body", {id: uid("b"), date: today(), weight, source: "check-in"}).catch(() => {});
   if (isCloudClient() && Cloud.me.trainerId && (changed.length || painChanged)){
-    const what = [...changed.map(k => ({goal:"goal", experience:"experience", equipment:"equipment", days:"days a week", mins:"session length"})[k]), ...(painChanged ? ["pain or injuries"] : [])];
+    const what = [...changed.map(k => ({sport:`sport (now ${sportLabel(it.sport)})`, sport2:"second sport", goal:"goal", experience:"experience", equipment:"equipment", days:"days a week", mins:"session length"})[k]), ...(painChanged ? ["pain or injuries"] : [])];
     Cloud.db.collection("trainers").doc(Cloud.me.trainerId).collection("alerts").add({...clean({clientId: Cloud.user.uid, clientName: Cloud.me.name || Cloud.me.email, kind: "profile",
       title: "updated their profile", text: `Changed: ${what.join(", ")}. Review their program.`, date: today(), read: false}), ts: ts()}).catch(() => {});
   }
@@ -1516,23 +2226,30 @@ async function saveProfileSheet(){
 /* ---- Cardio ---- */
 function viewCardio(){
   const w = Math.max(1, weekOf(today())); const st = weekStats(w); const s = set_();
-  let out = `<div><span class="eyebrow">Week ${w} plan · ${st.plan} min</span><h1>Cardio</h1></div>
-  <section class="card"><div class="row between"><b>This week</b><span class="num">${st.cardio} / ${st.plan} min</span></div><div class="meter"><i style="width:${Math.min(100, st.plan ? st.cardio/st.plan*100 : 0)}%"></i></div>
-  <span class="small">${st.cardioWorkouts ? `${st.cardioLogged} min logged here + ${st.cardioWorkouts} min from your workouts.` : "Cardio inside your workouts (walks, runs, rowing, bike) counts too."}</span>
-  <span class="muted small">Zone 2 ${s.zoneLow && s.zoneHigh ? `= heart rate ${s.zoneLow}–${s.zoneHigh} bpm.` : "band not set yet — add it in Settings."} Raise incline before speed; no handrails.</span></section>
+  const types = sportTypes(), ctype = types.includes(S.ui.ctype) ? S.ui.ctype : types[0], T0 = sessType(ctype), cd = S.ui.cdraft || {};
+  const fin = (f, ph, mode) => `<label class="f">${SFIELDS[f]()}<input id="c-${f}" ${mode ? `inputmode="${mode}"` : ""} value="${esc(cd[f] || "")}" placeholder="${esc(ph || "")}"></label>`;
+  const fieldHTML = f => f === "stroke" ? `<label class="f">${SFIELDS.stroke()}<select id="c-stroke"><option value=""></option>${STROKES.map(o => `<option ${cd.stroke === o ? "selected" : ""}>${o}</option>`).join("")}</select></label>`
+    : f === "hr" ? fin("hr", "bpm", "numeric") : f === "speed" ? fin("speed", isMi() ? "3.4" : "5.5", "decimal") : f === "incline" ? fin("incline", "6", "decimal")
+    : f === "dist" ? fin("dist", "", "decimal") : f === "metres" ? fin("metres", "1500", "numeric") : ["splits","grade"].includes(f) ? fin(f, f === "grade" ? "V4" : "") : fin(f, "", "numeric");
+  const sp = curSport();
+  let out = `<div><span class="eyebrow">${sp.k === "general" ? `Week ${w} plan · ${st.plan} min` : esc(sp.l.split(" (")[0])}</span><h1>${sp.k === "general" ? "Cardio" : "Training log"}</h1></div>
+  <section class="card"><div class="row between"><b>This week</b><span class="num">${st.cardio}${st.plan ? ` / ${st.plan}` : ""} min</span></div>${st.plan ? `<div class="meter"><i style="width:${Math.min(100, st.cardio/st.plan*100)}%"></i></div>` : ""}
+  <span class="small">${st.cardioWorkouts ? `${st.cardioLogged} min logged here + ${st.cardioWorkouts} min from your workouts and races.` : "Cardio inside your workouts (walks, runs, rowing, bike, swims) and races counts too."}</span>
+  <span class="muted small">Zone 2 ${s.zoneLow && s.zoneHigh ? `= heart rate ${s.zoneLow}–${s.zoneHigh} bpm.` : "band not set yet — add it in Settings."}${T0.m === "walk" ? " Raise incline before speed; no handrails." : ""}</span></section>
+  ${sportWeekCard()}
   <form class="card" id="cardioForm"><h3>Log a session</h3>
-  <div class="grid2"><label class="f">Date<input type="date" id="c-date" value="${today()}"></label>
-  <label class="f">Type<select id="c-type">${["Zone 2 incline walk","Easy walk","Post-meal walks","Treadmill run","Outdoor run","Cycling","Rowing","Swimming","Hiking","Sport","4×4 intervals","Other"].map(o => `<option>${o}</option>`).join("")}</select></label>
-  <label class="f">Minutes<input id="c-min" inputmode="numeric" placeholder="${cardioPlan(w, parse(today()).getDay())[1] || 30}"></label>
-  <label class="f">Avg heart rate<input id="c-hr" inputmode="numeric" placeholder="bpm"></label>
-  <label class="f">Speed ${spUnit()}<input id="c-speed" inputmode="decimal" placeholder="${isMi() ? "3.4" : "5.5"}"></label>
-  <label class="f">Incline %<input id="c-inc" inputmode="decimal" placeholder="6"></label></div>
-  <label class="f">Notes<input id="c-notes" placeholder="Optional"></label>
-  <button class="btn primary block" type="submit">Save cardio</button></form>`;
+  <div class="grid2"><label class="f">Date<input type="date" id="c-date" value="${esc(cd.date || today())}"></label>
+  <label class="f">Type<select id="c-type">${types.map(o => `<option ${o === ctype ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></label>
+  <label class="f">Minutes<input id="c-min" inputmode="numeric" value="${esc(cd.min || "")}" placeholder="${cardioPlan(w, parse(today()).getDay())[1] || 30}"></label>
+  ${T0.f.map(fieldHTML).join("")}</div>
+  <label class="f">Notes<input id="c-notes" value="${esc(cd.notes || "")}" placeholder="Optional"></label>
+  <button class="btn primary block" type="submit">Save session</button>
+  <button class="btn block" type="button" data-act="ev-new">Log a race or competition instead</button></form>`;
   const fromW = [];
-  S.data.sessions.forEach(ss => ss.exercises.forEach(e => { const m = exCardioMin(e); if (m >= 1) fromW.push({date: ss.date, ts: ss.ts, type: e.performedAs, minutes: Math.round(m), speed: e.speed, incline: e.incline, workout: ss.title, sid: ss.id}); }));
+  S.data.sessions.forEach(ss => { if (ss.event){ const m = sessionCardioMin(ss); if (m >= 1) fromW.push({date: ss.date, ts: ss.ts, type: (EVENT_KINDS[ss.event.kind] || {}).l || "Race", minutes: Math.round(m), detail: eventSummary(ss.event), workout: ss.title, race: true, sid: ss.id}); return; }
+    ss.exercises.forEach(e => { const m = exCardioMin(e); if (m >= 1) fromW.push({date: ss.date, ts: ss.ts, type: e.performedAs, minutes: Math.round(m), speed: e.speed, incline: e.incline, avgHr: e.hr, workout: ss.title, sid: ss.id}); }); });
   const rows = [...S.data.cardio, ...fromW].sort(byDateDesc).slice(0, 20);
-  out += `<section class="card"><h3>Recent</h3>${rows.length ? `<div class="tbl"><table><tr><th>Date</th><th>Type</th><th>Min</th><th>${spUnit()}</th><th>Incl.</th><th>HR</th><th></th></tr>${rows.map(c => `<tr><td>${shortDate(c.date)}</td><td>${esc(c.type)}${c.workout ? `<div class="small muted">in ${esc(c.workout)}</div>` : ""}</td><td>${c.minutes}</td><td>${num(c.speed) ? fmt(dOut(c.speed)) : "–"}</td><td>${c.incline != null && c.incline !== "" ? fmt(c.incline) + "%" : "–"}</td><td>${c.avgHr ? c.avgHr + " " + zonePill(c.avgHr) : "–"}</td><td>${c.workout ? `<button class="btn ghost" data-act="viewsession" data-id="${c.sid}" aria-label="Open workout">›</button>` : `<button class="btn ghost danger" data-act="del" data-col="cardio" data-id="${c.id}" aria-label="Delete">×</button>`}</td></tr>`).join("")}</table></div>` : `<div class="empty">Your cardio appears here.</div>`}</section>`;
+  out += `<section class="card"><h3>Recent</h3>${rows.length ? `<div class="tbl"><table><tr><th>Date</th><th>Type</th><th>Min</th><th>Details</th><th>HR</th><th></th></tr>${rows.map(c => `<tr><td>${shortDate(c.date)}</td><td>${esc(c.type)}${c.workout ? `<div class="small muted">${c.race ? "🏁 " : "in "}${esc(c.workout)}</div>` : ""}</td><td>${c.minutes}</td><td class="small">${esc(c.detail != null ? c.detail : c.sid ? [num(c.speed) ? `${fmt(dOut(c.speed))} ${spUnit()}` : "", c.incline ? fmt(c.incline) + "%" : ""].filter(Boolean).join(" · ") : cardioDetail(c)) || "–"}</td><td>${c.avgHr ? c.avgHr + " " + zonePill(c.avgHr) : "–"}</td><td>${c.workout ? `<button class="btn ghost" data-act="viewsession" data-id="${c.sid}" aria-label="Open workout">›</button>` : `<button class="btn ghost danger" data-act="del" data-col="cardio" data-id="${c.id}" aria-label="Delete">×</button>`}</td></tr>`).join("")}</table></div>` : `<div class="empty">Your sessions appear here.</div>`}</section>`;
   return out;
 }
 function zonePill(hr){
@@ -1554,7 +2271,8 @@ function viewBody(){
   <label class="f">Recovery score<input id="b-rec" inputmode="numeric" placeholder="0–100"></label>
   ${trackPain() ? `<label class="f">Back pain 0–10<input id="b-back" inputmode="numeric"></label>` : ""}</div>
   <button class="btn primary block" type="submit">Save check-in</button></form>`;
-  const rows = [...S.data.body].sort(byDateDesc).slice(0, 12);
+  const rows = [...S.data.body].filter(b => b.source !== "test").sort(byDateDesc).slice(0, 12);
+  out += eventsCard() + testsCard();
   out += `<section class="card"><h3>Recent check-ins</h3>${rows.length ? `<div class="tbl"><table><tr><th>Date</th><th>${wUnit() === "lb" ? "Lb" : "Kg"}</th><th>Waist</th><th>Sleep</th><th>Rec.</th>${trackPain()?"<th>Back</th>":""}<th></th></tr>${rows.map(b => `<tr><td>${shortDate(b.date)}${b.source==="pre-workout"?` <span class="pill blue">pre-lift</span>`:""}</td><td>${fmt(wOut(b.weight))}</td><td>${fmt(lenOut(b.waist))}</td><td>${fmt(b.sleep)}</td><td>${fmt(b.recovery,0)}</td>${trackPain()?`<td>${fmt(b.backPain,0)}</td>`:""}<td><button class="btn ghost danger" data-act="del" data-col="body" data-id="${b.id}" aria-label="Delete">×</button></td></tr>`).join("")}</table></div>` : `<div class="empty">Check-ins and pre-workout weigh-ins appear here.</div>`}</section>`;
 
   if (!healthOK()) return out + `<section class="card"><h3>DEXA scans and health reports</h3><p class="small" style="margin:0">You haven't switched on health data, so the app doesn't store DEXA scans, health reports or pain scores.</p><button class="btn block" data-act="settings">Switch it on in Settings → Privacy</button></section>`;
@@ -1579,6 +2297,7 @@ function viewProgress(){
   const ptab = S.ui.ptab || "stats";
   let out = `<div><span class="eyebrow">Trends</span><h1>Progress</h1></div><div class="chips"><button class="chip ${ptab==="stats"?"on":""}" data-act="ptab" data-v="stats">Stats</button><button class="chip ${ptab==="trophies"?"on":""}" data-act="ptab" data-v="trophies">Trophies</button></div>`;
   if (ptab === "trophies") return out + viewTrophies();
+  out += sportProgressHTML() + `<h2 style="margin-top:6px">All stats</h2>`;
   // lifts
   const names = {};
   sessionsSorted().forEach(s => s.exercises.forEach(e => { if ((e.type === "load" || e.type === "carry") && topSet(e)) names[e.performedAs] = (names[e.performedAs]||0) + 1; }));
@@ -1700,16 +2419,24 @@ function updateTimer(){
 }
 
 /* ---- Sheets ---- */
+// Templates for the sport on screen first, with a heading before the rest
+function tplOrder(){
+  const want = [...curSport().tpls, ...(curSport2() ? curSport2().tpls : [])], mine = want.map(k => TEMPLATES.find(t => t.key === k)).filter(Boolean), mineU = [...new Set(mine)];
+  const rest = TEMPLATES.filter(t => !mineU.includes(t));
+  return [...mineU.map((t, i) => i === 0 ? {...t, head: `For ${curSport().l.split(" (")[0].toLowerCase()}`} : t), ...rest.map((t, i) => i === 0 ? {...t, head: "Other programs"} : t)];
+}
 function sheetHTML(){
   if (!S.sheet) return "";
   const k = S.sheet.kind; let body = "";
   if (k === "auth"){ body = authSheet(); }
   else if (k === "selftpl"){
     body = `<h2>Ready-made programs</h2><span class="muted small">General programs, not tailored to you. For a personal plan, use the questionnaire or work with a trainer.</span>
-    ${TEMPLATES.map(t => `<button class="wcard" data-act="selftpl-pick" data-v="${t.key}" style="flex-direction:column;align-items:flex-start;gap:4px"><b>${esc(t.name)}</b><span class="small muted">${t.days.length} days a week · ${t.weeks} weeks · ${esc(t.goal)}</span><span class="small">${esc(t.desc)}</span></button>`).join("")}
+    ${tplOrder().map(t => `${t.head ? `<h3>${esc(t.head)}</h3>` : ""}<button class="wcard" data-act="selftpl-pick" data-v="${t.key}" ${t.head ? `data-head="${esc(t.head)}"` : ""} style="flex-direction:column;align-items:flex-start;gap:4px"><b>${esc(t.name)}</b><span class="small muted">${t.days.length} days a week · ${t.weeks} weeks · ${esc(t.goal)}</span><span class="small">${esc(t.desc)}</span></button>`).join("")}
     <button class="btn block" data-act="sheet-close">Cancel</button>`;
   }
   else if (k === "report"){ body = reportSheet(); }
+  else if (k === "event"){ body = eventSheet(); }
+  else if (k === "tests"){ body = testSheet(); }
   else if (k === "celebrate"){ body = celebrateHTML(S.sheet.c); }
   else if (k === "chal"){ body = chalSheet(); }
   else if (k === "squad"){ body = squadSheet(); }
@@ -1718,7 +2445,7 @@ function sheetHTML(){
     const others = (S.clients || []).filter(c => c.id !== S.cctx.uid && c.program && c.program.byTrainer);
     body = `<h2>New program</h2><span class="muted small">Start from a template, then change anything — days, exercises, sets, weights and weeks.</span>
     <button class="btn block" data-act="b-tpl" data-v="blank">Blank program</button>
-    ${TEMPLATES.map(t => `<button class="wcard" data-act="b-tpl" data-v="tpl:${t.key}" style="flex-direction:column;align-items:flex-start;gap:4px"><b>${esc(t.name)}</b><span class="small muted">${t.days.length} days a week · ${t.weeks} weeks · ${esc(t.goal)}</span><span class="small">${esc(t.desc)}</span></button>`).join("")}
+    ${tplOrder().map(t => `${t.head ? `<h3>${esc(t.head)}</h3>` : ""}<button class="wcard" data-act="b-tpl" data-v="tpl:${t.key}" style="flex-direction:column;align-items:flex-start;gap:4px"><b>${esc(t.name)}</b><span class="small muted">${t.days.length} days a week · ${t.weeks} weeks · ${esc(t.goal)}</span><span class="small">${esc(t.desc)}</span></button>`).join("")}
     <button class="wcard" data-act="b-tpl" data-v="standard" style="flex-direction:column;align-items:flex-start;gap:4px"><b>3-Day Strength Block — 12 weeks</b><span class="small muted">3 days a week · 12 weeks · General strength</span><span class="small">Back-friendly full-body strength with carries and core; deloads in weeks 6 and 12.</span></button>
     ${others.map(c => `<button class="btn block" data-act="b-tpl" data-v="copy:${c.id}">Copy ${esc(c.name || c.email)}'s program</button>`).join("")}
     <button class="btn block" data-act="sheet-close">Cancel</button>`;
@@ -1740,17 +2467,18 @@ function sheetHTML(){
     if (S.sheet.eq === undefined){ const eqp = ((set_().intake) || {}).equipment; S.sheet.eq = eqp === "bodyweight" ? "Bodyweight" : null; }
     const canAlways = inLog && !trainerManaged();
     if (S.sheet.always === undefined) S.sheet.always = false;
-    const sugg = swapSuggestions({...def, n: LIBMAP[current] ? current : def.n, type: inLog ? S.draft.exercises[S.sheet.x].type : def.type, alts: [def.n, ...(def.alts || [])]}, current, S.sheet.eq);
+    const sugg = swapSuggestions({...def, n: LIBMAP[current] ? current : def.n, type: inLog ? S.draft.exercises[S.sheet.x].type : def.type, alts: [def.n, ...(def.alts || [])]}, current, S.sheet.eq, !!S.sheet.allEx);
     const mus = musclesOf(LIBMAP[current] ? current : def.n);
     body = `<h2>Swap ${esc(current)}</h2>
     <span class="small muted">${mus.length ? `Works ${esc(mus.join(", ").toLowerCase())}` : esc(S.sheet.cat || "Custom exercise")}${LIBMAP[current] ? ` · ${esc(LIBMAP[current].equip)}` : ""}</span>
     ${canAlways ? `<div class="seg" role="group" aria-label="How long to swap"><button data-act="swap-scope" data-v="0" class="${!S.sheet.always ? "on" : ""}" style="min-width:auto;padding:0 12px">Just this workout</button><button data-act="swap-scope" data-v="1" class="${S.sheet.always ? "on" : ""}" style="min-width:auto;padding:0 12px">From now on</button></div>` : inLog ? `<span class="small muted">Your trainer sets your program, so this swap is for today only.</span>` : `<span class="small muted">This changes the exercise in your program from now on. Sets, reps and rest stay the same.</span>`}
     <div><div class="small muted" style="font-weight:600;margin-bottom:6px">Equipment you can use</div><div class="chips" style="flex-wrap:wrap"><button class="chip ${!S.sheet.eq ? "on" : ""}" data-act="swap-eq" data-v="">Any</button>${EQ_CLASSES.map(c => `<button class="chip ${S.sheet.eq === c ? "on" : ""}" data-act="swap-eq" data-v="${c}">${c}</button>`).join("")}</div></div>
+    ${curSport().k !== "general" ? `<div class="row between small" style="flex-wrap:nowrap;gap:12px"><span>${S.sheet.allEx ? "Showing exercises from every sport" : `Showing exercises for ${esc(curSport().l.split(" (")[0].toLowerCase())}`}</span><button class="btn ghost" data-act="swap-all">${S.sheet.allEx ? "Only my sport" : "Show all sports"}</button></div>` : ""}
     <div><div class="small muted" style="font-weight:600;margin-bottom:6px">Suggested swaps · tap one to use it</div>
     ${sugg.length ? `<div style="display:flex;flex-direction:column;gap:8px">${sugg.map(o => `<button class="wcard" data-act="swap-pick" data-v="${esc(o.n)}" style="padding:10px 12px"><div style="flex:1;min-width:0;text-align:left"><b style="display:block">${esc(o.n)}</b><span class="small muted">${esc(o.why)} · ${esc(o.equip)}</span></div>${I.swap.replace("<svg",'<svg width="18" height="18" style="color:var(--accent);flex:none"')}</button>`).join("")}</div>` : `<div class="empty">No matches with that equipment. Try another, or search below.</div>`}</div>
-    <details><summary class="small" style="cursor:pointer">Search all ${LIB.length} exercises</summary><div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
+    <details><summary class="small" style="cursor:pointer">Search all ${LIB.length} exercises${curSport().k !== "general" && !S.sheet.allEx ? " (search finds any sport)" : ""}</summary><div style="display:flex;flex-direction:column;gap:10px;margin-top:10px">
     <label class="f">Search<input id="swap-q" placeholder="Try row, lunge, cable, core" autocomplete="off"></label>
-    <label class="f">Exercise<select id="swap-sel">${libOptions("", current, S.sheet.cat)}</select></label>
+    <label class="f">Exercise<select id="swap-sel">${libOptions("", current, S.sheet.cat, !!S.sheet.allEx)}</select></label>
     <button class="btn primary block" data-act="swap-apply">Use this exercise</button>
     <label class="f">Not in the list? Exercise name<input id="swap-custom"></label>
     <label class="f">Logged as<select id="swap-type"><option value="load">Reps and kg</option><option value="bw">Reps only</option><option value="time">Seconds (and optional kg)</option><option value="carry">Metres and kg</option></select></label>
@@ -1768,8 +2496,10 @@ function sheetHTML(){
     body = `<h2>${esc(S.sheet.title)}</h2><p style="margin:0">${esc(S.sheet.text)}</p><button class="btn block ${S.sheet.danger?"danger":"primary"}" data-act="confirm-yes">${esc(S.sheet.yes)}</button><button class="btn block" data-act="sheet-close">Cancel</button>`;
   } else if (k === "session"){
     const s = (S.cctx ? S.cctx.data : S.data).sessions.find(x => x.id === S.sheet.id); if (!s) return "";
-    body = `<h2>${esc(s.title)}</h2><span class="muted small">${shortDate(s.date)} · week ${s.week} · ${s.durationMin||"–"} min${s.backPain!=null?` · back ${s.backPain}/10`:""}</span>
-    ${s.exercises.map(e => `<div><b>${esc(e.performedAs)}</b><div class="muted small num">${e.sets.filter(t=>t.done).map(t => `${esc(t.label)}: ${esc(setText(e.type, t))}`).join(" · ") || "Not done"}${e.speed ? ` · ${esc(spText(fmt(e.speed)))} ${spUnit()}` : ""}${e.incline ? ` · ${esc(e.incline)}% incline` : ""}</div>${e.note?`<div class="small">${esc(e.note)}</div>`:""}</div>`).join("")}
+    if (s.event) body = `<h2>${esc(s.title)}</h2><span class="muted small">${shortDate(s.date)} ${parse(s.date).getFullYear()}${s.durationMin ? ` · ${s.durationMin} min` : ""} · counted as a workout</span>${S.cctx ? withCtx(() => eventDetailHTML(s)) : eventDetailHTML(s)}
+    ${isTrainer() ? "" : `<button class="btn blue block" data-act="ev-edit" data-id="${s.id}">Edit result</button>`}<button class="btn block" data-act="sheet-close">Close</button>`;
+    else body = `<h2>${esc(s.title)}</h2><span class="muted small">${shortDate(s.date)} · week ${s.week} · ${s.durationMin||"–"} min${s.backPain!=null?` · back ${s.backPain}/10`:""}</span>
+    ${s.exercises.map(e => `<div><b>${esc(e.performedAs)}</b><div class="muted small num">${e.sets.filter(t=>t.done).map(t => `${esc(t.label)}: ${esc(setText(e.type, t))}`).join(" · ") || "Not done"}${e.speed ? ` · ${esc(spText(fmt(e.speed)))} ${spUnit()}` : ""}${e.incline ? ` · ${esc(e.incline)}% incline` : ""}${exPaceText(e)}${e.hr ? ` · avg HR ${esc(e.hr)}` : ""}</div>${e.note?`<div class="small">${esc(e.note)}</div>`:""}</div>`).join("")}
     ${s.notes ? `<p class="small" style="margin:0">${esc(s.notes)}</p>` : ""}
     ${isTrainer() ? "" : `<button class="btn danger block" data-act="ask-del-session" data-id="${s.id}">Delete workout</button>`}<button class="btn block" data-act="sheet-close">Close</button>`;
   } else if (k === "dexa"){
@@ -1804,6 +2534,7 @@ function sheetHTML(){
     <label class="f">DEXA every (weeks)<input id="s-dexa" inputmode="numeric" value="${s.dexaWeeks}"></label>
     <label class="f">Normal back pain 0–10<input id="s-bn" inputmode="numeric" value="${s.backNormal ?? ""}" placeholder="Leave blank if none"></label></div>
     ${healthOK() ? `<div class="row between"><span>Track back pain</span><button class="toggle ${s.trackBack?"on":""}" data-act="s-back" aria-pressed="${s.trackBack}" aria-label="Track back pain"></button></div>` : ""}
+    ${!isStaff() && curSport().k !== "general" ? `<div><div class="small muted" style="font-weight:600;margin-bottom:6px">Weekly targets · ${esc(curSport().l.split(" (")[0])}</div><div class="grid2">${sportTargets(curSport()).map((t, i) => `<label class="f">${esc(t.l)}${t.u === "long" ? " (longest)" : ""}${targetUnit(t)}<input id="s-tgt-${i}" inputmode="decimal" value="${t.t}"></label>`).join("")}</div></div>` : ""}
     <button class="btn primary block" data-act="settings-save">Save settings</button>
     <hr style="border:0;border-top:1px solid var(--line);width:100%">
     ${trainerManaged() ? `<h3>Program</h3><span class="muted small">${esc(prog().name || "Your program")} is set by ${esc(Cloud.me.trainerName || "your trainer")}. You can still swap an exercise for a single workout.</span><hr style="border:0;border-top:1px solid var(--line);width:100%">` : `    <h3>Program</h3><span class="muted small">Current: ${!hasProgram() ? "none yet" : prog().starter ? "starter block from the coach questionnaire" : prog().kind === "personal" ? "back-friendly" : prog().kind === "standard" ? "standard 3-day block" : esc(prog().name || "custom program")}. Switching keeps your logged workouts.</span>
@@ -1863,7 +2594,7 @@ async function finishWorkout(){
   const session = { id: D.id, date: D.date, ts: String(D.startedAt), week: D.week, day: D.day, title: D.title,
     durationMin: Math.round((Date.now() - D.startedAt)/60000), backPain: D.backPain, notes: D.notes, pre: D.pre,
     exercises: D.exercises.map(x => ({ base:x.base, performedAs:x.performedAs, type:x.type, note:x.note,
-      ...(x.speed ? {speed: +x.speed || x.speed} : {}), ...(x.incline ? {incline: +x.incline || x.incline} : {}),
+      ...(x.speed ? {speed: +x.speed || x.speed} : {}), ...(x.incline ? {incline: +x.incline || x.incline} : {}), ...(num(x.hr) ? {hr: +x.hr} : {}),
       sets: x.sets.map(s => ({label:s.label, reps:s.reps, kg:s.kg, done: s.done || (s.reps !== "")})) })) };
   const before = gameStats();
   try { await saveRec("sessions", session); } catch(e){ return; }
@@ -1957,6 +2688,13 @@ app.addEventListener("click", async ev => {
     S.view = "workouts"; S.forceRender = true; render(); return toast(`${p.name} is now your program`);
   }
   if (a === "bal-toggle"){ S.profile.settings.balanceWork = set_().balanceWork === false; await persistProfile(); S.forceRender = true; render(); return toast(set_().balanceWork === false ? "Balance work off" : "Balance work on"); }
+  if (a === "ev-new"){ const kind = t.dataset.kind && EVENT_KINDS[t.dataset.kind] ? t.dataset.kind : curSport().events[0]; const sh = {kind:"event", id:null, ev:{kind, name: t.dataset.name || "", splits:{}}}; S.sheet = sh; S.forceRender = true; render(); const de = document.getElementById("ev-date"); if (de && t.dataset.date) de.value = t.dataset.date; return; }
+  if (a === "ev-edit") return openSheet({kind:"event", id:t.dataset.id});
+  if (a === "ev-save") return saveEvent();
+  if (a === "test-new") return openSheet({kind:"tests"});
+  if (a === "test-save") return saveTests();
+  if (a === "swap-all"){ S.sheet.allEx = !S.sheet.allEx; S.forceRender = true; return render(); }
+  if (a === "ob-sport"){ S.ob.a.sport = t.dataset.v; if (S.ob.a.sport2 === t.dataset.v) S.ob.a.sport2 = null; return rerenderLogKeepScroll(); }
   if (a === "rep-new") return openSheet({kind:"report", id:null, type:"blood"});
   if (a === "rep-edit"){ const r = (S.data.reports || []).find(x => x.id === t.dataset.id); return openSheet({kind:"report", id:t.dataset.id, type: r ? r.type : "blood"}); }
   if (a === "rep-addrow"){ reportSheetCollect(); S.sheet.custom.push({name:"", unit:"", value:""}); S.forceRender = true; return render(); }
@@ -2185,6 +2923,7 @@ app.addEventListener("click", async ev => {
   if (a === "settings-save"){
     const s = S.profile.settings; const sd = val("s-start");
     if (sd) s.startDate = mondayOf(sd);
+    if (!isStaff() && curSport().k !== "general"){ const sp = curSport(); s.sportTargets = {...(s.sportTargets || {}), [sp.k]: sp.week.map((t, i) => numOrNull(val("s-tgt-" + i)) ?? t.t)}; }
     s.zoneLow = numOrNull(val("s-zl")); s.zoneHigh = numOrNull(val("s-zh")); s.dexaWeeks = numOrNull(val("s-dexa")) || 12; s.backNormal = numOrNull(val("s-bn")); s.trackBack = !!S.sheet.back;
     await persistProfile(); S.sheet = null; S.forceRender = true; render(); return toast(sd && sd !== s.startDate ? `Saved — block starts Monday ${shortDate(s.startDate)}` : "Settings saved");
   }
@@ -2241,10 +2980,15 @@ app.addEventListener("submit", async ev => {
   ev.preventDefault();
   if (ev.target.id === "cardioForm"){
     const mins = numOrNull(val("c-min")) ?? numOrNull(document.getElementById("c-min").placeholder);
-    if (!mins) return toast("Enter the minutes you walked.");
-    const date = val("c-date") || today();
-    await saveRec("cardio", {id:uid("c"), date, week:weekOf(date), type:val("c-type"), minutes:mins, avgHr:numOrNull(val("c-hr")), speed:num(val("c-speed")) ? +dIn(val("c-speed")) : null, incline:numOrNull(val("c-inc")), notes:val("c-notes")}).catch(()=>{});
-    S.forceRender = true; render(); toast(`Saved ${mins} min`);
+    if (!mins) return toast("Enter the minutes.");
+    const date = val("c-date") || today(), type = val("c-type"), f = sessType(type).f, has = k => f.includes(k);
+    const rec = {id:uid("c"), date, week:weekOf(date), type, minutes:mins, avgHr: has("hr") ? numOrNull(val("c-hr")) : null, speed: has("speed") && num(val("c-speed")) ? +dIn(val("c-speed")) : null, incline: has("incline") ? numOrNull(val("c-incline")) : null, notes:val("c-notes")};
+    if (has("dist") && num(val("c-dist"))) rec.dist = +dIn(val("c-dist"));
+    if (has("metres") && num(val("c-metres"))) rec.dist = +val("c-metres") / 1000;
+    ["power","cadence","elev","spm","rounds","roundMin","rpe","sends"].forEach(k => { if (has(k) && num(val("c-" + k))) rec[k] = +val("c-" + k); });
+    ["stroke","splits","grade"].forEach(k => { if (has(k) && val("c-" + k)) rec[k] = val("c-" + k); });
+    await saveRec("cardio", clean(rec)).catch(()=>{});
+    S.ui.cdraft = null; S.ui.ctype = type; S.forceRender = true; render(); toast(`Saved ${mins} min`);
   }
   if (ev.target.id === "bodyForm"){
     const rec = {date: val("b-date") || today(), weight:num(val("b-weight")) ? +wIn(val("b-weight")) : null, waist:lenIn(val("b-waist")), sleep:numOrNull(val("b-sleep")), recovery:numOrNull(val("b-rec")), backPain: trackPain() ? numOrNull(val("b-back")) : null, source:"check-in"};
@@ -2263,6 +3007,8 @@ app.addEventListener("change", ev => {
     if (el.dataset.custom){ S.forceRender = true; render(); }
     return;
   }
+  if (ev.target.id === "c-type"){ const d = {}; document.querySelectorAll('#cardioForm [id^="c-"]').forEach(el => { if (el.id !== "c-type") d[el.id.slice(2)] = el.value; }); S.ui.cdraft = d; S.ui.ctype = ev.target.value; S.forceRender = true; render(); return; }
+  if (ev.target.id === "ev-kind" && S.sheet && S.sheet.kind === "event"){ eventCollect(); const sh = S.sheet, d = sh.ev.date; sh.ev.kind = ev.target.value; sh.ev.splits = {}; S.forceRender = true; render(); const de = document.getElementById("ev-date"); if (de && d) de.value = d; return; }
   if (ev.target.id === "rp-type" && S.sheet && S.sheet.kind === "report"){ const old = S.sheet.type; reportSheetCollect(); S.sheet.type = ev.target.value; if (old !== S.sheet.type) S.sheet.vals = {}; S.forceRender = true; render(); return; }
   if (ev.target.id === "restore-file" && ev.target.files[0]) restore(ev.target.files[0]); });
 async function saveDexa(){
@@ -2415,7 +3161,7 @@ function sendWorkoutAlert(session){
   const sets = session.exercises.reduce((a, e) => a + e.sets.filter(s => s.done).length, 0);
   Cloud.db.collection("trainers").doc(Cloud.me.trainerId).collection("alerts").add({...clean({
     clientId: Cloud.user.uid, clientName: Cloud.me.name || Cloud.me.email, sessionId: session.id, title: session.title, day: session.day,
-    date: session.date, week: session.week, sets, durationMin: session.durationMin, backPain: session.backPain,
+    date: session.date, week: session.week, sets, durationMin: session.durationMin, backPain: session.backPain, result: session.event ? (EVENT_KINDS[session.event.kind] || {}).l + (eventSummary(session.event) ? " · " + eventSummary(session.event) : "") : null,
     weight: session.pre ? session.pre.weight : null, notes: session.notes || "", read: false
   }), ...{ts: ts()}}).catch(() => {});
 }
@@ -2494,7 +3240,7 @@ function viewClients(){
   out += cl.map(c => {
     const la = lastAlertFor(c.id); const unread = (S.alerts || []).filter(a => a.clientId === c.id && !a.read).length;
     const prog = c.program && c.program.byTrainer ? esc(c.program.name || "Program") : "No program from you yet";
-    return `<button class="wcard" data-act="open-client" data-id="${c.id}"><div class="dayblock" style="font-size:22px">${esc(initials(c.name))}</div><div style="min-width:0;flex:1"><b style="font-size:18px;display:block">${esc(c.name || c.email)}</b><span class="muted small">${prog} · ${la ? `last workout ${shortDate(la.date)}` : "no workouts logged yet"}</span>${unread ? `<div style="margin-top:6px"><span class="pill blue">${unread} new</span></div>` : ""}</div></button>`;
+    return `<button class="wcard" data-act="open-client" data-id="${c.id}"><div class="dayblock" style="font-size:22px">${esc(initials(c.name))}</div><div style="min-width:0;flex:1"><b style="font-size:18px;display:block">${esc(c.name || c.email)}</b><span class="muted small">${esc(sportLabel(((c.settings || {}).intake || {}).sport).split(" (")[0])} · ${prog} · ${la ? `last workout ${shortDate(la.date)}` : "no workouts logged yet"}</span>${unread ? `<div style="margin-top:6px"><span class="pill blue">${unread} new</span></div>` : ""}</div></button>`;
   }).join("");
   return out;
 }
@@ -2502,7 +3248,7 @@ function viewAlerts(){
   const al = S.alerts || [];
   let out = `<div class="row between"><div><span class="eyebrow">Completed workouts</span><h1>Alerts</h1></div>${al.some(a => !a.read) ? `<button class="btn" data-act="alerts-read">Mark all read</button>` : ""}</div>`;
   if (!al.length) return out + `<div class="empty">When a client saves a workout, it appears here.</div>`;
-  return out + al.map(a => a.kind === "deleted" ? `<div class="wcard" style="cursor:default"><div class="dayblock sm">·</div><div style="min-width:0;flex:1"><b style="display:block">${esc(a.clientName)} deleted their account</b><span class="muted small">${a.date ? shortDate(a.date) : ""} · their data and your notes about them have been removed</span></div><button class="btn ghost" data-act="alert-del" data-id="${a.id}" aria-label="Dismiss">×</button></div>` : a.kind === "profile" ? `<button class="wcard" data-act="open-alert" data-id="${a.id}" style="${a.read ? "" : "border-color:var(--accent)"}"><div class="dayblock sm">${I.body.replace("<svg",'<svg width="20" height="20"')}</div><div style="min-width:0;flex:1"><b style="display:block">${esc(a.clientName)} updated their profile</b><span class="muted small">${a.date ? shortDate(a.date) : ""} · ${esc(a.text || "")}</span></div></button>` : `<button class="wcard" data-act="open-alert" data-id="${a.id}" style="${a.read ? "" : "border-color:var(--accent)"}"><div class="dayblock sm">${esc(a.day || "·")}</div><div style="min-width:0;flex:1"><b style="display:block">${esc(a.clientName)} finished ${esc(a.title)}</b><span class="muted small">${a.date ? shortDate(a.date) : ""} · week ${a.week || "–"} · ${a.sets || 0} sets · ${a.durationMin || "–"} min${a.backPain != null ? ` · back ${a.backPain}/10` : ""}${a.weight ? ` · ${fmt(a.weight)} kg` : ""}</span>${a.notes ? `<div class="small">“${esc(a.notes)}”</div>` : ""}</div>${a.read ? "" : `<span class="pill blue">New</span>`}</button>`).join("");
+  return out + al.map(a => a.kind === "deleted" ? `<div class="wcard" style="cursor:default"><div class="dayblock sm">·</div><div style="min-width:0;flex:1"><b style="display:block">${esc(a.clientName)} deleted their account</b><span class="muted small">${a.date ? shortDate(a.date) : ""} · their data and your notes about them have been removed</span></div><button class="btn ghost" data-act="alert-del" data-id="${a.id}" aria-label="Dismiss">×</button></div>` : a.kind === "profile" ? `<button class="wcard" data-act="open-alert" data-id="${a.id}" style="${a.read ? "" : "border-color:var(--accent)"}"><div class="dayblock sm">${I.body.replace("<svg",'<svg width="20" height="20"')}</div><div style="min-width:0;flex:1"><b style="display:block">${esc(a.clientName)} updated their profile</b><span class="muted small">${a.date ? shortDate(a.date) : ""} · ${esc(a.text || "")}</span></div></button>` : `<button class="wcard" data-act="open-alert" data-id="${a.id}" style="${a.read ? "" : "border-color:var(--accent)"}"><div class="dayblock sm">${esc(a.day || "·")}</div><div style="min-width:0;flex:1"><b style="display:block">${esc(a.clientName)} finished ${esc(a.title)}</b><span class="muted small">${a.date ? shortDate(a.date) : ""} · ${a.result ? esc(a.result) : `week ${a.week || "–"} · ${a.sets || 0} sets`} · ${a.durationMin || "–"} min${a.backPain != null ? ` · back ${a.backPain}/10` : ""}${a.weight ? ` · ${fmt(a.weight)} kg` : ""}</span>${a.notes ? `<div class="small">“${esc(a.notes)}”</div>` : ""}</div>${a.read ? "" : `<span class="pill blue">New</span>`}</button>`).join("");
 }
 function viewTrainerAccount(){
   return `<div><span class="eyebrow">Account</span><h1>${esc(Cloud.me.name || "Coach")}</h1></div>
@@ -2530,6 +3276,7 @@ function intakeCard(){
   const lifts = LIFTS.filter(([k]) => it.lifts && it.lifts[k] && it.lifts[k].kg).map(([k, l]) => `${l} ${it.lifts[k].kg} kg × ${it.lifts[k].reps}`);
   return `<section class="card"><h3>Intake answers</h3><span class="muted small">From the client's questionnaire${it.completed ? `, ${shortDate(it.completed)}` : ""}${it.updated ? `; profile updated ${shortDate(it.updated)}` : ""}.</span>
   <div class="tbl"><table>
+  <tr><td>Sport</td><td style="white-space:normal">${esc(sportLabel(it.sport))}${it.sport2 ? " · " + esc(sportLabel(it.sport2)) : ""}</td></tr>
   <tr><td>Goal</td><td>${esc(lbl(GOALS, it.goal))}${it.event ? " · " + esc(lbl(EVENTS, it.event)) : ""}</td></tr>
   <tr><td>Experience</td><td>${esc(lbl(EXPERIENCE, it.experience))}</td></tr>
   <tr><td>Schedule</td><td>${it.days || "–"} days a week · ${it.mins || "–"} min</td></tr>
@@ -2708,7 +3455,7 @@ function accountSection(){
 }
 
 /* ============ First-run coach: questionnaire + starter plan ============ */
-const OB_STEPS = ["hello","goal","experience","schedule","equipment","about","health","strength","plan"];
+const OB_STEPS = ["hello","sport","goal","experience","schedule","equipment","about","health","strength","plan"];
 const GOALS = [["strength","Get stronger","Lift heavier on the big lifts"],["muscle","Build muscle","Look and feel more muscular"],["fatloss","Lose fat","Lower body fat and waist size"],["fitness","Get fitter","Better stamina and endurance"],["health","Feel healthier","Move well, more energy, long-term health"],["event","Train for an event","Hyrox, marathon, half marathon or 10K"]];
 const EVENTS = [["hyrox","Hyrox"],["marathon","Marathon"],["half","Half marathon"],["10k","10K run"]];
 const EXPERIENCE = [["new","New to training","Less than 6 months of regular workouts"],["some","Some experience","6 months to 2 years"],["experienced","Experienced","2+ years of consistent training"]];
@@ -2749,7 +3496,18 @@ function coachPlan(a){
     return finishPlan(p, a, why, warn, tips, flagged);
   }
 
-  const g = a.goal || "health";
+  // Sports with their own program start from that sport's template
+  const sp = SPORTMAP[a.sport] || SPORTMAP.general;
+  const sportTpl = flagged ? null : sp.k === "running" ? (exp === "experienced" ? "half" : "10k") : sp.tpl;
+  if (sportTpl && TEMPLATES.some(t => t.key === sportTpl)){
+    const t = TEMPLATES.find(x => x.key === sportTpl), p = templateProgram(sportTpl); p.byTrainer = false; p.starter = true; p.name = "Starter: " + p.name;
+    why.push(`You chose ${sp.l}, so this plan starts from our ${t.name} program: ${t.desc}`);
+    if (exp === "new" && !["rehab","mobility"].includes(sportTpl)) warn.push(`This is a sport-specific program. As you're new to training, ease in: use lighter weights and shorter sessions for the first 2 weeks, and ask a coach to adjust it for you.`);
+    if (a.eventDate && p.eventKey){ const f = fitToEvent(p, a.eventDate); if (f.ok){ (f.status === "ok" ? why : warn).push(f.msg); } else warn.push(f.msg); }
+    if (t.days.length > (+a.days || 3)) tips.push(`This program has ${t.days.length} training days a week; you said ${a.days || 3}. Drop the lowest-priority day or ask a coach to merge sessions.`);
+    return finishPlan(p, a, why, warn, tips, flagged);
+  }
+  const g = sp.plan && !["strength","muscle","fatloss"].includes(a.goal) ? sp.plan : a.goal || "health";
   const rx = {
     strength:{main:"5", acc:"8–10", restMain:180, restAcc:90, mainSetsBonus:1},
     muscle:{main:"8–10", acc:"10–12", restMain:120, restAcc:75, mainSetsBonus:0},
@@ -2886,6 +3644,12 @@ function viewOnboard(){
     <button class="btn primary block" data-act="ob-next">Let's start</button>
     <button class="btn block" data-act="ob-skip">Skip for now</button>
     ${isCloudClient() ? `<button class="btn ghost" data-act="ob-havetrainer">I have a trainer's invite code</button>` : ""}`;
+  } else if (step === "sport"){
+    const groups = [...new Set(SPORTS.map(x => x.g))];
+    body = `<h2>What's your sport?</h2><span class="muted small">The app shapes your exercises, logging, weekly targets and progress around it. You can change it later in Edit profile.</span>
+    ${groups.map(g => `<div><div class="small muted" style="font-weight:600;margin:4px 0 6px">${esc(g)}</div><div style="display:flex;flex-direction:column;gap:8px">${SPORTS.filter(x => x.g === g).map(x => `<button class="wcard" data-act="ob-sport" data-v="${x.k}" style="${a.sport === x.k ? "border-color:var(--accent);background:var(--accent-soft)" : ""}"><div style="flex:1"><b style="display:block">${esc(x.l)}</b><span class="small muted">${esc(x.d)}</span></div>${a.sport === x.k ? `<span class="pill blue">Selected</span>` : ""}</button>`).join("")}</div></div>`).join("")}
+    ${a.sport ? `<label class="f">Second sport (optional)<select id="ob-sport2"><option value="">None</option>${SPORTS.filter(x => x.k !== a.sport && x.k !== "general").map(x => `<option value="${x.k}" ${a.sport2 === x.k ? "selected" : ""}>${esc(x.l)}</option>`).join("")}</select></label>` : ""}
+    ${nav("Next", !!a.sport)}`;
   } else if (step === "goal"){
     body = `<h2>What's your main goal?</h2>${choice("goal", GOALS)}${a.goal === "event" ? `<h3>Which event?</h3>${choice("event", EVENTS)}<label class="f">Event date (optional)<input type="date" id="ob-evdate" value="${esc(a.eventDate || "")}" min="${today()}"></label><span class="small muted">With a date, the plan is timed so you peak on race day.</span>` : ""}${nav("Next", a.goal && (a.goal !== "event" || a.event))}`;
   } else if (step === "experience"){
@@ -2938,6 +3702,7 @@ function obCollect(){
   const O = S.ob, a = O.a, step = OB_STEPS[O.step];
   if (step === "hello" && document.getElementById("ob-name")) S.profile.settings.name = val("ob-name");
   if (step === "goal" && document.getElementById("ob-evdate")) a.eventDate = val("ob-evdate");
+  if (step === "sport" && document.getElementById("ob-sport2")) a.sport2 = val("ob-sport2") || null;
   if (step === "about"){ a.age = numOrNull(val("ob-age")); a.sex = val("ob-sex"); a.height = lenIn(val("ob-height")); a.weight = num(val("ob-weight")) ? +wIn(val("ob-weight")) : null; }
   if (step === "health"){ a.health = {}; document.querySelectorAll("[data-obh]").forEach(c => { if (c.checked) a.health[c.dataset.obh] = true; }); a.other = val("ob-other"); }
   if (step === "strength") LIFTS.forEach(([k]) => { const kg = num(val(`ob-${k}-kg`)) ? +wIn(val(`ob-${k}-kg`)) : null, reps = numOrNull(val(`ob-${k}-reps`)); if (document.getElementById(`ob-${k}-kg`)) a.lifts[k] = kg && reps ? {kg, reps} : {}; });
@@ -3015,19 +3780,25 @@ function rankFor(xp){
   return {name: cur[0], idx: i, floor: cur[1], next: nxt ? nxt[1] : null, nextName: nxt ? nxt[0] : null, pct: nxt ? (xp - cur[1]) / (nxt[1] - cur[1]) : 1};
 }
 const doneSets = e => (e.sets || []).filter(x => x.done);
-function sessionKm(s){ let km = 0; s.exercises.forEach(e => doneSets(e).forEach(x => { if (e.type === "run") km += +x.reps || 0; else if (e.type === "dist" && libCat(e.performedAs) === "Running") km += (+x.reps || 0) / 1000; })); return km; }
+function sessionKm(s){ if (s.event){ const k = EVENT_KINDS[s.event.kind] || {}; return k.mode === "run" ? (eventKm(s.event) || 0) : 0; } let km = 0; s.exercises.forEach(e => doneSets(e).forEach(x => { if (e.type === "run") km += +x.reps || 0; else if (e.type === "dist" && libCat(e.performedAs) === "Running") km += (+x.reps || 0) / 1000; })); return km; }
 // Minutes of cardio inside a logged workout: walks, runs, rowing, bike and other conditioning
 function exCardioMin(e){
   let m = 0, cat = libCat(e.performedAs);
   doneSets(e).forEach(x => {
     if (e.type === "run") m += +x.kg || 0;
-    else if (e.type === "cardio") m += +x.reps || 0;
-    else if (e.type === "dist" && (cat === "Running" || cat === "Conditioning")) m += (+x.kg || 0) / 60;
-    else if (e.type === "time" && cat === "Conditioning") m += (+x.reps || 0) / 60;
+    else if (e.type === "cardio"){ if (cat !== "Mobility" && cat !== "Climbing") m += +x.reps || 0; }
+    else if (e.type === "dist" && ["Running","Conditioning","Swimming","Sport skills"].includes(cat)) m += (+x.kg || 0) / 60;
+    else if (e.type === "time" && (cat === "Conditioning" || (cat === "Sport skills" && /Bag|Sparring|Shadow/.test(e.performedAs)))) m += (+x.reps || 0) / 60;
   });
   return m;
 }
-function sessionCardioMin(s){ return s.exercises.reduce((a, e) => a + exCardioMin(e), 0); }
+// Pace for runs, swims and rows inside a workout
+function exPaceText(e){
+  const m = exMode(e); if (!["run","swim","row"].includes(m)) return "";
+  let km = 0, min = 0; doneSets(e).forEach(x => { if (e.type === "run"){ km += +x.reps || 0; min += +x.kg || 0; } else if (e.type === "dist"){ km += (+x.reps || 0) / 1000; min += (+x.kg || 0) / 60; } else if (e.type === "cardio"){ min += +x.reps || 0; km += +x.kg || 0; } });
+  const p = paceOf({m, km, min}); return p ? ` · ${paceText(m, p)}` : "";
+}
+function sessionCardioMin(s){ if (s.event){ const k = EVENT_KINDS[s.event.kind] || {}; return k.mode ? (s.event.finish ? s.event.finish / 60 : +s.durationMin || 0) : 0; } return s.exercises.reduce((a, e) => a + exCardioMin(e), 0); }
 function sessionVolume(s){ let v = 0; s.exercises.forEach(e => { if (e.type === "load") doneSets(e).forEach(x => v += (+x.kg || 0) * (+x.reps || 0)); }); return v; }
 const ascSessions = () => [...S.data.sessions].sort((a,b) => (a.date + (a.ts||"")).localeCompare(b.date + (b.ts||"")));
 function pbScan(){
@@ -3141,7 +3912,7 @@ function ringsCard(G){
   const r = G.rings;
   const line = (col, lbl, v, unit) => `<div class="row" style="gap:8px;flex-wrap:nowrap"><i style="width:10px;height:10px;border-radius:50%;background:${col};flex:none"></i><span class="small" style="flex:1">${lbl}</span><b class="num small">${v[0]}${unit} / ${v[1]}${unit}</b></div>`;
   return `<div class="row" style="flex-wrap:nowrap;gap:16px">${ringsSVG(r)}<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px">
-  ${line("var(--accent)", "Workouts", r.work, "")}${line("var(--chart-2)", "Cardio", r.cardio, " min")}<div class="row" style="gap:8px;flex-wrap:nowrap"><i style="width:10px;height:10px;border-radius:50%;background:var(--good);flex:none"></i><span class="small" style="flex:1">Check-in</span><b class="small">${r.check[0] ? "Done" : "Not yet"}</b></div>
+  ${line("var(--accent)", "Workouts", r.work, "")}${line("var(--chart-2)", esc(curSport().ring || "Cardio"), r.cardio, " min")}<div class="row" style="gap:8px;flex-wrap:nowrap"><i style="width:10px;height:10px;border-radius:50%;background:var(--good);flex:none"></i><span class="small" style="flex:1">Check-in</span><b class="small">${r.check[0] ? "Done" : "Not yet"}</b></div>
   <span class="small muted">${r.full ? "All three closed — +150 bonus points" : "Close all three for a Full week bonus"}</span></div></div>`;
 }
 function rankBadge(G){ return `<span class="pill blue">🦍 ${G.rank.name} · ${kfmt(G.xp)} pts</span>`; }
@@ -3191,7 +3962,7 @@ function viewTrophies(){
 }
 
 /* ============ Event dates ============ */
-const EVENT_MIN = {hyrox:8, marathon:12, half:8, "10k":5};
+const EVENT_MIN = {hyrox:8, marathon:12, half:8, "10k":5, triathlon:8};
 function progWeek(w){ const b = blk(); let x = w; if (b.peak != null) x = Math.min(x, b.peak); return Math.max(1, x - (b.base || 0)); }
 function fitToEvent(p, dateStr){
   if (!dateStr) return {ok:false, msg:"Pick the event date first."};
@@ -3234,7 +4005,8 @@ function countdownCard(){
   <span class="small muted">${esc(ev.name || "Event")} · ${DOW[parse(ev.date).getDay()]} ${shortDate(ev.date)} ${parse(ev.date).getFullYear()}</span></div>
   ${w >= 1 && w <= b.weeks ? `<div class="small" style="text-align:right;flex:none">Week ${w} of ${b.weeks}<br><span class="muted">${phaseOf(w).name}</span></div>` : w < 1 ? `<div class="small muted" style="text-align:right;flex:none">Plan starts<br>${shortDate(startDate())}</div>` : ""}</div>
   <div class="meter"><i style="width:${pct}%"></i></div>
-  ${prog().fitted === "tooShort" || prog().fitted === "short" ? `<span class="small muted">Shorter than ideal prep — a coach can help you make the most of it.</span>` : ""}</section>`;
+  ${prog().fitted === "tooShort" || prog().fitted === "short" ? `<span class="small muted">Shorter than ideal prep — a coach can help you make the most of it.</span>` : ""}
+  ${d <= 0 && !isTrainer() && !S.data.sessions.some(s => s.event && s.date >= ev.date) ? `<button class="btn primary block" data-act="ev-new" data-name="${esc(ev.name || "")}" data-date="${esc(ev.date)}" data-kind="${esc(prog().eventKey || "")}">How did it go? Log your result</button>` : ""}</section>`;
 }
 
 /* ============ Squad: challenges, boards, buddies ============ */

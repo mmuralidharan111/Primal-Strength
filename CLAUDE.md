@@ -17,7 +17,8 @@ A workout app for **clients, trainers and gym owners**, built by Manas (Bengalur
 | Path | What it is |
 | --- | --- |
 | `www/index.html` | **The whole app**: one HTML file, vanilla JS, no framework. Edit this file directly. |
-| `www/download.html`, `privacy.html`, `delete-account.html` | Static web pages. Privacy policy v1.0 names Manas as data fiduciary, contact mmuralidharan111@gmail.com. Update it when data handling changes. |
+| `www/download.html`, `privacy.html`, `delete-account.html` | Static web pages. Privacy policy v1.1 (`POLICY_V` in the app; raise `CONSENT_V` only when data is used in a new way, which makes everyone agree again) names Manas as data fiduciary, contact mmuralidharan111@gmail.com. Update it when data handling changes. |
+| `docs/play-data-safety.md` | Ready-to-paste Play Console Data safety answers; keep in step with the privacy policy. |
 | `firestore.rules` | Source of truth for the database rules. **Manas pastes these into Firebase console → Firestore → Rules → Publish** after every change — always remind him and give him the full file. |
 | `test/smoke.js` | jsdom end-to-end test against a fake Firestore/Auth (offline, client, trainer, owner, buddies, challenges, consent, deletion…). Failures print `::error` annotations. |
 | `test/rules.test.js` | 122 security-rule checks on the official Firestore emulator, including a security-audit section (cross-account reads/writes, trainer and gym-owner scope, gym codes). |

@@ -51,6 +51,39 @@ Builds in order. Each groups items that share setup; later builds depend on earl
 
 **Alongside: iPhone app** — starts once the Apple Developer account exists (TestFlight, then App Store, then Apple Health).
 
+## Retention features (requested 24 Nov 2026)
+
+Goal: spot members slipping earlier, get trainers and owners to act, give members reasons to stay, and show owners what works. Most of this runs on the free Firebase plan; exceptions are marked.
+
+### Proposed for the next build (Manas to confirm)
+1. **Personal risk score.** Compare each member with their own usual pattern (average workouts per week over the last 4–8 weeks), not a fixed 14 days. Flag when this week falls clearly below their norm (e.g. 3/week → 1/week). Show the reason on the owner and trainer views.
+2. **Trainer weekly call list.** Each trainer sees "members to contact this week" from the risk score. A one-tap WhatsApp button opens a wa.me link with a ready-made message (free, no WhatsApp API). Trainer records the outcome: Called / Back training / Lost. Owner sees the outcomes.
+3. **Pause / holiday mode.** Member (or trainer) pauses for travel or illness with a start and end date. Streaks, rings and the risk status freeze during the pause.
+4. **Comeback plan.** After a gap of 10 days or more, the first week back is automatically lighter (fewer sets, lower targets), then returns to the normal program.
+5. **Monthly report card.** On the 1st of each month: workouts, personal bests, total kg lifted, km run, body changes, streak. Shareable as an image (WhatsApp/Instagram). Trainers and owners see summaries only, following the existing privacy rules.
+6. **Retention dashboard (owner and trainer).** For members who joined in a given month, the share still training at 30, 90 and 180 days. Split by trainer, class/troop and program. Also: active members trend and at-risk count trend.
+
+### Later retention items (backlog)
+7. **More warning signs** in the risk score: missed planned workouts, missed class roll calls, shorter sessions, pain flags, program finished with no new one assigned, membership ending within 30 days while not training.
+8. **Membership end date** entered by hand on the member profile (until full memberships arrive in the payments/gym-management build).
+9. **First-60-days watch.** New members get a stricter risk threshold and a highlighted "new member" tag for trainers.
+10. **First-30-days journey.** Goal set on day 1; check-ins in week 1 and week 2; celebration of the first personal best; prompt for a trainer intro.
+11. **Owner win-back list.** Inactive members with their trainer named, plus an owner-defined comeback offer text to send via WhatsApp link.
+12. **Re-test days.** Benchmark workout every 4–6 weeks matched to the member's sport (e.g. 5 km time, estimated 1-rep max, HYROX stations), with the result compared with last time.
+13. **Troop accountability.** Optional: a buddy or troop is told when a member misses a planned session. Team challenges where a missed session costs the team points.
+14. **Gym rewards.** Gym defines rewards for points (free PT session, merchandise, shake), handed over at the desk; the app tracks points and redemptions.
+15. **Anniversary badges.** 3, 6 and 12 months as a member.
+16. **Exit reason.** One question when a member goes inactive or deletes their account: cost, time, injury, moved, lost interest, other. Owner sees totals.
+17. **Trainer retention ranking.** Owner view ranking trainers by how long their clients keep training.
+18. **Member reminders by push**, e.g. "You planned Mon/Wed/Fri, missed Wednesday", plus a streak-saver reminder. Needs push notifications (Blaze plan, build 4).
+19. **WhatsApp automated reminders** through the WhatsApp Business API. Charged per message; later.
+20. **Revenue at risk.** At-risk members × membership fee. Needs membership fees (payments build) or a fee entered by hand.
+
+### Notes for building
+- Keep privacy rules: owners see statuses, counts and summaries only, never weights, health data or trainer notes.
+- Extend test/smoke.js for the risk score, pause mode, call-list outcomes and the dashboard; add rules tests for any new collections (call-list outcomes, exit reasons, pauses).
+- Database rules will likely change; give Manas the full firestore.rules to paste after release.
+
 ## From Manas's notes (18 Nov 2026)
 
 **Priority**

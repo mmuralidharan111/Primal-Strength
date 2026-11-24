@@ -4,23 +4,52 @@ Requested features, not yet built.
 
 > Process: when Manas next asks for changes or additions, go through every item below and ask whether it should go into the next build. Release a new build once 4–5 items are agreed.
 
-## Priority order (agreed 18 Nov 2026)
+## Build plan (agreed 24 Nov 2026)
 
-**Tier 1, next build:** 1. Sign-up by sport (whole app adapts) · 2. Progress by sport (all 19 sports) · 3. Events as workouts + event results.
-**Tier 1b, the build after:** Workout timers (AMRAP/EMOM/Tabata/For Time, landscape) · One workout to many clients, personalised loads.
-**Parallel track:** iPhone app (starts once the Apple Developer account exists).
-**Tier 2:** Classes (recurring schedule per troop) · Trainer approval = attendance · Event calendar + same-event community + event leaderboard (with nearby race suggestions) · Buddies by email · Wearables via Health Connect, then wearable data on the big screen.
-**Tier 3:** Play Store readiness + App Check · Push notifications · Email verification back on (after SMTP setup) · AI insights / AI coaching.
-**Tier 3b:** Video calls client ↔ trainer (start with scheduled call links, then in-app video) and form-check videos.
-**Tier 4:** Paid plans for clients (app only / weekly check-in with or without video / video every workout) and billing for independent trainers, together with gym management desktop app + backend (views, memberships, billing, payments, GST invoices) with privacy documents (gym terms, breach plan, retention) · Age verification · Health report files on all devices.
+Builds in order. Each groups items that share setup; later builds depend on earlier ones. Build numbers on GitHub follow the run count, so they're named here, not numbered.
 
-## Next build
-Not agreed yet. Tier 1b is next in the priority order: workout timers (AMRAP/EMOM/Tabata/For Time, landscape) and one workout to many clients with personalised loads.
+**1. Coach tools on the gym floor — IN PROGRESS (agreed 24 Nov 2026)**
+- Workout timers: AMRAP, EMOM, Tabata, For Time, with a full-screen landscape mode.
+- One workout to many clients, with each client's weights and reps set from their own history.
+- Trainer approves a logged workout; an approved workout counts as attendance (for trainer and gym billing).
+- Classes: recurring sessions for a troop (e.g. Mon/Wed/Fri 7 am); clients see their class schedule.
+- Coach challenges by sport (swim metres, rounds, HYROX time and more).
 
-## Still open from the sport build (November 2026)
-- Progress photos for bodybuilding/physique (needs file storage; on-device only unless the Blaze plan is switched on).
-- Challenge metrics by sport (e.g. swim metres, rounds, HYROX time) for coach challenges.
-- Event calendar, same-event community and event leaderboard (Tier 2).
+**2. Events and community**
+- Event calendar of races, filtered city → state → region → country → part of a continent → continent → world.
+- Same-event community: find people targeting the same event (HYROX, CrossFit…), compare prep, option to share event-prep progress.
+- Event leaderboard not limited by location.
+- Nearby race suggestions, and gym city for city-wide leaderboards.
+- Buddies by email (with permission).
+- Decision needed: where race listings come from (added by trainers/users, or a paid race-data source).
+
+**3. Play Store and phone features**
+- Play Store readiness: signed release bundle (.aab), target Android 16 (API 36), final app ID decision, store listing, Data safety and health declarations, 12-tester / 14-day closed test.
+- Firebase App Check.
+- Wearables via Health Connect (steps, heart rate, sleep, workouts, VO2 max; covers Fitbit, Samsung, Oura, Whoop, Strava, Ultrahuman and others).
+- Wearable data on the gym big screen (coach chooses what to show).
+- Email verification back on, after Firebase emails are sent through your own Gmail (SMTP).
+
+**4. Blaze plan: storage, notifications, AI** (switch on Firebase's paid Blaze plan once)
+- Health report files on all devices (shared with the trainer only when the report is shared).
+- Progress photos for bodybuilding/physique.
+- Push notifications for trainer alerts and buddy high-fives.
+- AI insights for trainers and AI coaching (Claude API key).
+- Age verification and parental consent for under-18s (DPDP Act).
+
+**5. Video coaching**
+- Scheduled call links per session (Google Meet / Jitsi), logged against the client.
+- Form-check videos: client records a set, trainer replies later (needs storage from build 4).
+- In-app video calls through a provider (100ms, Agora, Daily).
+
+**6. Payments and gym management**
+- Paid client plans: app only / weekly check-in without or with video / video every workout.
+- Billing and payouts for independent trainers (Razorpay Route, trainer KYC).
+- Gym management desktop app + backend: views (clients needing a new program, new clients without a program, defaulters, memberships ending), monthly/quarterly/6-monthly/yearly memberships.
+- Payments with GST invoices.
+- Privacy documents: gym terms, 72-hour breach plan, retention rule for inactive accounts.
+
+**Alongside: iPhone app** — starts once the Apple Developer account exists (TestFlight, then App Store, then Apple Health).
 
 ## From Manas's notes (18 Nov 2026)
 

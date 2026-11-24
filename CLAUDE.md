@@ -60,7 +60,7 @@ Open `www/index.html` in a browser for a quick look: without `www/vendor/` Fireb
 
 ## Current state (24 Nov 2026)
 
-- Latest release: build 40. **Sport build** (sign-up by sport, progress by sport, events as workouts) is coded and tested; see `BACKLOG.md` → Built (sport build). Release = push to `main`.
-- Next build: not agreed yet (Tier 1b: workout timers, one workout to many clients).
+- Latest release: build-48 (sport build, 24 Nov 2026). Release = push to `main`.
+- Next build (agreed 24 Nov, in progress): coach tools — timers, one workout to many clients, approval = attendance, classes, challenges by sport. Build order in `BACKLOG.md` → Build plan.
 - Parallel: iPhone app is his priority — needs his Apple Developer Program account first.
 - See `BACKLOG.md` for the priority tiers and full details.

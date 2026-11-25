@@ -24,7 +24,17 @@ Builds in order. Each groups items that share setup; later builds depend on earl
 - Retention dashboard for owner and trainer (30/90/180-day cohorts, trends).
 - Also: membership end date entered by hand (item 8), first-60-days watch (item 9), anniversary badges (item 15).
 
-**3. Events and community**
+**3. Gym web app — agreed 25 Nov 2026, next to build** (moved up from the old build 7)
+- A web app (opens in a browser on the front-desk PC, laptop, tablet or phone; no install) instead of a desktop app. Wide layout for big screens. Can be wrapped as a desktop app later if a gym needs entry gates, biometric attendance or receipt printers.
+- Logins for the gym owner and front-desk staff (new "front desk" role, joins with a desk code from the owner; owner can remove them).
+- Members: the gym's own member list, including people who don't use the app (name, phone, plan, start and end dates, trainer), linked to the member's app account when they have one.
+- Membership plans: monthly, quarterly, 6-monthly, yearly (owner sets prices).
+- Payments recorded by hand at the desk (cash, UPI, card, bank transfer), renewing the membership; dues; GST receipt with a sequential number (tax invoice when the gym has a GSTIN); payments list and .csv export. Online payments stay for build 8.
+- Desk check-in: search a member, tap check in; today's visits.
+- Owner action lists: clients needing a new program, new clients without a program, defaulters (overdue or unpaid), memberships ending in 30 days.
+- Extras from the retention backlog: revenue at risk (item 20), owner win-back list (item 11), exit reason (item 16), trainer retention ranking (item 17).
+
+**4. Events and community**
 - Event calendar of races, filtered city → state → region → country → part of a continent → continent → world.
 - Same-event community: find people targeting the same event (HYROX, CrossFit…), compare prep, option to share event-prep progress.
 - Event leaderboard not limited by location.
@@ -32,30 +42,29 @@ Builds in order. Each groups items that share setup; later builds depend on earl
 - Buddies by email (with permission).
 - Decision needed: where race listings come from (added by trainers/users, or a paid race-data source).
 
-**4. Play Store and phone features**
+**5. Play Store and phone features**
 - Play Store readiness: signed release bundle (.aab), target Android 16 (API 36), final app ID decision, store listing, Data safety and health declarations, 12-tester / 14-day closed test.
 - Firebase App Check.
 - Wearables via Health Connect (steps, heart rate, sleep, workouts, VO2 max; covers Fitbit, Samsung, Oura, Whoop, Strava, Ultrahuman and others).
 - Wearable data on the gym big screen (coach chooses what to show).
 - Email verification back on, after Firebase emails are sent through your own Gmail (SMTP).
 
-**5. Blaze plan: storage, notifications, AI** (switch on Firebase's paid Blaze plan once)
+**6. Blaze plan: storage, notifications, AI** (switch on Firebase's paid Blaze plan once)
 - Health report files on all devices (shared with the trainer only when the report is shared).
 - Progress photos for bodybuilding/physique.
 - Push notifications for trainer alerts and buddy high-fives.
 - AI insights for trainers and AI coaching (Claude API key).
 - Age verification and parental consent for under-18s (DPDP Act).
 
-**6. Video coaching**
+**7. Video coaching**
 - Scheduled call links per session (Google Meet / Jitsi), logged against the client.
-- Form-check videos: client records a set, trainer replies later (needs storage from build 5).
+- Form-check videos: client records a set, trainer replies later (needs storage from build 6).
 - In-app video calls through a provider (100ms, Agora, Daily).
 
-**7. Payments and gym management**
+**8. Online payments**
 - Paid client plans: app only / weekly check-in without or with video / video every workout.
 - Billing and payouts for independent trainers (Razorpay Route, trainer KYC).
-- Gym management web app (opens in a browser on the front-desk PC, laptop, tablet or phone; decided 25 Nov 2026 instead of a desktop app) + backend: views (clients needing a new program, new clients without a program, defaulters, memberships ending), monthly/quarterly/6-monthly/yearly memberships.
-- Payments with GST invoices.
+- Members pay online through Razorpay, with GST invoices (needs the Blaze plan, a Razorpay business account with KYC, and a small server). Builds on the gym web app's hand-recorded payments (build 3).
 - Privacy documents: gym terms, 72-hour breach plan, retention rule for inactive accounts.
 
 **Alongside: iPhone app** — starts once the Apple Developer account exists (TestFlight, then App Store, then Apple Health).
@@ -77,16 +86,16 @@ Goal: spot members slipping earlier, get trainers and owners to act, give member
 8. **Membership end date** entered by hand on the member profile (until full memberships arrive in the payments/gym-management build).
 9. **First-60-days watch.** New members get a stricter risk threshold and a highlighted "new member" tag for trainers.
 10. **First-30-days journey.** Goal set on day 1; check-ins in week 1 and week 2; celebration of the first personal best; prompt for a trainer intro.
-11. **Owner win-back list.** Inactive members with their trainer named, plus an owner-defined comeback offer text to send via WhatsApp link.
+11. **Owner win-back list.** (Going into build 3, gym web app.) Inactive members with their trainer named, plus an owner-defined comeback offer text to send via WhatsApp link.
 12. **Re-test days.** Benchmark workout every 4–6 weeks matched to the member's sport (e.g. 5 km time, estimated 1-rep max, HYROX stations), with the result compared with last time.
 13. **Troop accountability.** Optional: a buddy or troop is told when a member misses a planned session. Team challenges where a missed session costs the team points.
 14. **Gym rewards.** Gym defines rewards for points (free PT session, merchandise, shake), handed over at the desk; the app tracks points and redemptions.
 15. **Anniversary badges.** 3, 6 and 12 months as a member.
-16. **Exit reason.** One question when a member goes inactive or deletes their account: cost, time, injury, moved, lost interest, other. Owner sees totals.
-17. **Trainer retention ranking.** Owner view ranking trainers by how long their clients keep training.
-18. **Member reminders by push**, e.g. "You planned Mon/Wed/Fri, missed Wednesday", plus a streak-saver reminder. Needs push notifications (Blaze plan, build 5).
+16. **Exit reason.** (Going into build 3, gym web app.) One question when a member goes inactive or deletes their account: cost, time, injury, moved, lost interest, other. Owner sees totals.
+17. **Trainer retention ranking.** (Going into build 3, gym web app.) Owner view ranking trainers by how long their clients keep training.
+18. **Member reminders by push**, e.g. "You planned Mon/Wed/Fri, missed Wednesday", plus a streak-saver reminder. Needs push notifications (Blaze plan, build 6).
 19. **WhatsApp automated reminders** through the WhatsApp Business API. Charged per message; later.
-20. **Revenue at risk.** At-risk members × membership fee. Needs membership fees (payments build) or a fee entered by hand.
+20. **Revenue at risk.** (Going into build 3, gym web app.) At-risk members × membership fee. Needs membership fees (payments build) or a fee entered by hand.
 
 ### Notes for building
 - Keep privacy rules: owners see statuses, counts and summaries only, never weights, health data or trainer notes.

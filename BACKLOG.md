@@ -54,7 +54,7 @@ Builds in order. Each groups items that share setup; later builds depend on earl
 **7. Payments and gym management**
 - Paid client plans: app only / weekly check-in without or with video / video every workout.
 - Billing and payouts for independent trainers (Razorpay Route, trainer KYC).
-- Gym management desktop app + backend: views (clients needing a new program, new clients without a program, defaulters, memberships ending), monthly/quarterly/6-monthly/yearly memberships.
+- Gym management web app (opens in a browser on the front-desk PC, laptop, tablet or phone; decided 25 Nov 2026 instead of a desktop app) + backend: views (clients needing a new program, new clients without a program, defaulters, memberships ending), monthly/quarterly/6-monthly/yearly memberships.
 - Payments with GST invoices.
 - Privacy documents: gym terms, 72-hour breach plan, retention rule for inactive accounts.
 
@@ -154,8 +154,8 @@ Goal: spot members slipping earlier, get trainers and owners to act, give member
   3. Premium: a trainer on a video call for every workout.
 - Needs: subscriptions and payments (e.g. Razorpay subscriptions with GST invoices), payouts to independent trainers with the platform's commission (e.g. Razorpay Route, needs trainer KYC), trainer availability and booking, and a server (Firebase Blaze). Shares the billing foundation with the gym management item.
 
-**Gym management (desktop app and backend)**
-- Desktop web app for gyms and trainers, with a proper backend, covering client and trainer data: missed sessions, progress alerts, member tenure, billing.
+**Gym management (web app and backend)**
+- Web app for gyms and trainers (large-screen layout, no install; can be wrapped as a desktop app later if a gym needs entry gates, biometric attendance or receipt printers), with a proper backend, covering client and trainer data: missed sessions, progress alerts, member tenure, billing.
 - Views: (a) existing clients who need a new program; (b) new clients and whether they've been given a program; (c) defaulters (overdue payments); (d) clients nearing the end of their membership.
 - Memberships: monthly, quarterly, 6-monthly and yearly.
 - Payments in the app with invoices for clients and gyms; tax (GST) calculated for accounting.

@@ -66,8 +66,8 @@ Open `www/index.html` in a browser for a quick look: without `www/vendor/` Fireb
 
 ## Current state (24 Nov 2026)
 
-- Latest release: retention build = build-54 (24 Nov 2026). Release = push to `main`.
-- Gym web app (build 3 in `BACKLOG.md`) built and tested on branch `claude/inspiring-euler-p66uye` (25 Nov 2026), with `docs/ARCHITECTURE.md`; not yet on `main`. Database rules changed — give Manas the full rules after release.
+- Latest release: gym web app = build-56 (25 Nov 2026). Release = push to `main`.
+- Manas got "unknown error" publishing the gym-web-app rules in the console; `firestore.rules` was then rewritten without inline `? :` conditionals (same behaviour, 187 checks pass). That rewrite is on branch `claude/inspiring-euler-p66uye`, not yet on `main`; confirm he managed to publish.
 - Next after that: number 4, events and community. Ask where race listings should come from.
 - Parallel: iPhone app is his priority — needs his Apple Developer Program account first.
 - See `BACKLOG.md` for the build plan and full details.

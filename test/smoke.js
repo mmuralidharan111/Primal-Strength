@@ -74,6 +74,7 @@ function makeFirebase(){
     enablePersistence: async () => {},
     collection: c => query(c),
     doc: p => docRef(p),
+    runTransaction: async fn => fn({get: r => r.get(), set: (r, d) => r.set(d), update: (r, d) => r.update(d), delete: r => r.delete()}),
     batch: () => { const ops = []; return {set: (r, d) => ops.push(() => r.set(d)), update: (r, d) => ops.push(() => r.update(d)), delete: r => ops.push(() => r.delete()), commit: async () => { for (const o of ops) await o(); }}; }
   };
   let user = null; const authCbs = []; const accounts = SHARED.accounts;
@@ -749,10 +750,139 @@ async function agree(X, {dob = "1985-04-12", health = true, staff = false} = {})
   check(O3.text().includes("Follow-up") && O3.text().includes("Back training") && O3.text().includes("Ravi K"), "owner sees trainer follow-up outcomes");
   check(!O3.text().includes("Illness") && !O3.text().includes("98450"), "owner sees no pause reasons or phone numbers");
   await O3.click('[data-act="otab"][data-v="oretention"]', "owner retention tab"); await sleep(200);
-  check(O3.text().includes("By month joined") && O3.text().includes("Trainer follow-ups") && O3.text().includes("Coach Ravi"), "owner retention dashboard by trainer");
+  check(O3.text().includes("By month joined") && O3.text().includes("Trainer ranking") && O3.text().includes("Coach Ravi"), "owner retention dashboard by trainer");
   await O3.click('[data-act="ret-split"][data-v="class"]'); check(O3.text().includes("Morning HIIT"), "split by class");
   O3.w.close();
   await fb.firestore().collection("public").doc("u_ravi").delete();
+
+  /* ===== Gym web app: plans, members, payments + receipts, check-in, front desk, win-back, exit reasons ===== */
+  step = "gym-setup";
+  const G = "gyms/u_gita";
+  let O4 = await load(makeFirebase());
+  await O4.click('[data-act="auth-mode"][data-v="in"]'); await O4.type("#a-email", "gita@test.in"); await O4.type("#a-pass", "secret4");
+  await O4.click('[data-act="auth-go"]', "owner signs in to the gym web app"); await sleep(900);
+  check(!!O4.$(".gymapp") && ["gmembers", "gcheck", "gpay", "gsettings", "oretention"].every(v => O4.$(`[data-act="otab"][data-v="${v}"]`)), "owner gets the gym web app with Members, Check-in, Payments, Retention and Settings");
+  check(O4.text().includes("Revenue at risk") && O4.text().includes("To do") && O4.text().includes("Need a new program") && O4.text().includes("Overdue"), "dashboard shows revenue at risk and the to-do lists");
+  check((fb._docs.get(G).trainers || []).some(t => t.id === "u_coach"), "gym record lists its trainers for the front desk");
+  await O4.click('[data-act="otab"][data-v="gsettings"]', "open settings");
+  await O4.type("#gs-gstin", "29ABCDE1234F1Z5"); await O4.type("#gs-addr", "27th Main, HSR Layout, Bengaluru 560102");
+  await O4.click('[data-act="g-gsave"]', "save gym details"); await sleep(300);
+  check(fb._docs.get(G).gstin === "29ABCDE1234F1Z5" && fb._docs.get(G).gstRate === 18, "GSTIN and GST rate saved");
+  await O4.type("#gs-gstin", "BADGSTIN"); await O4.click('[data-act="g-gsave"]'); await sleep(200);
+  check(fb._docs.get(G).gstin === "29ABCDE1234F1Z5", "an invalid GSTIN is refused");
+  for (const [n, mo, pr] of [["Monthly", "1", "1500"], ["Quarterly", "3", "4000"]]){
+    await O4.click('[data-act="g-planopen"]'); await O4.type("#gpl-name", n); O4.$("#gpl-months").value = mo; await O4.type("#gpl-price", pr);
+    await O4.click('[data-act="g-plsave"]', `save plan ${n}`); await sleep(250);
+  }
+  const plans = [...fb._docs.entries()].filter(([k]) => k.startsWith(G + "/plans/")).map(([, v]) => v);
+  check(plans.length === 2 && plans.some(p => p.name === "Quarterly" && p.months === 3 && p.price === 4000), "membership plans saved");
+  check(O4.text().includes("₹1,770"), "plan list shows the price with GST");
+  await O4.click('[data-act="g-deskcode"]', "create front-desk code"); await sleep(300);
+  const deskCode = fb._docs.get(G).deskCode;
+  check(deskCode && fb._docs.get("gymcodes/" + deskCode).kind === "desk" && fb._docs.get("gymcodes/" + deskCode).gymId === "u_gita", "front-desk code created");
+
+  step = "gym-members-payments";
+  await O4.click('[data-act="otab"][data-v="gmembers"]', "open members");
+  await O4.click('[data-act="g-madd"]', "add member");
+  await O4.type("#gm-name", "Ravi Kumar"); await O4.type("#gm-phone", "98450 00001"); O4.$("#gm-trainer").value = "u_coach";
+  await O4.click('[data-act="g-msave"]', "save new member"); await sleep(300);
+  const memId = k => ([...fb._docs.entries()].find(([p, v]) => p.startsWith(G + "/members/") && v.name === k) || [""])[0].split("/").pop();
+  const ravi = memId("Ravi Kumar");
+  check(ravi && fb._docs.get(`${G}/members/${ravi}`).trainerId === "u_coach" && fb._docs.get(`${G}/members/${ravi}`).status === "active", "member added with phone and trainer");
+  await O4.click(`[data-act="g-payopen"][data-id="${ravi}"]`, "record first payment");
+  check(O4.text().includes("GST 18%") && O4.text().includes("₹1,770"), "payment shows price, GST and total");
+  await O4.click('[data-act="g-pmode"][data-v="cash"]', "paid in cash");
+  await O4.click('[data-act="g-paysave"]', "save payment"); await sleep(400);
+  const pays = () => [...fb._docs.entries()].filter(([k]) => k.startsWith(G + "/payments/")).map(([, v]) => v);
+  const p1 = pays().find(p => p.memberId === ravi);
+  check(p1 && /^PGH\/\d{4}-\d{2}\/0001$/.test(p1.receipt) && p1.total === 1770 && p1.gst === 270 && p1.paid === 1770 && p1.mode === "cash", "payment saved with receipt number 0001, GST and mode");
+  const mRavi = fb._docs.get(`${G}/members/${ravi}`);
+  check(mRavi.planName === "Monthly" && mRavi.from && mRavi.end > mRavi.from && mRavi.due === 0 && mRavi.fee === 1770, "membership renewed for a month");
+  check(O4.text().includes("Tax invoice") && O4.text().includes("CGST 9%") && O4.text().includes("GSTIN 29ABCDE1234F1Z5") && !!O4.$('.receipt'), "receipt is a tax invoice with CGST/SGST");
+  check(!!O4.$('a[href^="https://wa.me/919845000001"]'), "receipt can be sent on WhatsApp");
+  await O4.click('[data-act="sheet-close"]');
+  await O4.click('[data-act="g-madd"]'); await O4.type("#gm-name", "Neha Sharma");
+  await O4.click('[data-act="g-msave"]'); await sleep(300);
+  const neha = memId("Neha Sharma");
+  await O4.click(`[data-act="g-payopen"][data-id="${neha}"]`);
+  const ps = O4.$("#gp-plan"); ps.value = [...ps.options].find(o => o.text.startsWith("Quarterly")).value; ps.dispatchEvent(new O4.w.Event("change", {bubbles: true})); await sleep(200);
+  check(O4.text().includes("₹4,720"), "switching plan updates the total");
+  await O4.type("#gp-paid", "3000");
+  await O4.click('[data-act="g-paysave"]', "save part payment"); await sleep(400);
+  const p2 = pays().find(p => p.memberId === neha);
+  check(p2 && p2.receipt.endsWith("/0002") && p2.due === 1720 && fb._docs.get(`${G}/members/${neha}`).due === 1720, "part payment leaves a balance due, receipt 0002");
+  check(O4.text().includes("Balance due"), "receipt shows the balance due");
+  await O4.click('[data-act="sheet-close"]');
+  await O4.click('[data-act="g-mf"][data-v="overdue"]', "filter overdue");
+  check(O4.$("#gm-body").textContent.includes("Neha Sharma") && !O4.$("#gm-body").textContent.includes("Ravi Kumar"), "overdue filter lists members with a balance due");
+  await O4.click('[data-act="g-mf"][data-v="current"]');
+  check(O4.text().includes("On the app but not on your member list") && O4.text().includes("Asha"), "app members not yet on the list are offered");
+  await O4.click('[data-act="g-madd"][data-uid="u_asha"]', "add app member to the list");
+  check(O4.$("#gm-uid").value === "u_asha" && O4.$("#gm-name").value.includes("Asha"), "app account and name pre-filled");
+  await O4.click('[data-act="g-msave"]'); await sleep(300);
+  check([...fb._docs.entries()].some(([k, v]) => k.startsWith(G + "/members/") && v.uid === "u_asha"), "member linked to their app account");
+  await O4.click('[data-act="sheet-close"]');
+  const q = O4.$("#gm-q"); q.value = "neha"; q.dispatchEvent(new O4.w.Event("input", {bubbles: true})); await sleep(100);
+  check(O4.$("#gm-body").textContent.includes("Neha") && !O4.$("#gm-body").textContent.includes("Ravi Kumar"), "member search filters as you type");
+
+  step = "gym-checkin";
+  await O4.click('[data-act="otab"][data-v="gcheck"]', "open check-in");
+  const gq = O4.$("#g-q"); gq.value = "98450"; gq.dispatchEvent(new O4.w.Event("input", {bubbles: true})); await sleep(100);
+  check(O4.$("#g-res").textContent.includes("Ravi Kumar"), "search by phone finds the member");
+  await O4.click(`[data-act="g-in"][data-id="${ravi}"]`, "check in"); await sleep(300);
+  const ciDate = O4.w.eval("today()");
+  check(fb._docs.get(`${G}/checkins/${ravi}_${ciDate}`) && fb._docs.get(`${G}/members/${ravi}`).lastVisit === ciDate, "check-in saved and last visit updated");
+  check(O4.text().includes("Today's visits") && O4.text().includes("✓ In at"), "today's visits listed");
+
+  step = "gym-exit-winback-ranking";
+  await O4.click('[data-act="otab"][data-v="gmembers"]'); await O4.click(`[data-act="g-mopen"][data-id="${neha}"]`);
+  await O4.click(`[data-act="g-exitopen"][data-id="${neha}"]`, "mark as left"); O4.$("#gx-why").value = "cost";
+  await O4.click('[data-act="g-exitsave"]', "save exit reason"); await sleep(300);
+  check(fb._docs.get(`${G}/members/${neha}`).status === "left" && fb._docs.get(`${G}/members/${neha}`).exitReason === "cost", "member marked as left with a reason");
+  const dAgo2 = n => O4.w.eval(`addDays(today(), ${-n})`);
+  await fb.firestore().collection("gyms").doc("u_gita").collection("members").doc("mOld").set({name: "Old Timer", phone: "9900011122", status: "active", planName: "Monthly", months: 1, fee: 1770, from: dAgo2(50), end: dAgo2(20), due: 0, start: dAgo2(200), trainerId: "u_coach"});
+  await fb.firestore().collection("gyms").doc("u_gita").collection("members").doc("mSam").set({name: "Sleepy Sam", phone: "9900011133", status: "active", planName: "Quarterly", months: 3, fee: 4720, from: dAgo2(40), end: dAgo2(-50), due: 0, start: dAgo2(40), lastVisit: dAgo2(20)});
+  await sleep(200);
+  await O4.click('[data-act="otab"][data-v="owner"]'); await sleep(200);
+  check(O4.text().includes("Revenue at risk") && O4.text().includes("Sleepy Sam") && O4.text().includes("₹1,573"), "revenue at risk counts a paid-up member who stopped coming (₹4,720 ÷ 3 a month)");
+  check(/Overdue\s*\d/.test(O4.text().replace(/\s+/g, " ")) && O4.text().includes("Old Timer"), "expired member is on the overdue list");
+  await O4.click('[data-act="otab"][data-v="oretention"]', "open retention"); await sleep(200);
+  check(O4.text().includes("Win-back list") && O4.text().includes("Old Timer") && !!O4.$('a[href^="https://wa.me/919900011122"]'), "win-back list with a WhatsApp offer");
+  check(O4.text().includes("Neha Sharma") && O4.text().includes("Cost"), "member who left over cost is on the win-back list");
+  check(O4.text().includes("Why members left") && /Cost\s*1 · 100%/.test(O4.text().replace(/\s+/g, " ")), "exit reasons totalled");
+  check(O4.text().includes("Trainer ranking") && O4.text().includes("Avg. membership"), "trainer ranking shown");
+
+  step = "gym-payments-page";
+  await O4.click('[data-act="otab"][data-v="gpay"]', "open payments");
+  check(O4.text().includes("₹4,770") && O4.text().includes("/0001") && O4.text().includes("/0002"), "payments page totals the month and lists receipts");
+  await O4.click('[data-act="g-paycsv"]', "export payments"); await sleep(300);
+  check(!O4.text().includes("Couldn't"), "payments export runs");
+
+  step = "gym-front-desk";
+  let DK = await load(makeFirebase());
+  await DK.click('[data-act="auth-role"][data-v="desk"]', "pick front-desk role");
+  await DK.type("#a-name", "Deepa Desk"); await DK.type("#a-email", "deepa@test.in"); await DK.type("#a-pass", "secret7");
+  await DK.click('[data-act="auth-go"]', "create front-desk account"); await sleep(700);
+  await agree(DK, {staff: true}); await sleep(300);
+  check(fb._docs.get("users/u_deepa").role === "desk" && DK.text().includes("Join your gym"), "front desk is asked for the gym's code");
+  await DK.type("#desk-code", "WRONG123"); await DK.click('[data-act="desk-join"]'); await sleep(300);
+  check(!fb._docs.get("gyms/u_gita/staff/u_deepa"), "a wrong code doesn't join");
+  await DK.type("#desk-code", deskCode); await DK.click('[data-act="desk-join"]', "join with the desk code"); await sleep(700);
+  check(fb._docs.get("gyms/u_gita/staff/u_deepa") && fb._docs.get("users/u_deepa").gymId === "u_gita", "front desk joined the gym");
+  check(DK.text().includes("Check-in") && !DK.$('[data-act="otab"][data-v="gsettings"]') && !DK.$('[data-act="otab"][data-v="oretention"]') && !DK.$('[data-act="otab"][data-v="owner"]'), "front desk sees check-in, members and payments, not settings or gym figures");
+  const dq = DK.$("#g-q"); dq.value = "neha"; dq.dispatchEvent(new DK.w.Event("input", {bubbles: true})); await sleep(100);
+  check(!DK.$("#g-res").textContent.includes("Neha"), "members who left don't show at check-in");
+  await DK.click('[data-act="otab"][data-v="gmembers"]'); check(DK.text().includes("Ravi Kumar") && !DK.text().includes("On the app but not on your member list"), "front desk sees the member list, without app accounts");
+  await DK.click(`[data-act="g-mopen"][data-id="${ravi}"]`); check(!DK.$("#gm-uid") && !DK.$('[data-act="g-mdel"]'), "front desk can't link app accounts or delete members");
+  await DK.click(`[data-act="g-payopen"][data-id="${ravi}"]`); await DK.click('[data-act="g-paysave"]', "front desk records a renewal"); await sleep(400);
+  const p3 = pays().find(p => p.memberId === ravi && p.by === "u_deepa");
+  check(p3 && p3.receipt.endsWith("/0003") && p3.byName === "Deepa Desk" && p3.from > mRavi.end, "renewal starts after the current membership and continues the receipt numbers");
+  await DK.click('[data-act="sheet-close"]');
+  await O4.click('[data-act="otab"][data-v="gsettings"]');
+  check(O4.text().includes("Deepa Desk"), "owner sees front-desk staff");
+  await O4.click('[data-act="g-staffdel"][data-id="u_deepa"]', "remove front desk"); await O4.click('[data-act="confirm-yes"]', "confirm removal"); await sleep(500);
+  check(!fb._docs.get("gyms/u_gita/staff/u_deepa") && DK.text().includes("Join your gym"), "removed front desk loses access straight away");
+  DK.w.close(); O4.w.close();
 
   step = "bounded-reads";
   const dayStr = n => { const d = new Date(Date.now() - n * 86400000); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };

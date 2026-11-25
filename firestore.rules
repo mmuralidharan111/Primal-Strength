@@ -12,6 +12,10 @@ service cloud.firestore {
     // Pause dates (a short list) and a membership end date ("YYYY-MM-DD" or empty)
     function pausesOK(d) { return !('pauses' in d) || d.pauses == null || (d.pauses is list && d.pauses.size() <= 20); }
     function memberEndOK(d) { return textUpTo(d, 'memberEnd', 10); }
+    // Gym web app: the owner (gym id = owner's uid) and the gym's front-desk staff (a staff record the owner can remove)
+    function isDeskOf(gid) { return signedIn() && exists(/databases/$(database)/documents/gyms/$(gid)/staff/$(request.auth.uid)); }
+    function gymTeam(gid) { return isMe(gid) || isDeskOf(gid); }
+    function isNum(d, f) { return d.get(f, null) == null || d[f] is number; }
 
     // A person's profile, settings and program
     match /users/{uid} {
@@ -19,7 +23,7 @@ service cloud.firestore {
         || (signedIn() && resource.data.get('trainerId', null) == request.auth.uid)
         || (signedIn() && resource.data.get('gymId', null) == request.auth.uid);   // gym owner reads their trainers
       allow create: if isMe(uid)
-        && request.resource.data.role in ['client', 'trainer', 'owner']
+        && request.resource.data.role in ['client', 'trainer', 'owner', 'desk']
         && request.resource.data.get('trainerId', null) == null
         && request.resource.data.get('gymId', null) == null;
       // The person themselves: can't change role; trainer and gym links only through a valid code
@@ -31,7 +35,7 @@ service cloud.firestore {
         && (request.resource.data.get('gymId', null) == resource.data.get('gymId', null)
             || request.resource.data.get('gymId', null) == null
             || (resource.data.role == 'owner' && request.resource.data.gymId == uid)
-            || (resource.data.role == 'trainer'
+            || (resource.data.role in ['trainer', 'desk']
                 && get(/databases/$(database)/documents/gymcodes/$(request.resource.data.gymCode)).data.gymId == request.resource.data.gymId));
       // Their trainer: may only change the program, pauses (holiday / illness) and the membership end date
       allow update: if signedIn() && resource.data.get('trainerId', null) == request.auth.uid
@@ -69,10 +73,59 @@ service cloud.firestore {
 
     // Gyms (id = owner's user id) and gym codes
     match /gyms/{gid} {
-      allow read: if isMe(gid) || (signedIn() && userData(request.auth.uid).get('gymId', null) == gid);
+      allow read: if isMe(gid) || isDeskOf(gid)
+        || (signedIn() && userData(request.auth.uid).get('gymId', null) == gid && userData(request.auth.uid).role == 'trainer');
       allow create: if isMe(gid) && request.resource.data.ownerId == gid && userData(gid).role == 'owner';
       allow update, delete: if isMe(gid);
     }
+    // Gym web app records. Front desk may add and edit members, record payments and check people in;
+    // only the owner may change plans, edit or delete payments, delete members, or link a member to an app account.
+    match /gyms/{gid}/plans/{pid} {
+      allow read: if gymTeam(gid);
+      allow write: if isMe(gid);
+    }
+    match /gyms/{gid}/members/{mid} {
+      allow read: if gymTeam(gid);
+      allow create, update: if gymTeam(gid)
+        && request.resource.data.keys().hasOnly(['name', 'phone', 'email', 'trainerId', 'start', 'notes', 'uid', 'status', 'due', 'created', 'by',
+             'planId', 'planName', 'months', 'fee', 'from', 'end', 'leftOn', 'exitReason', 'exitNote', 'lastVisit'])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
+        && textUpTo(request.resource.data, 'phone', 20) && textUpTo(request.resource.data, 'email', 120) && textUpTo(request.resource.data, 'notes', 300)
+        && textUpTo(request.resource.data, 'exitNote', 200) && isNum(request.resource.data, 'due') && isNum(request.resource.data, 'fee')
+        && (isMe(gid) || request.resource.data.get('uid', null) == (resource == null ? null : resource.data.get('uid', null)));
+      allow delete: if isMe(gid);
+    }
+    match /gyms/{gid}/payments/{pid} {
+      allow read: if gymTeam(gid);
+      allow create: if gymTeam(gid) && request.resource.data.by == request.auth.uid
+        && request.resource.data.keys().hasOnly(['memberId', 'memberName', 'phone', 'kind', 'planId', 'planName', 'months', 'from', 'to', 'base', 'gstRate',
+             'gst', 'total', 'paid', 'due', 'mode', 'ref', 'date', 'by', 'byName', 'receipt', 'n'])
+        && request.resource.data.paid is number && request.resource.data.paid > 0 && request.resource.data.total is number
+        && request.resource.data.mode in ['upi', 'cash', 'card', 'bank'] && request.resource.data.receipt is string && request.resource.data.receipt.size() <= 40
+        && textUpTo(request.resource.data, 'memberName', 120) && textUpTo(request.resource.data, 'ref', 60) && textUpTo(request.resource.data, 'byName', 120);
+      allow update, delete: if isMe(gid);
+    }
+    match /gyms/{gid}/checkins/{cid} {
+      allow read: if gymTeam(gid);
+      allow create, update: if gymTeam(gid) && request.resource.data.by == request.auth.uid
+        && request.resource.data.keys().hasOnly(['memberId', 'name', 'date', 'time', 'by']) && textUpTo(request.resource.data, 'name', 120);
+      allow delete: if isMe(gid);
+    }
+    match /gyms/{gid}/counters/{cid} {
+      allow read: if gymTeam(gid);
+      allow write: if gymTeam(gid) && request.resource.data.keys().hasOnly(['n']) && request.resource.data.n is int
+        && request.resource.data.n == (resource == null ? 0 : resource.data.n) + 1;
+    }
+    match /gyms/{gid}/staff/{sid} {
+      allow read: if isMe(gid) || isMe(sid);
+      // Joining: a front-desk account with this gym's front-desk code
+      allow create: if isMe(sid) && userData(sid).role == 'desk'
+        && request.resource.data.keys().hasOnly(['name', 'email', 'code', 'added'])
+        && get(/databases/$(database)/documents/gymcodes/$(request.resource.data.code)).data.gymId == gid
+        && get(/databases/$(database)/documents/gymcodes/$(request.resource.data.code)).data.get('kind', '') == 'desk';
+      allow delete: if isMe(gid) || isMe(sid);
+    }
+
     match /gymcodes/{code} {
       allow get: if signedIn();   // look up one code; listing all codes is not allowed
       // Only a gym owner creates a code, for their own gym; only that owner can change or delete it later

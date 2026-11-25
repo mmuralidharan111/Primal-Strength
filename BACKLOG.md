@@ -24,7 +24,7 @@ Builds in order. Each groups items that share setup; later builds depend on earl
 - Retention dashboard for owner and trainer (30/90/180-day cohorts, trends).
 - Also: membership end date entered by hand (item 8), first-60-days watch (item 9), anniversary badges (item 15).
 
-**3. Gym web app — agreed 25 Nov 2026, next to build** (moved up from the old build 7)
+**3. Gym web app — BUILT 25 Nov 2026 (see Built, gym web app build)** (moved up from the old build 7)
 - A web app (opens in a browser on the front-desk PC, laptop, tablet or phone; no install) instead of a desktop app. Wide layout for big screens. Can be wrapped as a desktop app later if a gym needs entry gates, biometric attendance or receipt printers.
 - Logins for the gym owner and front-desk staff (new "front desk" role, joins with a desk code from the owner; owner can remove them).
 - Members: the gym's own member list, including people who don't use the app (name, phone, plan, start and end dates, trainer), linked to the member's app account when they have one.
@@ -188,6 +188,17 @@ Goal: spot members slipping earlier, get trainers and owners to act, give member
 - Privacy documents: terms for gyms using the app, a data-breach response plan (72-hour reporting), a data-retention rule for inactive accounts.
 - Health report files on all devices: files uploaded to Firebase Storage so they appear on every signed-in device; trainer sees a file only when the report is shared. Needs Firebase's Blaze plan.
 - Push notifications for trainer alerts and buddy high-fives (needs Firebase Cloud Messaging).
+
+## Built (November 2026, gym web app build)
+- Gym owners and a new **Front desk** login get a web app with a side menu on big screens (front-desk PC, laptop, tablet) and bottom tabs on phones. Owner: Dashboard, Members, Check-in, Payments, Retention, Settings. Front desk: Check-in, Members, Payments, Account.
+- Front desk joins with a front-desk code from the owner (Settings → Front desk); the owner sees who has access and can remove them at once. Front desk can't see gym figures, retention, settings, can't edit or delete payments, change plans, delete members or link app accounts (database rules).
+- Members: the gym's own list, including people who don't use the app (name, phone, email, trainer, join date, notes); filters Current / Ending in 30 days / Overdue / Left; search as you type; app members not yet on the list are offered to add and link.
+- Plans (owner sets name, length, price before GST). Settings: gym name, address, GSTIN (checked), GST rate (default 18%), SAC code, receipt prefix, win-back message.
+- Payments recorded by hand (UPI, cash, card, bank transfer, reference); renewals start the day after the current membership ends; part payments leave a balance due; "balance due only" payments. Receipt numbers run in order per financial year (e.g. PGH/2026-27/0001); with a GSTIN the receipt is a tax invoice with CGST + SGST. Print (web) or send on WhatsApp. Payments page by month with totals by payment method, GST and .csv export (owner).
+- Desk check-in: search by name or phone, one tap; warns when a membership has expired or a balance is due; today's visits. Check-ins give a training status for members who don't use the app.
+- Owner dashboard: paid-up members, received this month, balance due; revenue at risk (monthly value of paid-up members who are slipping); to-do lists: need a new program, new without a program, overdue, ending in 30 days.
+- Retention tab: trainer ranking (90/30/180-day retention, average membership length, follow-ups), win-back list with a WhatsApp offer, why members left (exit reasons). Members can give an optional reason when deleting their app account (sent to their trainer).
+- Database rules: new gyms/{gid}/plans, members, payments, checkins, counters, staff; "desk" role. 187 rule checks pass. Privacy policy v1.3 (gym membership records), Play Data safety notes updated (purchase history).
 
 ## Built (November 2026, retention build)
 - Personal risk score: each member is compared with their own usual training (average workouts a week over up to 6 earlier weeks, skipping paused weeks). At risk = last week clearly below their norm (e.g. 3 → 1), or a long gap for them, or 14 days with no workout; inactive after 30 days. The reason is shown ("1 workout last week; usually 3 a week"). Replaces the fixed 14-day rule on the owner dashboard.

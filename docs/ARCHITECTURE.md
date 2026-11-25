@@ -1,6 +1,6 @@
 # Primal Strength: architecture and code review guide
 
-This guide is for an outside developer reviewing the app's code, security and build. It describes the code as of the retention build (24 Nov 2026, commit `e57fddc`). Diagrams use Mermaid, so GitHub draws them.
+This guide is for an outside developer reviewing the app's code, security and build. It describes the code as of the gym web app build (25 Nov 2026). Diagrams use Mermaid, so GitHub draws them.
 
 **Contents**
 1. What the app is
@@ -26,7 +26,8 @@ A training app for three kinds of user:
 | --- | --- |
 | **Client (member)** | Follows a program, logs workouts, cardio, check-ins, races and tests; earns points, streaks and badges; joins challenges and buddies. Works offline, without an account. |
 | **Trainer** | Connects clients with an invite code; builds programs; sees clients' logs and progress; runs classes, challenges, a gym "big screen" and a weekly call list for members who are slipping. |
-| **Gym owner** | Connects trainers with a gym code; sees **summaries only** (counts, statuses, attendance, retention), never weights, health data or notes. |
+| **Gym owner** | Connects trainers with a gym code; sees **summaries only** of app members (counts, statuses, attendance, retention), never weights, health data or notes. Runs the **gym web app**: the gym's own member list, membership plans, hand-recorded payments with GST receipts, desk check-in, win-back and exit reasons. |
+| **Front desk** | Receptionist login (`role: "desk"`) joined with a front-desk code: adds members, records payments, checks people in. No gym figures or settings. |
 
 It ships as a sideloaded Android app (Capacitor 7, app ID `com.strengthlog.app`) and as a website on GitHub Pages (also the iPhone option for now). There is **no server code**: the backend is Firebase (Authentication with email and password, Firestore with offline persistence) on the free Spark plan. All access control lives in `firestore.rules`.
 
@@ -71,7 +72,7 @@ flowchart LR
 
 | Path | Purpose |
 | --- | --- |
-| `www/index.html` | **The whole app**: about 5,550 lines; HTML, CSS and vanilla JavaScript in one file; no framework, no build step. |
+| `www/index.html` | **The whole app**: about 6,093 lines; HTML, CSS and vanilla JavaScript in one file; no framework, no build step. |
 | `www/privacy.html`, `delete-account.html`, `download.html` | Static pages: privacy policy v1.2, account deletion instructions, tester download page. |
 | `firestore.rules` | Firestore security rules, the only server-side enforcement. Pasted into the Firebase console by hand after each change. |
 | `firebase.json` | Emulator configuration for the rules tests. |
@@ -108,7 +109,7 @@ flowchart TB
 - **Actions:** every button carries `data-act="name"`; the handler is one long `if (a === "...")` chain starting around line 2733.
 - **Role context:** trainers view a client through `withCtx(fn)`, which temporarily swaps `S.data`/`S.profile` for the client's, so the client screens and calculations are reused.
 
-### 4.2 Code map (section headers in the file)
+### 4.2 Code map (section headers in the file; line numbers are approximate and drift as the file grows)
 
 | Lines (approx.) | Section | Key functions |
 | --- | --- | --- |
@@ -131,7 +132,8 @@ flowchart TB
 | 5079–5121 | Gym owner | `attachOwner`, `setupGym`, `joinGym` |
 | 5121–5440 | **Retention** | `riskOf`, pauses, comeback week, call list, monthly report card, retention dashboard |
 | 5437–5510 | Owner dashboard | `trainerStats`, `viewOwner`, `viewOwnerTrainer` |
-| 5534– | Boot | `boot()` |
+| 5576– | **Gym web app** | `Hub`, `attachHub`, `viewGymSide`, members, payments and receipts (`savePayment`), check-in, settings, `ownerGymCards`, win-back, exit reasons, trainer ranking |
+| end of file | Boot | `boot()` |
 
 ## 5. Data model (Firestore)
 
@@ -153,6 +155,12 @@ erDiagram
   CHALLENGES ||--o{ ENTRIES : "challenges/{cid}/entries/{uid}"
   TRAINER ||--o{ CLASSES : "classes (trainerId)"
   GYM ||--o{ TRAINER : "users.gymId = owner uid"
+  GYM ||--o{ GMEMBERS : "gyms/{gid}/members"
+  GYM ||--o{ GPAYMENTS : "gyms/{gid}/payments"
+  GYM ||--o{ GCHECKINS : "gyms/{gid}/checkins"
+  GYM ||--o{ GPLANS : "gyms/{gid}/plans"
+  GYM ||--o{ GSTAFF : "gyms/{gid}/staff (front desk)"
+  GMEMBERS }o--o| USERS : "members.uid (optional link)"
   CODES }o--|| TRAINER : "codes/{code}"
   GYMCODES }o--|| GYM : "gymcodes/{code}"
   BUDDYCODES }o--|| USERS : "buddycodes/{code}"
@@ -169,7 +177,13 @@ erDiagram
 | `trainers/{tid}/calls` | the trainer | weekly call list outcomes: called, back, lost |
 | `challenges/{cid}` + `entries/{uid}` | trainer; each client writes their own entry | coach challenges and leaderboards |
 | `classes/{cid}` | the trainer | recurring classes |
-| `gyms/{ownerUid}` | the owner | gym name |
+| `gyms/{ownerUid}` | the owner | gym name, GSTIN, GST rate, SAC, address, receipt prefix, win-back message, front-desk code, trainer list (copied by the owner's app so the desk can assign trainers) |
+| `gyms/{gid}/members` | owner, front desk (desk can't change `uid`; only the owner deletes) | the gym's member list, including people without the app: name, phone, email, trainer, plan, period, fee, balance due, status, exit reason, last visit, optional `uid` link to an app account |
+| `gyms/{gid}/payments` | owner, front desk create (`by` must be the writer); only the owner edits or deletes | hand-recorded payments: plan, period, price, GST, total, paid, balance, method, reference, receipt number |
+| `gyms/{gid}/counters/receipt-<FY>` | owner, front desk, inside a transaction | receipt sequence `n`; rules only allow `n` to go up by exactly 1 |
+| `gyms/{gid}/checkins` | owner, front desk | one per member per day: `<memberId>_<date>` |
+| `gyms/{gid}/plans` | the owner | membership plans: name, months, price before GST |
+| `gyms/{gid}/staff/{uid}` | the desk user creates it with a `gymcodes` doc of `kind: "desk"`; the owner (or the user) deletes it | front-desk access; deleting it revokes access at once |
 | `codes`, `gymcodes`, `buddycodes` | their owner | 8-character join codes (6-character codes from before still work); readable one at a time with `get`, never listable |
 
 **Units:** everything is stored metric (kg, km, cm). Display conversion is per user.
@@ -187,6 +201,9 @@ flowchart LR
   O -->|read| AT["attendance, calls,<br/>challenges, classes"]
   O -.->|no access| CU
   O -.->|no access| NOTES["notes, alerts, squads"]
+  O -->|read, write| GR["gyms/{gid}/members, payments,<br/>checkins, plans, staff"]
+  DK(("Front desk")) -->|read, add, check in, record payments| GR
+  DK -.->|no access| PS
   B(("Buddy")) -->|read| PS
 ```
 
@@ -197,6 +214,7 @@ Security model, in short:
 - **Trainers** read their clients' documents and logs (`isTrainerOf`), except health reports the client hasn't shared. They may change only `program`, `programUpdatedAt`, `pauses` and `memberEnd` on the client's user document, and only `approved` on a session.
 - **Gym owners** read `public/{uid}` summaries, attendance, call outcomes, challenges and classes for trainers whose `gymId` is theirs (`ownsGymOfTrainer`). They can't read client user documents, logs, notes or alerts.
 - **Alerts** a client writes to their trainer are limited to known fields and lengths.
+- **Gym records** (`gyms/{gid}/…`) are readable and writable only by the gym's team: the owner (`isMe(gid)`) or a front desk with a staff record (`isDeskOf(gid)`, an `exists()` check). Trainers and members can't read them. Payment records are append-only for the front desk.
 - **Tests:** `test/rules.test.js` has 149 allow/deny checks, including cross-account reads and writes, trainer and owner scope, code takeover, and the retention collections.
 
 ## 7. Main data flows
@@ -303,6 +321,10 @@ These are the points a reviewer should weigh. Severity is our own estimate.
 | 10 | **Health data** | DEXA, reports, screening answers and pain scores are stored in Firestore under the user, gated by a separate consent (`healthOK()`). Report files stay on the device. Trainers see reports only when shared. | Review against DPDP |
 | 11 | **Phone number** | An optional WhatsApp number is stored in `users/{uid}.settings.phone`, readable by the member and their trainer only. | Low |
 | 12 | **README out of date** | It says nothing leaves the phone. | Docs |
+| 13 | **Gym member list read in full** | The gym web app listens to all of `gyms/{gid}/members` (needed for desk search). Reads grow with gym size; a big gym on the free plan could use a noticeable share of the 50,000 daily reads. | Cost |
+| 14 | **Receipts need a connection** | Receipt numbers come from a Firestore transaction (sequential numbers are required for GST invoices), so recording a payment fails offline. The app says so. | Low |
+| 15 | **GST assumptions** | Receipts split GST into CGST + SGST (same-state buyer). The GST rate and SAC code are set by the owner; the app doesn't validate them against tax rules. Have an accountant check before relying on receipts as tax invoices. | Legal |
+| 16 | **Gym-held personal data** | Gyms can record people who never agreed to the app's privacy policy (name, phone, payments). The gym is responsible for telling its members; the privacy policy (v1.3) describes it. | Review against DPDP |
 
 ## 11. Review checklist
 
@@ -318,7 +340,8 @@ These are the points a reviewer should weigh. Severity is our own estimate.
 - [ ] Every `${…}` holding user-provided text (names, notes, titles, gym names, challenge titles) goes through `esc()`, including attributes and `href`s (`waLink` builds a `wa.me` URL with `encodeURIComponent`).
 - [ ] No `eval`, `new Function` or HTML from the network.
 - [ ] Consent: nothing is stored or sent before the consent screen; health features are gated by `healthOK()`.
-- [ ] Account deletion (`deleteAccount`) removes every collection listed in section 5 for that role.
+- [ ] Account deletion (`deleteAccount`) removes every collection listed in section 5 for that role (an owner's deletion also removes the gym's members, payments, check-ins, plans, staff and codes).
+- [ ] Gym web app: front desk can't reach owner-only actions (payment edits, plans, member deletion, app-account linking, settings), in the UI and in the rules.
 - [ ] Listeners are detached on sign-out (`stopListeners`, `socialStop`, `ownerStop`) and are date- or ID-bounded.
 - [ ] Units: values are stored metric and converted only for display.
 

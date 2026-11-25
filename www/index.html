@@ -2,7 +2,8 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#043F5C">
-<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,sans-serif}img{max-width:100%}[hidden]{display:none!important}
+</style>
 </head><body>
 <script src="vendor/firebase-app-compat.js"></script>
 <script src="vendor/firebase-app-check-compat.js"></script>
@@ -239,6 +240,29 @@ svg.chart .plan{stroke:var(--ink);stroke-width:2}
 .histitem:first-of-type{border-top:0}
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 @media (max-width:380px){.sets{grid-template-columns:34px minmax(0,1fr) 62px 62px 40px;gap:6px}.grid3{grid-template-columns:1fr 1fr}}
+/* Gym web app (owner and front desk): wide layout, side menu on big screens */
+.gymapp main .wrap{max-width:1180px}
+.gymapp svg.chart{max-width:720px;max-height:260px}
+.gymapp header.top .wrap{max-width:1180px}
+.gymapp nav.tabs button span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+@media (min-width:900px){
+  .gymapp nav.tabs{top:0;bottom:0;right:auto;width:210px;border-top:0;border-right:1px solid var(--line);padding-top:calc(72px + env(safe-area-inset-top,0px))}
+  .gymapp nav.tabs .wrap{display:flex!important;flex-direction:column;gap:2px;padding:0 10px}
+  .gymapp nav.tabs button{flex-direction:row;justify-content:flex-start;gap:12px;padding:11px 12px;font-size:15px;border-radius:10px}
+  .gymapp nav.tabs button.on{background:var(--accent-soft)}
+  .gymapp header.top{z-index:26}
+  .gymapp main,.gymapp header.top{margin-left:210px}
+  .gymapp main{padding-bottom:40px}
+  .gymapp .grid3{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+}
+.receipt{background:#fff;color:#15181C;border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.receipt table{width:100%;border-collapse:collapse;font-size:14px}.receipt th,.receipt td{border-bottom:1px solid #DADDD7;padding:6px 4px;text-align:left}
+.receipt .muted{color:#5F6772}
+@media print{
+  body *{visibility:hidden!important}
+  .receipt,.receipt *{visibility:visible!important}
+  .receipt{position:fixed;left:0;top:0;width:100%;border:0}
+}
 </style>
 
 <div id="app"></div>
@@ -1670,9 +1694,9 @@ function render(){
   else if (cloudOK() && !Cloud.user) html = viewWelcome();
   else if (needsConsent()) html = viewConsent();
   else if (S.view === "onboard" && S.ob && !isTrainer()) html = viewOnboard();
-  else if (isOwner()){
-    if (!["owner","otrainer","oaccount","oretention"].includes(S.view)) S.view = "owner";
-    html = ownerHeader() + `<main><div class="wrap" style="max-width:900px">${S.view === "otrainer" ? viewOwnerTrainer() : S.view === "oaccount" ? viewOwnerAccount() : S.view === "oretention" ? viewOwnerRetention() : viewOwner()}</div></main>` + ownerNav();
+  else if (isGymSide()){
+    const body = viewGymSide();
+    html = `<div class="gymapp">` + gymHeader() + `<main><div class="wrap">${body}</div></main>` + (isDesk() && Hub.joined !== true ? "" : gymNav()) + `</div>`;
   }
   else if (isTrainer()){
     if (S.view === "gym" && Gym.sel.length) html = viewGym();
@@ -2048,12 +2072,12 @@ function runPlaces(){
 }
 
 /* ============ Privacy: consent, age check, email verification, account deletion ============ */
-const CONSENT_V = 1, POLICY_V = "1.2";   // raise CONSENT_V only when data is used in a new way: that asks everyone to agree again
+const CONSENT_V = 1, POLICY_V = "1.3";   // raise CONSENT_V only when data is used in a new way: that asks everyone to agree again
 const SITE = "https://mmuralidharan111.github.io/Primal-Strength/";
 const PRIVACY_URL = SITE + "privacy.html", DELETE_URL = SITE + "delete-account.html";
 const VERIFY_FROM = "2026-11-07";      // accounts created from this date must confirm their email first
 const MED_NOTE = "Primal Strength gives general fitness guidance, not medical advice. Check with a doctor before starting a new program, and stop if you feel chest pain, dizziness or unusual breathlessness.";
-const isStaff = () => isTrainer() || isOwner();
+const isStaff = () => isTrainer() || isOwner() || isDesk();
 function consentRec(){ if (cloudOK() && Cloud.user) return (Cloud.me && Cloud.me.consent) || null; return (S.profile && set_().consent) || null; }
 function needsConsent(){ if (!S.profile) return false; if (cloudOK() && Cloud.user && !Cloud.me) return false; const c = consentRec(); return !c || (c.v || 0) < CONSENT_V; }
 const healthOK = () => isStaff() || !!(consentRec() && consentRec().health);
@@ -2154,7 +2178,8 @@ async function deleteAccount(pass){
         const al = db.collection("trainers").doc(me.trainerId).collection("alerts");
         const mine = await al.where("clientId", "==", uid).get().catch(() => null);
         if (mine) for (const d of mine.docs) await del(al.doc(d.id));
-        await al.add({clientId: uid, clientName: me.name || me.email || "A client", kind: "deleted", title: "deleted their account", date: today(), read: false, ts: ts()}).catch(() => {});
+        const why = EXIT_WHY.find(x => x[0] === S.delWhy);
+        await al.add(clean({clientId: uid, clientName: me.name || me.email || "A client", kind: "deleted", title: "deleted their account", text: why ? `Reason: ${why[1]}` : null, date: today(), read: false, ts: ts()})).catch(() => {});
         const ch = await db.collection("challenges").where("trainerId", "==", me.trainerId).get().catch(() => null);
         if (ch) for (const d of ch.docs) await del(db.collection("challenges").doc(d.id).collection("entries").doc(uid));
       }
@@ -2171,7 +2196,14 @@ async function deleteAccount(pass){
       const ch = await db.collection("challenges").where("trainerId", "==", uid).get().catch(() => null);
       if (ch) for (const d of ch.docs){ await delAll(db.collection("challenges").doc(d.id).collection("entries")); await del(db.collection("challenges").doc(d.id)); }
     }
-    if (me.role === "owner"){ if (me.gymCode) await del(db.collection("gymcodes").doc(me.gymCode)); await del(db.collection("gyms").doc(uid)); }
+    if (me.role === "owner"){
+      if (me.gymCode) await del(db.collection("gymcodes").doc(me.gymCode));
+      const g = await db.collection("gyms").doc(uid).get().catch(() => null);
+      if (g && g.exists && g.data().deskCode) await del(db.collection("gymcodes").doc(g.data().deskCode));
+      for (const c of ["members", "payments", "checkins", "plans", "staff", "counters"]) await delAll(db.collection("gyms").doc(uid).collection(c));
+      await del(db.collection("gyms").doc(uid));
+    }
+    if (me.role === "desk" && me.gymId) await del(db.collection("gyms").doc(me.gymId).collection("staff").doc(uid));
     await uref(uid).delete();
     await Store.clearAll(); clearDraft(); S.timer = null;
     S.data = emptyData(); S.profile = defaultsFor(false); await Store.saveProfile(S.profile).catch(() => {});
@@ -2480,6 +2512,11 @@ function sheetHTML(){
   else if (k === "event"){ body = eventSheet(); }
   else if (k === "wt"){ body = wtSetupSheet(); }
   else if (k === "pause"){ body = pauseSheet(); }
+  else if (k === "gmember"){ body = memberSheet(); }
+  else if (k === "gexit"){ body = exitSheet(); }
+  else if (k === "gplan"){ body = planSheet(); }
+  else if (k === "gpay"){ body = paySheet(); }
+  else if (k === "greceipt"){ body = receiptSheet(); }
   else if (k === "img"){ body = `<h2>${esc(S.sheet.title)}</h2><img src="${S.sheet.src}" alt="${esc(S.sheet.title)}" style="width:100%;border-radius:12px"><span class="small muted">Press and hold the image to save or share it.</span><button class="btn block" data-act="sheet-close">Close</button>`; }
   else if (k === "msend"){ body = msendSheet(); }
   else if (k === "class"){ body = classSheet(); }
@@ -2568,8 +2605,9 @@ function sheetHTML(){
     <button class="btn blue block" data-act="file-save">Save a copy</button><button class="btn block" data-act="sheet-close">Close</button>`;
   } else if (k === "profile"){ body = profileSheet();
   } else if (k === "delacct"){
-    body = `<h2>Delete your account?</h2><p style="margin:0">This permanently deletes your login and everything in your account: ${isStaff() ? (isTrainer() ? "your invite code, challenges, client groups, notes and alerts. Your clients keep their own logs." : "your gym and gym code. Your trainers and their clients keep their accounts.") : `all workouts, cardio, check-ins, DEXA scans, health reports, your leaderboard summary, buddy links and challenge entries.${Cloud.me && Cloud.me.trainerId ? " Your trainer is told you've left." : ""}`} It can't be undone.</p>
+    body = `<h2>Delete your account?</h2><p style="margin:0">This permanently deletes your login and everything in your account: ${isStaff() ? (isTrainer() ? "your invite code, challenges, client groups, notes and alerts. Your clients keep their own logs." : isDesk() ? "your front-desk login. The gym's member and payment records stay with the gym." : "your gym, gym codes, member list, plans, payment records and check-ins. Your trainers and their clients keep their accounts.") : `all workouts, cardio, check-ins, DEXA scans, health reports, your leaderboard summary, buddy links and challenge entries.${Cloud.me && Cloud.me.trainerId ? " Your trainer is told you've left." : ""}`} It can't be undone.</p>
     <span class="small muted">Want a copy first? Close this and use Export in Settings.</span>
+    ${isStaff() ? "" : `<label class="f">Why are you leaving? (optional)<select id="da-why"><option value="">Rather not say</option>${EXIT_WHY.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("")}</select></label>`}
     <label class="f">Your password<input id="da-pass" type="password" autocomplete="current-password"></label>
     <button class="btn danger block" data-act="delacct-go">Delete my account permanently</button><button class="btn block" data-act="sheet-close">Cancel</button>`;
   } else if (k === "settings"){
@@ -2837,6 +2875,31 @@ app.addEventListener("click", async ev => {
   if (a === "ob-skip") return obSkip();
   if (a === "ob-start") return obStart();
   if (a === "ob-havetrainer"){ await obSkip(); return openSheet({kind:"settings", back: trackPain()}); }
+  if (a === "desk-join") return deskJoin(val("desk-code"));
+  if (a === "desk-leave"){ S.sheet = {kind:"confirm", title:"Leave this gym?", text:"You'll lose access to its members and payments until the owner gives you a new code.", yes:"Leave gym", danger:true, run: async () => { await gref("staff").doc(Cloud.user.uid).delete().catch(() => {}); await uref().update({gymId: null, gymCode: null, gymName: null}).catch(() => {}); hubStop(); }}; S.forceRender = true; return render(); }
+  if (a === "g-madd"){ const c = t.dataset.uid ? appMembers().find(x => x.id === t.dataset.uid) : null; const q = (S.ui.gq || "").trim(); return openSheet({kind:"gmember", id:null, pre: c ? {name: c.name, uid: c.id, trainerId: c._tid} : (q && !digits(q) ? {name: q} : digits(q).length >= 10 ? {phone: q} : {})}); }
+  if (a === "g-mopen") return openSheet({kind:"gmember", id: t.dataset.id});
+  if (a === "g-msave") return saveMember();
+  if (a === "g-mdel"){ const m = Hub.members.find(x => x.id === t.dataset.id) || {}; S.sheet = {kind:"confirm", title:`Delete ${m.name || "this member"}?`, text:"This removes the member from your list. Their payments and check-ins stay in your records. This can't be undone.", yes:"Delete member", danger:true, run: () => gref("members").doc(t.dataset.id).delete().catch(e => toast("Couldn't delete: " + (e.code || "error")))}; S.forceRender = true; return render(); }
+  if (a === "g-mf"){ S.ui.gmf = t.dataset.v; S.forceRender = true; return render(); }
+  if (a === "g-mfgo"){ S.ui.gmf = t.dataset.v; S.view = "gmembers"; S.forceRender = true; render(); window.scrollTo(0,0); return; }
+  if (a === "g-in"){ await checkIn(t.dataset.id); S.forceRender = true; return render(); }
+  if (a === "g-payopen") return openSheet({kind:"gpay", mid: t.dataset.id || null, mode:"upi"});
+  if (a === "g-pmode"){ payCollect(); S.sheet.mode = t.dataset.v; S.forceRender = true; return render(); }
+  if (a === "g-paysave") return savePayment();
+  if (a === "g-print"){ try { window.print(); } catch(e){ toast("Printing isn't available here."); } return; }
+  if (a === "g-rcpt"){ const p = (t.dataset.m >= monthKey(monthStart(prevMonth())) ? Hub.pays : (Hub.payCache[t.dataset.m] || [])).find(x => x.id === t.dataset.id); if (p) openSheet({kind:"greceipt", p}); return; }
+  if (a === "g-pm"){ S.ui.gpm = t.dataset.v; S.forceRender = true; return render(); }
+  if (a === "g-paycsv") return paymentsCSV(t.dataset.v);
+  if (a === "g-exitopen") return openSheet({kind:"gexit", id: t.dataset.id});
+  if (a === "g-exitsave"){ try { await gref("members").doc(S.sheet.id).update({status:"left", leftOn: today(), exitReason: val("gx-why") || "other", exitNote: val("gx-note").slice(0, 200) || null}); } catch(e){ return toast("Couldn't save: " + (e.code || "error")); } S.sheet = null; S.forceRender = true; render(); return toast("Marked as left"); }
+  if (a === "g-rejoin"){ await gref("members").doc(t.dataset.id).update({status:"active", leftOn: null, exitReason: null, exitNote: null}).catch(() => {}); S.forceRender = true; render(); return toast("Welcome back! Record a payment to restart their membership."); }
+  if (a === "g-planopen") return openSheet({kind:"gplan", id: t.dataset.id || null});
+  if (a === "g-plsave") return savePlan();
+  if (a === "g-plarch"){ const p = Hub.plans.find(x => x.id === t.dataset.id) || {}; await gref("plans").doc(t.dataset.id).update({archived: !p.archived}).catch(() => {}); S.sheet = null; S.forceRender = true; return render(); }
+  if (a === "g-gsave") return saveGymDetails();
+  if (a === "g-deskcode") return newDeskCode();
+  if (a === "g-staffdel"){ const st = Hub.staff.find(x => x.id === t.dataset.id) || {}; S.sheet = {kind:"confirm", title:`Remove ${st.name || "this person"}?`, text:"They will no longer see your members or payments. Payments they recorded stay.", yes:"Remove access", danger:true, run: () => gref("staff").doc(t.dataset.id).delete().catch(e => toast("Couldn't remove: " + (e.code || "error")))}; S.forceRender = true; return render(); }
   if (a === "pause-open") return openSheet({kind:"pause", cid: t.dataset.c || null});
   if (a === "pause-save") return pauseSave();
   if (a === "pause-end") return pauseEnd();
@@ -2935,7 +2998,7 @@ app.addEventListener("click", async ev => {
     S.forceRender = true; return render();
   }
   if (a === "ask-delete-account") return openSheet({kind:"delacct"});
-  if (a === "delacct-go"){ const p = (document.getElementById("da-pass") || {}).value || ""; if (!p) return toast("Enter your password to confirm."); return deleteAccount(p); }
+  if (a === "delacct-go"){ S.delWhy = val("da-why") || null; const p = (document.getElementById("da-pass") || {}).value || ""; if (!p) return toast("Enter your password to confirm."); return deleteAccount(p); }
   if (a === "pf-pain"){ const P = S.sheet.p, v = t.dataset.v; P.pain = P.pain.includes(v) ? P.pain.filter(x => x !== v) : [...P.pain, v]; t.classList.toggle("on", P.pain.includes(v)); t.setAttribute("aria-pressed", P.pain.includes(v)); return; }
   if (a === "profile-save") return saveProfileSheet();
   if (a === "resume") return goLog();
@@ -3057,6 +3120,8 @@ function applyAutofill(){
 }
 app.addEventListener("input", ev => {
   const el = ev.target;
+  if (el.id === "g-q"){ S.ui.gq = el.value; const r = document.getElementById("g-res"); if (r) r.innerHTML = checkinResults(); return; }
+  if (el.id === "gm-q"){ S.ui.gmq = el.value; const r = document.getElementById("gm-body"); if (r) r.innerHTML = memberRows(); return; }
   if (el.dataset && el.dataset.bp && S.builder){
     let v = el.value; const path = el.dataset.bp;
     if (path.startsWith("block.")){ S.builder.p.block.peak = null; S.builder.p.block.base = 0; }
@@ -3099,6 +3164,7 @@ app.addEventListener("submit", async ev => {
   }
 });
 app.addEventListener("change", ev => {
+  if (["gp-mem","gp-plan","gp-from"].includes(ev.target.id) && S.sheet && S.sheet.kind === "gpay"){ payCollect(); if (ev.target.id !== "gp-from"){ S.sheet.paid = null; if (ev.target.id === "gp-mem"){ S.sheet.plan = null; S.sheet.from = null; } } else S.sheet.paid = null; S.forceRender = true; render(); return; }
   if (ev.target.dataset && ev.target.dataset.mwc && S.sheet && S.sheet.kind === "msend"){ const id = ev.target.dataset.mwc; S.sheet.sel = ev.target.checked ? [...new Set([...S.sheet.sel, id])] : S.sheet.sel.filter(x => x !== id); const b = document.querySelector('[data-act="mw-preview"]'); if (b) b.disabled = !S.sheet.sel.length; return; }
   if (ev.target.dataset && ev.target.dataset.gday){ const cid = ev.target.dataset.gday, day = ev.target.value; withClient(cid, () => { Gym.drafts[cid] = newDraft(day); }); S.forceRender = true; render(); return; }
   if (S.sheet && S.sheet.kind === "chal"){
@@ -3173,7 +3239,7 @@ async function cloudInit(){
     firebase.auth().onAuthStateChanged(u => { Cloud.authKnown = true; S.obOffered = false; S.ob = null; if (!u) S.forceRender = true; onAuth(u).then(() => { if (!u){ S.forceRender = true; render(); } }).catch(err => { console.error(err); toast("Couldn't load your account — check your connection."); }); });
   } catch(e){ console.error(e); Cloud.db = null; }
 }
-function stopListeners(){ S.hist = null; Cloud.unsub.forEach(f => { try { f(); } catch(e){} }); Cloud.unsub = []; Cloud.attached = null; closeClient(); socialStop(); ownerStop(); gymStop(); }
+function stopListeners(){ hubStop(); S.hist = null; Cloud.unsub.forEach(f => { try { f(); } catch(e){} }); Cloud.unsub = []; Cloud.attached = null; closeClient(); socialStop(); ownerStop(); gymStop(); }
 function softRender(){ render(); }
 async function onAuth(u){
   const had = !!Cloud.user;
@@ -3194,7 +3260,10 @@ async function onAuth(u){
     const d = sn.data(); if (!d) return;
     Cloud.me = {id: sn.id, ...d};
     if (d.role === "owner"){
-      if (Cloud.attached !== "owner"){ Cloud.attached = "owner"; attachOwner(); S.view = "owner"; }
+      if (Cloud.attached !== "owner"){ Cloud.attached = "owner"; attachOwner(); attachHub(); S.view = "owner"; }
+    } else if (d.role === "desk"){
+      if (Cloud.attached !== "desk"){ Cloud.attached = "desk"; S.view = "gcheck"; }
+      attachHub();
     } else if (d.role === "trainer"){
       if (Cloud.attached !== "trainer"){ Cloud.attached = "trainer"; attachTrainer(); S.view = "clients"; }
     } else {
@@ -3361,7 +3430,7 @@ function viewAlerts(){
   const al = S.alerts || [];
   let out = `<div class="row between"><div><span class="eyebrow">Completed workouts</span><h1>Alerts</h1></div>${al.some(a => !a.read) ? `<button class="btn" data-act="alerts-read">Mark all read</button>` : ""}</div>`;
   if (!al.length) return out + `<div class="empty">When a client saves a workout, it appears here.</div>`;
-  return out + al.map(a => a.kind === "deleted" ? `<div class="wcard" style="cursor:default"><div class="dayblock sm">·</div><div style="min-width:0;flex:1"><b style="display:block">${esc(a.clientName)} deleted their account</b><span class="muted small">${a.date ? shortDate(a.date) : ""} · their data and your notes about them have been removed</span></div><button class="btn ghost" data-act="alert-del" data-id="${a.id}" aria-label="Dismiss">×</button></div>` : a.kind === "profile" ? `<button class="wcard" data-act="open-alert" data-id="${a.id}" style="${a.read ? "" : "border-color:var(--accent)"}"><div class="dayblock sm">${I.body.replace("<svg",'<svg width="20" height="20"')}</div><div style="min-width:0;flex:1"><b style="display:block">${esc(a.clientName)} updated their profile</b><span class="muted small">${a.date ? shortDate(a.date) : ""} · ${esc(a.text || "")}</span></div></button>` : `<button class="wcard" data-act="open-alert" data-id="${a.id}" style="${a.read ? "" : "border-color:var(--accent)"}"><div class="dayblock sm">${esc(dayTag(a.day))}</div><div style="min-width:0;flex:1"><b style="display:block">${esc(a.clientName)} finished ${esc(a.title)}</b><span class="muted small">${a.date ? shortDate(a.date) : ""} · ${a.result ? esc(a.result) : `week ${a.week || "–"} · ${a.sets || 0} sets`} · ${a.durationMin || "–"} min${a.backPain != null ? ` · back ${a.backPain}/10` : ""}${a.weight ? ` · ${fmt(a.weight)} kg` : ""}</span>${a.notes ? `<div class="small">“${esc(a.notes)}”</div>` : ""}</div>${a.read ? "" : `<span class="pill blue">New</span>`}</button>${a.sessionId ? (a.approved ? `<span class="pill good" style="align-self:flex-end;margin-top:-6px">✓ Approved</span>` : `<button class="btn ghost" data-act="approve" data-c="${a.clientId}" data-id="${a.sessionId}" style="align-self:flex-end;margin-top:-6px">✓ Approve as attendance</button>`) : ""}`).join("");
+  return out + al.map(a => a.kind === "deleted" ? `<div class="wcard" style="cursor:default"><div class="dayblock sm">·</div><div style="min-width:0;flex:1"><b style="display:block">${esc(a.clientName)} deleted their account</b><span class="muted small">${a.date ? shortDate(a.date) : ""} · their data and your notes about them have been removed${a.text ? ` · ${esc(a.text)}` : ""}</span></div><button class="btn ghost" data-act="alert-del" data-id="${a.id}" aria-label="Dismiss">×</button></div>` : a.kind === "profile" ? `<button class="wcard" data-act="open-alert" data-id="${a.id}" style="${a.read ? "" : "border-color:var(--accent)"}"><div class="dayblock sm">${I.body.replace("<svg",'<svg width="20" height="20"')}</div><div style="min-width:0;flex:1"><b style="display:block">${esc(a.clientName)} updated their profile</b><span class="muted small">${a.date ? shortDate(a.date) : ""} · ${esc(a.text || "")}</span></div></button>` : `<button class="wcard" data-act="open-alert" data-id="${a.id}" style="${a.read ? "" : "border-color:var(--accent)"}"><div class="dayblock sm">${esc(dayTag(a.day))}</div><div style="min-width:0;flex:1"><b style="display:block">${esc(a.clientName)} finished ${esc(a.title)}</b><span class="muted small">${a.date ? shortDate(a.date) : ""} · ${a.result ? esc(a.result) : `week ${a.week || "–"} · ${a.sets || 0} sets`} · ${a.durationMin || "–"} min${a.backPain != null ? ` · back ${a.backPain}/10` : ""}${a.weight ? ` · ${fmt(a.weight)} kg` : ""}</span>${a.notes ? `<div class="small">“${esc(a.notes)}”</div>` : ""}</div>${a.read ? "" : `<span class="pill blue">New</span>`}</button>${a.sessionId ? (a.approved ? `<span class="pill good" style="align-self:flex-end;margin-top:-6px">✓ Approved</span>` : `<button class="btn ghost" data-act="approve" data-c="${a.clientId}" data-id="${a.sessionId}" style="align-self:flex-end;margin-top:-6px">✓ Approve as attendance</button>`) : ""}`).join("");
 }
 function viewTrainerAccount(){
   return `<div><span class="eyebrow">Account</span><h1>${esc(Cloud.me.name || "Coach")}</h1></div>
@@ -3544,8 +3613,8 @@ function authForm(st, inPage){
   ${up ? `<label class="f">Your name<input id="a-name" autocomplete="name"></label>` : ""}
   <label class="f">Email<input id="a-email" type="email" autocomplete="email" inputmode="email"></label>
   <label class="f">Password${up ? " (6+ characters)" : ""}<input id="a-pass" type="password" autocomplete="${up ? "new-password" : "current-password"}"></label>
-  ${up ? `<div><div class="small muted" style="font-weight:600;margin-bottom:6px">I am a</div><div class="grid3"><button type="button" class="btn ${st.role!=="trainer"&&st.role!=="owner"?"blue":""}" data-act="auth-role" data-v="client">Client</button><button type="button" class="btn ${st.role==="trainer"?"blue":""}" data-act="auth-role" data-v="trainer">Trainer</button><button type="button" class="btn ${st.role==="owner"?"blue":""}" data-act="auth-role" data-v="owner">Gym owner</button></div>
-  <span class="small muted">${st.role === "trainer" ? "Trainers build programs for clients and see their progress." : st.role === "owner" ? "Gym owners see how their trainers and clients are doing — summaries only." : "You'll answer a few questions and get a starter plan. Any workouts already on this phone move into your account."}</span></div>
+  ${up ? `<div><div class="small muted" style="font-weight:600;margin-bottom:6px">I am a</div><div class="grid2"><button type="button" class="btn ${!["trainer","owner","desk"].includes(st.role)?"blue":""}" data-act="auth-role" data-v="client">Client</button><button type="button" class="btn ${st.role==="trainer"?"blue":""}" data-act="auth-role" data-v="trainer">Trainer</button><button type="button" class="btn ${st.role==="owner"?"blue":""}" data-act="auth-role" data-v="owner">Gym owner</button><button type="button" class="btn ${st.role==="desk"?"blue":""}" data-act="auth-role" data-v="desk">Front desk</button></div>
+  <span class="small muted">${st.role === "trainer" ? "Trainers build programs for clients and see their progress." : st.role === "desk" ? "Front-desk staff add members, record payments and check people in. You'll need the front-desk code from your gym owner." : st.role === "owner" ? "Gym owners see how their trainers and clients are doing — summaries only." : "You'll answer a few questions and get a starter plan. Any workouts already on this phone move into your account."}</span></div>
   ${st.role === "owner" ? `<label class="f">Gym name<input id="a-gym" placeholder="e.g. Primal Gym Indiranagar"></label>` : ""}` : ""}
   <button class="btn primary block" data-act="auth-go">${up ? "Create account" : "Sign in"}</button>
   ${up ? "" : `<button class="btn ghost" data-act="auth-reset">Forgot password?</button>`}
@@ -3559,7 +3628,7 @@ async function authGo(){
     const st = (S.sheet && S.sheet.kind === "auth") ? S.sheet : S.authPage;
     if (st.mode === "up"){
       const name = val("a-name"); if (!name){ if (btn){ btn.disabled = false; btn.textContent = "Create account"; } return toast("Enter your name."); }
-      Cloud.pending = {role: ["trainer","owner"].includes(st.role) ? st.role : "client", name, gymName: val("a-gym")};
+      Cloud.pending = {role: ["trainer","owner","desk"].includes(st.role) ? st.role : "client", name, gymName: val("a-gym")};
       await firebase.auth().createUserWithEmailAndPassword(email, pass);
     } else await firebase.auth().signInWithEmailAndPassword(email, pass);
     if (S.sheet && S.sheet.kind === "auth") S.sheet = null; S.forceRender = true; render();
@@ -5083,6 +5152,7 @@ function ownerStop(){ Owner.unsub.forEach(f => { try { f(); } catch(e){} }); Obj
 function attachOwner(){
   Owner.unsub.push(Cloud.db.collection("users").where("gymId", "==", Cloud.user.uid).onSnapshot(q => {
     Owner.trainers = q.docs.map(d => ({id: d.id, ...d.data()})).filter(t => t.role === "trainer").sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    syncGymTrainers();
     const ids = new Set(Owner.trainers.map(t => t.id));
     Object.keys(Owner.tUnsub).forEach(id => { if (!ids.has(id)){ Owner.tUnsub[id].forEach(f => f()); delete Owner.tUnsub[id]; delete Owner.clients[id]; delete Owner.chals[id]; delete Owner.calls[id]; delete Owner.cls[id]; } });
     Owner.trainers.forEach(t => {
@@ -5425,12 +5495,8 @@ function viewOwnerRetention(){
     program: {l: "By program", none: "No program", of: c => c.program ? c.program.name || "Program" : "No program"}
   };
   let out = `<div><span class="eyebrow">${esc(Cloud.me.gymName || "Your gym")}</span><h1>Retention</h1><span class="small muted">Statuses and counts only: no weights, health data or trainer notes.</span></div>`;
-  if (!T.length) return out + `<div class="empty">No trainers yet. Share your gym code with your trainers.</div>`;
-  out += retentionHTML(members, splits);
-  const rows = T.map(t => { const cl = Owner.clients[t.id] || [], calls = Owner.calls[t.id] || [], r = retCells(cl);
-    return `<tr><td>${esc(t.name || t.email)}</td><td>${cl.length}</td><td>${cl.filter(c => ["risk", "inactive"].includes(riskOf(c).st)).length}</td><td>${calls.length}</td><td>${calls.filter(x => x.outcome === "back").length}</td><td>${calls.filter(x => x.outcome === "lost").length}</td>${r.map(x => `<td>${retCell(x)}</td>`).join("")}</tr>`; }).join("");
-  out += `<section class="card"><h3>Trainer follow-ups</h3><span class="small muted">Calls logged from each trainer's weekly list, last 8 weeks, and how long their clients keep training.</span>
-  <div class="tbl"><table><tr><th>Trainer</th><th>Clients</th><th>At risk</th><th>Follow-ups</th><th>Back training</th><th>Lost</th><th>30 days</th><th>90 days</th><th>180 days</th></tr>${rows}</table></div></section>`;
+  if (!T.length) return out + winBackCard() + exitReasonsCard() + `<div class="empty">No trainers yet. Share your gym code with your trainers.</div>`;
+  out += trainerRankingCard() + winBackCard() + exitReasonsCard() + retentionHTML(members, splits);
   return out;
 }
 
@@ -5463,6 +5529,7 @@ function viewOwner(){
   let out = `<div><span class="eyebrow">${esc(Cloud.me.gymName || "Your gym")}</span><h1>${greeting()}${nm ? ", " + esc(nm) : ""}</h1></div>`;
   out += `<section class="card"><div class="row between"><div><span class="eyebrow">Gym code for trainers</span><div style="font-family:var(--f-display);font-size:32px;letter-spacing:.12em" class="num">${esc(Cloud.me.gymCode || "······")}</div></div>${Cloud.me.gymCode ? `<button class="btn" data-act="copy-code" data-v="${esc(Cloud.me.gymCode)}">Copy</button>` : ""}</div>
   <span class="small muted">Trainers enter this under Account → Gym to join. You see summaries only: no body weight, pain, notes or health reports.</span></section>`;
+  out += ownerGymCards();
   if (!T.length) return out + `<div class="empty">No trainers yet. Share your gym code with your trainers.</div>`;
   const all = T.map(t => trainerStats(t.id));
   const sum = k => all.reduce((a, s) => a + (s[k] || 0), 0);
@@ -5504,6 +5571,478 @@ function viewOwnerAccount(){
   <section class="card"><span class="muted small">Signed in as ${esc(Cloud.user.email)} · Gym owner of ${esc(Cloud.me.gymName || "your gym")}</span>
   <label class="f">Gym name<input id="o-gname" value="${esc(Cloud.me.gymName || "")}"></label><button class="btn" data-act="o-rename">Save name</button>
   <button class="btn block" data-act="signout">Sign out</button></section>`;
+}
+
+/* ============ Gym web app: members, plans, payments, check-in, front desk ============
+   Gym-owned records live under gyms/{gid} (gid = owner's uid): plans, members (including people
+   who don't use the app), payments (recorded by hand, with numbered receipts), checkins, staff
+   (front-desk logins) and counters. Only the owner and the gym's front desk can read or write them. */
+const Hub = {gid: null, gym: null, plans: [], members: [], pays: [], checks: [], staff: [], joined: null, unsub: [], payCache: {}, tSync: ""};
+const isDesk = () => !!(Cloud.user && Cloud.me && Cloud.me.role === "desk");
+const isGymSide = () => isOwner() || isDesk();
+const hubGid = () => isOwner() ? Cloud.user.uid : (Cloud.me && Cloud.me.gymId) || null;
+const gref = c => { const g = Cloud.db.collection("gyms").doc(Hub.gid); return c ? g.collection(c) : g; };
+const EXIT_WHY = [["cost", "Cost"], ["time", "No time"], ["injury", "Injury or health"], ["moved", "Moved away"], ["interest", "Lost interest"], ["other", "Other"]];
+const PAY_MODES = [["upi", "UPI"], ["cash", "Cash"], ["card", "Card"], ["bank", "Bank transfer"]];
+const exitLabel = k => (EXIT_WHY.find(x => x[0] === k) || [, "Not given"])[1];
+const modeLabel = k => (PAY_MODES.find(x => x[0] === k) || [, k || "–"])[1];
+const rupee = n => "₹" + Math.round(+n || 0).toLocaleString("en-IN");
+const nowHM = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const digits = s => String(s || "").replace(/\D/g, "");
+const finYear = d => { const y = +d.slice(0, 4), m = +d.slice(5, 7), s = m >= 4 ? y : y - 1; return `${s}-${pad((s + 1) % 100)}`; };
+const addMonths = (d, n) => { const x = parse(d); const day = x.getDate(); x.setDate(1); x.setMonth(x.getMonth() + n); const last = new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate(); x.setDate(Math.min(day, last)); return ymd(x); };
+const gymName = () => (Hub.gym && Hub.gym.name) || (Cloud.me && Cloud.me.gymName) || "Your gym";
+const gymTrainers = () => (Hub.gym && Hub.gym.trainers) || [];
+const trainerName = id => (gymTrainers().find(t => t.id === id) || {}).name || "";
+const gstRate = () => Hub.gym && Hub.gym.gstin ? (num(Hub.gym.gstRate) ? +Hub.gym.gstRate : 18) : 0;
+const rcptPrefix = () => ((Hub.gym && Hub.gym.prefix) || gymName().split(/\s+/).map(w => w[0]).join("").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4) || "PS");
+
+function hubStop(){ Hub.unsub.forEach(f => { try { f(); } catch(e){} }); Object.assign(Hub, {gid: null, gym: null, plans: [], members: [], pays: [], checks: [], staff: [], joined: null, unsub: [], payCache: {}, tSync: ""}); }
+function attachHub(){
+  const gid = hubGid(); if (Hub.gid === gid && Hub.unsub.length) return;
+  hubStop(); Hub.gid = gid; if (!gid) return render();
+  const on = () => {
+    Hub.unsub.push(gref().onSnapshot(sn => { Hub.gym = sn.exists ? sn.data() : {}; syncGymTrainers(); render(); }, () => {}));
+    Hub.unsub.push(gref("plans").onSnapshot(q => { Hub.plans = q.docs.map(d => ({id: d.id, ...d.data()})).sort((a, b) => (a.months - b.months) || (a.price - b.price)); render(); }, () => {}));
+    Hub.unsub.push(gref("members").onSnapshot(q => { Hub.members = q.docs.map(d => ({id: d.id, ...d.data()})).sort((a, b) => (a.name || "").localeCompare(b.name || "")); render(); }, () => {}));
+    Hub.unsub.push(gref("payments").where("date", ">=", monthStart(prevMonth())).onSnapshot(q => { Hub.pays = q.docs.map(d => ({id: d.id, ...d.data()})).sort((a, b) => (b.date + (b.receipt || "")).localeCompare(a.date + (a.receipt || ""))); render(); }, () => {}));
+    Hub.unsub.push(gref("checkins").where("date", ">=", addDays(today(), -30)).onSnapshot(q => { Hub.checks = q.docs.map(d => ({id: d.id, ...d.data()})); render(); }, () => {}));
+    if (isOwner()) Hub.unsub.push(gref("staff").onSnapshot(q => { Hub.staff = q.docs.map(d => ({id: d.id, ...d.data()})); render(); }, () => {}));
+  };
+  if (isOwner()){ Hub.joined = true; on(); return; }
+  // Front desk: access lasts while the owner keeps their staff record
+  let started = false;
+  Hub.unsub.push(gref("staff").doc(Cloud.user.uid).onSnapshot(sn => {
+    Hub.joined = sn.exists;
+    if (sn.exists && !started){ started = true; on(); }
+    if (!sn.exists && started){ const keep = Hub.unsub.shift(); Hub.unsub.forEach(f => { try { f(); } catch(e){} }); Hub.unsub = [keep]; started = false; Object.assign(Hub, {gym: null, plans: [], members: [], pays: [], checks: []}); }
+    render();
+  }, () => { Hub.joined = false; render(); }));
+}
+// The owner's app keeps the gym's trainer list on the gym record, so the front desk can assign trainers
+function syncGymTrainers(){
+  if (!isOwner() || !Hub.gym) return;
+  const tl = Owner.trainers.map(t => ({id: t.id, name: t.name || t.email || "Trainer"})), k = JSON.stringify(tl);
+  if (k === JSON.stringify(Hub.gym.trainers || []) || k === Hub.tSync) return;
+  Hub.tSync = k; gref().update({trainers: tl}).catch(() => {});
+}
+
+/* ---- membership state ---- */
+function memState(m){
+  if (m.status === "left") return "left";
+  if (!m.end) return "none";
+  if (m.end < today()) return "expired";
+  return daysBetween(today(), m.end) <= 30 ? "ending" : "active";
+}
+const isOverdue = m => m.status !== "left" && (memState(m) === "expired" || (+m.due || 0) > 0);
+const monthlyFee = m => +m.fee && +m.months ? +m.fee / +m.months : 0;
+const appMembers = () => Owner.trainers.flatMap(t => (Owner.clients[t.id] || []).map(c => ({...c, _t: t.name || t.email || "Trainer", _tid: t.id})));
+const pubFor = m => m && m.uid ? appMembers().find(c => c.id === m.uid) || null : null;
+// Activity: from the app (personal risk score) when the member uses it, otherwise from desk check-ins
+function memberActivity(m){
+  const pub = pubFor(m); if (pub) return {...riskOf(pub), src: "app"};
+  if (m.status === "left") return {st: "left", why: "Left the gym"};
+  const ref = m.lastVisit || null, since = m.from || m.start || null;
+  if (!ref){ const d = since ? daysBetween(since, today()) : 0; return d >= 7 ? {st: "never", why: "No visit recorded yet", src: "desk"} : {st: "never", why: "Just joined", fresh: true, src: "desk"}; }
+  const d = daysBetween(ref, today());
+  return d > 30 ? {st: "inactive", why: `No visit for ${d} days`, days: d, src: "desk"} : d >= 14 ? {st: "risk", why: `No visit for ${d} days`, days: d, src: "desk"} : {st: "active", why: `Last visit ${shortDate(ref)}`, days: d, src: "desk"};
+}
+function memPill(m){
+  const s = memState(m);
+  return s === "left" ? `<span class="pill">Left</span>` : s === "expired" ? `<span class="pill bad">Expired ${shortDate(m.end)}</span>` : s === "ending" ? `<span class="pill warn">Ends ${shortDate(m.end)}</span>` : s === "none" ? `<span class="pill">No plan</span>` : `<span class="pill good">Until ${shortDate(m.end)}</span>`;
+}
+const duePill = m => +m.due > 0 ? ` <span class="pill warn">Due ${rupee(m.due)}</span>` : "";
+const waURL = (phone, text) => { let p = digits(phone); if (p.length === 10) p = "91" + p; return `https://wa.me/${p}?text=${encodeURIComponent(text)}`; };
+
+/* ---- layout ---- */
+function gymNav(){
+  const t = isOwner()
+    ? [["owner", "Dashboard", I.chart], ["gmembers", "Members", I.body], ["gcheck", "Check-in", I.check], ["gpay", "Payments", I.note], ["oretention", "Retention", I.squad], ["gsettings", "Settings", I.gear]]
+    : [["gcheck", "Check-in", I.check], ["gmembers", "Members", I.body], ["gpay", "Payments", I.note], ["gaccount", "Account", I.gear]];
+  const cur = S.view === "otrainer" ? "owner" : S.view;
+  return `<nav class="tabs" aria-label="Sections"><div class="wrap" style="grid-template-columns:repeat(${t.length},1fr)">${t.map(([k, l, ic]) => `<button data-act="otab" data-v="${k}" class="${cur === k ? "on" : ""}">${ic}<span>${l}</span></button>`).join("")}</div></nav>`;
+}
+function gymHeader(){
+  return `<header class="top"><div class="wrap"><img class="mark lt" src="${MARK_NAVY}" alt=""><img class="mark dk" src="${MARK_WHITE}" alt=""><div class="brand"><b>${esc(gymName())}</b><span>${isOwner() ? "Gym owner" : "Front desk"} · ${esc((Cloud.me && Cloud.me.name) || "")}</span></div></div></header>`;
+}
+const OWNER_VIEWS = ["owner", "otrainer", "oretention", "gmembers", "gcheck", "gpay", "gsettings"], DESK_VIEWS = ["gcheck", "gmembers", "gpay", "gaccount"];
+function viewGymSide(){
+  if (isDesk() && Hub.joined !== true) return viewDeskJoin();
+  const allowed = isOwner() ? OWNER_VIEWS : DESK_VIEWS;
+  if (!allowed.includes(S.view)) S.view = allowed[0];
+  const v = S.view;
+  return v === "otrainer" ? viewOwnerTrainer() : v === "oretention" ? viewOwnerRetention() : v === "gmembers" ? viewMembers() : v === "gcheck" ? viewCheckin()
+    : v === "gpay" ? viewPayments() : v === "gsettings" ? viewGymSettings() : v === "gaccount" ? viewDeskAccount() : viewOwner();
+}
+
+/* ---- front desk: joining a gym ---- */
+function viewDeskJoin(){
+  if (Hub.joined === null && Hub.gid) return `<div class="empty">Opening your gym…</div>`;
+  return `<div><span class="eyebrow">Front desk</span><h1>Join your gym</h1></div>
+  <section class="card"><span class="small">Ask the gym owner for the <b>front-desk code</b> (Settings → Front desk in their app), then enter it here.</span>
+  ${Hub.gid && Hub.joined === false ? `<div class="banner warn"><div>Your access to ${esc((Cloud.me && Cloud.me.gymName) || "the gym")} was removed by the owner, or hasn't been set up. Enter a new code to join again.</div></div>` : ""}
+  <div class="row" style="flex-wrap:nowrap"><input id="desk-code" placeholder="Front-desk code" autocapitalize="characters" style="flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:16px;background:var(--surface);color:var(--ink)"><button class="btn blue" data-act="desk-join">Join</button></div>
+  <button class="btn block" data-act="signout">Sign out</button></section>`;
+}
+async function deskJoin(code){
+  code = (code || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (code.length !== 8) return toast("Front-desk codes are 8 letters and numbers.");
+  try {
+    const d = await Cloud.db.collection("gymcodes").doc(code).get();
+    if (!d.exists || d.data().kind !== "desk") return toast("That isn't a front-desk code. Check it with the gym owner.");
+    const gid = d.data().gymId;
+    await Cloud.db.collection("gyms").doc(gid).collection("staff").doc(Cloud.user.uid).set({name: Cloud.me.name || "", email: Cloud.user.email || "", code, added: today()});
+    await uref().update({gymId: gid, gymCode: code, gymName: d.data().name || "your gym"});
+    toast(`Joined ${d.data().name || "the gym"}`);
+  } catch(e){ toast("Couldn't join: " + (e.code || "error")); }
+}
+function viewDeskAccount(){
+  return `<div><span class="eyebrow">Account</span><h1>${esc(Cloud.me.name || "Front desk")}</h1></div>
+  <section class="card"><span class="muted small">Signed in as ${esc(Cloud.user.email)} · Front desk at ${esc(gymName())}</span>
+  <span class="small">You can add members, record payments and check people in. Gym figures, trainer follow-ups and settings are for the owner.</span>
+  <button class="btn block" data-act="signout">Sign out</button><button class="btn danger block" data-act="desk-leave">Leave this gym</button>
+  <button class="btn danger block" data-act="ask-delete-account">Delete my account</button></section>`;
+}
+
+/* ---- check-in ---- */
+function checkinResults(){
+  const q = (S.ui.gq || "").trim().toLowerCase(), qd = digits(q);
+  if (!q) return `<div class="empty">Type a member's name or phone number.</div>`;
+  if (/^[\d\s+]+$/.test(q) && qd.length < 3) return `<div class="empty">Keep typing: at least 3 digits of the phone number.</div>`;
+  const hits = Hub.members.filter(m => m.status !== "left" && ((m.name || "").toLowerCase().includes(q) || (qd.length >= 3 && digits(m.phone).includes(qd)))).slice(0, 8);
+  if (!hits.length) return `<div class="empty">No member matches "${esc(S.ui.gq)}". <button class="btn ghost" data-act="g-madd">Add a new member</button></div>`;
+  return hits.map(m => { const c = Hub.checks.find(x => x.memberId === m.id && x.date === today());
+    return `<div class="row between" style="flex-wrap:nowrap;gap:10px;border-top:1px solid var(--line);padding-top:10px"><div style="min-width:0"><button class="btn ghost" style="padding:0;font-weight:700" data-act="g-mopen" data-id="${m.id}">${esc(m.name)}</button><div class="small muted">${esc(m.phone || "")}${m.planName ? " · " + esc(m.planName) : ""}</div><div style="margin-top:4px">${memPill(m)}${duePill(m)}</div></div>
+    <div class="row" style="gap:6px;flex:none">${memState(m) === "expired" ? `<button class="btn" data-act="g-payopen" data-id="${m.id}">Renew</button>` : ""}${c ? `<span class="pill good">✓ In at ${esc(c.time || "")}</span>` : `<button class="btn primary" data-act="g-in" data-id="${m.id}">Check in</button>`}</div></div>`; }).join("");
+}
+function viewCheckin(){
+  const todays = Hub.checks.filter(c => c.date === today()).sort((a, b) => (b.time || "").localeCompare(a.time || ""));
+  return `<div class="row between"><div><span class="eyebrow">${esc(dayLabel(today()))} · ${shortDate(today())}</span><h1>Check-in</h1></div><button class="btn blue" data-act="g-madd">Add member</button></div>
+  <section class="card"><input id="g-q" value="${esc(S.ui.gq || "")}" placeholder="Search by name or phone" autocomplete="off" style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:18px;background:var(--surface);color:var(--ink)"><div id="g-res" style="display:flex;flex-direction:column;gap:10px">${checkinResults()}</div></section>
+  <section class="card"><div class="row between"><h3>Today's visits</h3><span class="pill">${todays.length}</span></div>${todays.length ? `<div class="tbl"><table><tr><th>Time</th><th>Member</th><th>Membership</th></tr>${todays.map(c => { const m = Hub.members.find(x => x.id === c.memberId) || {name: c.name}; return `<tr><td class="num">${esc(c.time || "")}</td><td>${esc(m.name || c.name || "")}</td><td>${m.id ? memPill(m) + duePill(m) : ""}</td></tr>`; }).join("")}</table></div>` : `<div class="empty">No one has checked in yet today.</div>`}</section>`;
+}
+async function checkIn(id){
+  const m = Hub.members.find(x => x.id === id); if (!m) return;
+  try {
+    await gref("checkins").doc(`${id}_${today()}`).set({memberId: id, name: m.name || "", date: today(), time: nowHM(), by: Cloud.user.uid});
+    await gref("members").doc(id).update({lastVisit: today()});
+  } catch(e){ return toast("Couldn't check in: " + (e.code || "error")); }
+  const st = memState(m);
+  toast(st === "expired" ? `${firstOf(m.name)} checked in. Membership expired ${shortDate(m.end)}: please renew.` : +m.due > 0 ? `${firstOf(m.name)} checked in. Balance due ${rupee(m.due)}.` : `${firstOf(m.name)} checked in`);
+}
+const firstOf = n => String(n || "").trim().split(/\s+/)[0] || "Member";
+
+/* ---- members ---- */
+const MEM_FILTERS = [["current", "Current"], ["ending", "Ending in 30 days"], ["overdue", "Overdue"], ["left", "Left"], ["all", "All"]];
+const memFilter = (f, m) => f === "all" ? true : f === "left" ? m.status === "left" : m.status === "left" ? false : f === "ending" ? memState(m) === "ending" : f === "overdue" ? isOverdue(m) : true;
+function memberRows(){
+  const f = S.ui.gmf || "current", q = (S.ui.gmq || "").trim().toLowerCase(), qd = digits(q);
+  const list = Hub.members.filter(m => memFilter(f, m) && (!q || (m.name || "").toLowerCase().includes(q) || (qd.length >= 3 && digits(m.phone).includes(qd))));
+  if (!list.length) return `<tr><td colspan="8" class="muted">No members here.</td></tr>`;
+  return list.map(m => { const a = memberActivity(m);
+    return `<tr><td><button class="btn ghost" style="padding:0;font-weight:600;text-align:left" data-act="g-mopen" data-id="${m.id}">${esc(m.name)}</button>${m.uid ? ` <span class="pill blue" title="Uses the app">App</span>` : ""}</td><td class="num">${esc(m.phone || "")}</td><td>${esc(m.planName || "–")}</td><td>${memPill(m)}</td><td class="num">${+m.due > 0 ? rupee(m.due) : "–"}</td><td>${esc(trainerName(m.trainerId) || "–")}</td><td>${m.lastVisit ? shortDate(m.lastVisit) : "–"}</td><td style="white-space:normal;min-width:120px">${a.st === "left" ? "" : riskPill(a)}</td></tr>`; }).join("");
+}
+function viewMembers(){
+  const f = S.ui.gmf || "current";
+  let out = `<div class="row between"><div><span class="eyebrow">${esc(gymName())}</span><h1>Members</h1></div><button class="btn blue" data-act="g-madd">Add member</button></div>
+  <div class="chips">${MEM_FILTERS.map(([k, l]) => `<button class="chip ${k === f ? "on" : ""}" data-act="g-mf" data-v="${k}">${l} · ${Hub.members.filter(m => memFilter(k, m)).length}</button>`).join("")}</div>
+  <input id="gm-q" value="${esc(S.ui.gmq || "")}" placeholder="Search by name or phone" autocomplete="off" style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:16px;background:var(--surface);color:var(--ink)">
+  <section class="card"><div class="tbl"><table><thead><tr><th>Name</th><th>Phone</th><th>Plan</th><th>Membership</th><th>Due</th><th>Trainer</th><th>Last visit</th><th>Training</th></tr></thead><tbody id="gm-body">${memberRows()}</tbody></table></div>
+  <span class="small muted">Training status comes from the app for members who use it, and from desk check-ins for everyone else.</span></section>`;
+  if (isOwner()){
+    const linked = new Set(Hub.members.map(m => m.uid).filter(Boolean)), notOn = appMembers().filter(c => !linked.has(c.id));
+    if (notOn.length) out += `<section class="card"><h3>On the app but not on your member list</h3><span class="small muted">Add them to track their membership and payments.</span>
+    ${notOn.map(c => `<div class="row between" style="border-top:1px solid var(--line);padding-top:8px"><span>${esc(c.name || "Member")} <span class="small muted">· ${esc(c._t)}</span></span><button class="btn" data-act="g-madd" data-uid="${c.id}">Add</button></div>`).join("")}</section>`;
+  }
+  return out;
+}
+function memberSheet(){
+  const id = S.sheet.id, m = id ? Hub.members.find(x => x.id === id) || {} : (S.sheet.pre || {});
+  const opts = [["", "No trainer"], ...gymTrainers().map(t => [t.id, t.name])];
+  const sel = (k, list, v) => `<select id="${k}">${list.map(([a, b]) => `<option value="${esc(a)}" ${String(v || "") === String(a) ? "selected" : ""}>${esc(b)}</option>`).join("")}</select>`;
+  let h = `<h2>${id ? esc(m.name || "Member") : "Add a member"}</h2>`;
+  if (id) h += `<div class="row" style="gap:6px">${memPill(m)}${duePill(m)}${m.uid ? `<span class="pill blue">Uses the app</span>` : ""}</div>
+    <span class="small">${m.planName ? `${esc(m.planName)} · ${m.from ? shortDate(m.from) : ""} – ${m.end ? shortDate(m.end) : ""}` : "No plan yet."}${m.lastVisit ? ` · last visit ${shortDate(m.lastVisit)}` : ""}${m.status === "left" ? ` · left ${m.leftOn ? shortDate(m.leftOn) : ""} (${esc(exitLabel(m.exitReason))})` : ""}</span>
+    <div class="grid2"><button class="btn primary" data-act="g-payopen" data-id="${id}">Record payment</button>${m.status === "left" ? `<button class="btn" data-act="g-rejoin" data-id="${id}">Rejoined</button>` : `<button class="btn" data-act="g-in" data-id="${id}">Check in</button>`}</div>`;
+  h += `<label class="f">Name<input id="gm-name" value="${esc(m.name || "")}" autocomplete="off"></label>
+  <div class="grid2"><label class="f">Phone (WhatsApp)<input id="gm-phone" type="tel" inputmode="tel" value="${esc(m.phone || "")}" placeholder="98450 12345"></label><label class="f">Email (optional)<input id="gm-email" type="email" value="${esc(m.email || "")}"></label>
+  <label class="f">Trainer${sel("gm-trainer", opts, m.trainerId)}</label><label class="f">Joined the gym<input id="gm-start" type="date" value="${esc(m.start || today())}"></label></div>`;
+  if (isOwner()){
+    const linked = new Set(Hub.members.filter(x => x.id !== id).map(x => x.uid).filter(Boolean));
+    const apps = appMembers().filter(c => !linked.has(c.id));
+    h += `<label class="f">App account${sel("gm-uid", [["", "Doesn't use the app (or not linked yet)"], ...apps.map(c => [c.id, `${c.name || "Member"} (${c._t})`])], m.uid)}</label>`;
+  }
+  h += `<label class="f">Notes (optional)<input id="gm-notes" value="${esc(m.notes || "")}" placeholder="e.g. morning batch, corporate tie-up"></label>
+  <span class="small muted">Seen by the gym owner and front desk only.</span>
+  <button class="btn primary block" data-act="g-msave">${id ? "Save changes" : "Add member"}</button>`;
+  if (id){
+    if (m.phone) h += `<a class="btn block" href="${esc(waURL(m.phone, `Hi ${firstOf(m.name)}, `))}" target="_blank" rel="noopener">WhatsApp ${esc(firstOf(m.name))}</a>`;
+    if (m.status !== "left") h += `<button class="btn block" data-act="g-exitopen" data-id="${id}">Mark as left</button>`;
+    if (isOwner()) h += `<button class="btn danger block" data-act="g-mdel" data-id="${id}">Delete this member and their records</button>`;
+  }
+  return h + `<button class="btn block" data-act="sheet-close">Close</button>`;
+}
+async function saveMember(){
+  const id = S.sheet.id, name = val("gm-name");
+  if (!name) return toast("Enter the member's name.");
+  const phone = val("gm-phone").replace(/[^\d+ ]/g, "").trim().slice(0, 20);
+  if (phone && digits(phone).length < 10) return toast("Enter a 10-digit phone number.");
+  const dup = phone && Hub.members.find(x => x.id !== id && digits(x.phone).slice(-10) === digits(phone).slice(-10));
+  if (dup && !S.sheet.dupOK){ S.sheet.dupOK = true; return toast(`${dup.name} already has this number. Tap again to save anyway.`); }
+  const data = clean({name: name.slice(0, 120), phone: phone || null, email: val("gm-email").slice(0, 120) || null, trainerId: val("gm-trainer") || null, start: val("gm-start") || today(), notes: val("gm-notes").slice(0, 300) || null});
+  if (document.getElementById("gm-uid")) data.uid = val("gm-uid") || null;
+  try {
+    if (id) await gref("members").doc(id).update(data);
+    else { const r = gref("members").doc(); await r.set({...data, uid: data.uid || null, status: "active", due: 0, created: today(), by: Cloud.user.uid}); S.sheet = {kind: "gmember", id: r.id}; S.forceRender = true; render(); return toast(`${firstOf(name)} added. Record their first payment to start the membership.`); }
+  } catch(e){ return toast("Couldn't save: " + (e.code || "error")); }
+  S.sheet = null; S.forceRender = true; render(); toast("Saved");
+}
+function exitSheet(){
+  const m = Hub.members.find(x => x.id === S.sheet.id) || {};
+  return `<h2>${esc(firstOf(m.name))} has left?</h2><span class="small muted">The reason helps you see why members leave. Their records stay; you can mark them as rejoined later.</span>
+  <label class="f">Main reason<select id="gx-why">${EXIT_WHY.map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join("")}</select></label>
+  <label class="f">Note (optional)<input id="gx-note" placeholder="e.g. moving to Pune in January"></label>
+  <button class="btn danger block" data-act="g-exitsave">Mark as left</button><button class="btn block" data-act="sheet-close">Cancel</button>`;
+}
+
+/* ---- plans ---- */
+function planSheet(){
+  const p = S.sheet.id ? Hub.plans.find(x => x.id === S.sheet.id) || {} : {months: 1};
+  return `<h2>${S.sheet.id ? "Edit plan" : "New membership plan"}</h2>
+  <label class="f">Name<input id="gpl-name" value="${esc(p.name || "")}" placeholder="e.g. Monthly, Quarterly, Annual + PT"></label>
+  <div class="grid2"><label class="f">Length<select id="gpl-months">${[[1, "1 month"], [3, "3 months"], [6, "6 months"], [12, "12 months"]].map(([k, l]) => `<option value="${k}" ${+p.months === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+  <label class="f">Price before GST (₹)<input id="gpl-price" inputmode="numeric" value="${p.price ?? ""}"></label></div>
+  <span class="small muted">${Hub.gym && Hub.gym.gstin ? `GST at ${gstRate()}% is added on the receipt.` : "Add your GSTIN in Settings to show GST on receipts."}</span>
+  <button class="btn primary block" data-act="g-plsave">Save plan</button>${S.sheet.id ? `<button class="btn block" data-act="g-plarch" data-id="${S.sheet.id}">${p.archived ? "Offer this plan again" : "Stop offering this plan"}</button>` : ""}<button class="btn block" data-act="sheet-close">Cancel</button>`;
+}
+async function savePlan(){
+  const name = val("gpl-name"), months = +val("gpl-months") || 1, price = +val("gpl-price");
+  if (!name) return toast("Give the plan a name.");
+  if (!(price > 0) || price > 1000000) return toast("Enter the price in rupees.");
+  const data = {name: name.slice(0, 60), months, price: Math.round(price)};
+  try { if (S.sheet.id) await gref("plans").doc(S.sheet.id).update(data); else await gref("plans").add({...data, archived: false}); }
+  catch(e){ return toast("Couldn't save: " + (e.code || "error")); }
+  S.sheet = null; S.forceRender = true; render(); toast("Plan saved");
+}
+
+/* ---- payments and receipts ---- */
+function payCalc(P){
+  const m = Hub.members.find(x => x.id === P.mid) || {};
+  if (P.plan === "dues") return {m, dues: true, base: +m.due || 0, gst: 0, total: +m.due || 0, from: null, to: null};
+  const pl = Hub.plans.find(x => x.id === P.plan); if (!pl) return {m};
+  const rate = gstRate(), base = +pl.price, gst = Math.round(base * rate) / 100, total = Math.round((base + gst) * 100) / 100;
+  const from = P.from || (m.end && m.end >= today() ? addDays(m.end, 1) : today()), to = addDays(addMonths(from, +pl.months), -1);
+  return {m, pl, rate, base, gst, total, from, to};
+}
+function paySheet(){
+  const P = S.sheet; const mems = Hub.members.filter(m => m.status !== "left" || m.id === P.mid);
+  const plans = Hub.plans.filter(p => !p.archived);
+  if (!plans.length && !isOwner()) return `<h2>Record a payment</h2><div class="empty">The gym owner hasn't set up membership plans yet.</div><button class="btn block" data-act="sheet-close">Close</button>`;
+  if (!plans.length) return `<h2>Record a payment</h2><div class="empty">Set up your membership plans first.</div><button class="btn primary block" data-act="g-planopen">Add a plan</button><button class="btn block" data-act="sheet-close">Close</button>`;
+  if (!P.plan) P.plan = (plans.find(p => p.id === (Hub.members.find(x => x.id === P.mid) || {}).planId) || plans[0]).id;
+  const c = payCalc(P), m = c.m || {};
+  if (P.paid == null && c.total != null) P.paid = c.total;
+  return `<h2>Record a payment</h2>
+  <label class="f">Member<select id="gp-mem"><option value="">Choose a member</option>${mems.map(x => `<option value="${x.id}" ${x.id === P.mid ? "selected" : ""}>${esc(x.name)}${x.phone ? " · " + esc(x.phone) : ""}</option>`).join("")}</select></label>
+  ${m.id ? `<div class="row" style="gap:6px">${memPill(m)}${duePill(m)}</div>` : ""}
+  <div class="grid2"><label class="f">For<select id="gp-plan">${plans.map(p => `<option value="${p.id}" ${p.id === P.plan ? "selected" : ""}>${esc(p.name)} · ${rupee(p.price)}</option>`).join("")}${+m.due > 0 ? `<option value="dues" ${P.plan === "dues" ? "selected" : ""}>Balance due only · ${rupee(m.due)}</option>` : ""}</select></label>
+  ${c.dues ? "" : `<label class="f">Starts<input id="gp-from" type="date" value="${esc(c.from || "")}"></label>`}</div>
+  ${c.dues ? "" : c.pl ? `<div class="tbl"><table><tr><td>Membership</td><td>${shortDate(c.from)} – ${shortDate(c.to)} ${parse(c.to).getFullYear()}</td></tr><tr><td>Price</td><td class="num">${rupee(c.base)}</td></tr>${c.rate ? `<tr><td>GST ${c.rate}%</td><td class="num">${rupee(c.gst)}</td></tr>` : ""}<tr><td><b>Total</b></td><td class="num"><b>${rupee(c.total)}</b></td></tr></table></div>` : ""}
+  <div><div class="small muted" style="font-weight:600;margin-bottom:6px">Paid by</div><div class="chips">${PAY_MODES.map(([k, l]) => `<button class="chip ${(P.mode || "upi") === k ? "on" : ""}" data-act="g-pmode" data-v="${k}">${l}</button>`).join("")}</div></div>
+  <div class="grid2"><label class="f">Amount received (₹)<input id="gp-paid" inputmode="decimal" value="${esc(P.paid ?? "")}"></label><label class="f">Reference (optional)<input id="gp-ref" value="${esc(P.ref || "")}" placeholder="UPI ref / last 4 digits"></label></div>
+  <span class="small muted">If less than the total is paid, the rest is saved as a balance due.</span>
+  <button class="btn primary block" data-act="g-paysave">Save and make receipt</button><button class="btn block" data-act="sheet-close">Cancel</button>`;
+}
+function payCollect(){ const P = S.sheet; if (!P || P.kind !== "gpay") return; const e = id => document.getElementById(id);
+  if (e("gp-mem")) P.mid = e("gp-mem").value || null; if (e("gp-plan")) P.plan = e("gp-plan").value; if (e("gp-from")) P.from = e("gp-from").value || null;
+  if (e("gp-paid")) P.paid = e("gp-paid").value; if (e("gp-ref")) P.ref = e("gp-ref").value; }
+async function savePayment(){
+  payCollect(); const P = S.sheet, c = payCalc(P), m = c.m;
+  if (!m || !m.id) return toast("Choose the member.");
+  if (!c.dues && !c.pl) return toast("Choose a plan.");
+  const paid = Math.round(+P.paid * 100) / 100;
+  if (!(paid > 0)) return toast("Enter the amount received.");
+  if (paid > c.total + 0.5) return toast(`That's more than the total of ${rupee(c.total)}.`);
+  const date = today(), fy = finYear(date), ctr = gref("counters").doc("receipt-" + fy), payRef = gref("payments").doc(), memRef = gref("members").doc(m.id);
+  const due = Math.max(0, Math.round(((+m.due || 0) + c.total - paid) * 100) / 100);
+  const pay = clean({memberId: m.id, memberName: m.name || "", phone: m.phone || null, kind: c.dues ? "dues" : "plan", planId: c.dues ? null : c.pl.id, planName: c.dues ? "Balance payment" : c.pl.name, months: c.dues ? null : +c.pl.months,
+    from: c.from, to: c.to, base: c.base, gstRate: c.dues ? 0 : c.rate, gst: c.gst, total: c.total, paid, due, mode: P.mode || "upi", ref: (P.ref || "").slice(0, 60) || null, date, by: Cloud.user.uid, byName: Cloud.me.name || ""});
+  const upd = c.dues ? {due} : {planId: c.pl.id, planName: c.pl.name, months: +c.pl.months, fee: c.total, from: c.from, end: c.to, due, status: "active", leftOn: null, exitReason: null, exitNote: null};
+  let receipt = null;
+  try {
+    receipt = await Cloud.db.runTransaction(async tx => {
+      const sn = await tx.get(ctr); const n = (sn.exists ? +sn.data().n || 0 : 0) + 1;
+      const no = `${rcptPrefix()}/${fy}/${String(n).padStart(4, "0")}`;
+      tx.set(ctr, {n}); tx.set(payRef, {...pay, receipt: no, n}); tx.update(memRef, upd);
+      return no;
+    });
+  } catch(e){ return toast(/unavailable|offline|network/i.test(String(e && (e.code || e.message))) ? "Couldn't save: no internet. Receipts need a connection; try again when you're online." : "Couldn't save the payment: " + (e.code || "error")); }
+  S.sheet = {kind: "greceipt", p: {...pay, receipt, id: payRef.id}}; S.forceRender = true; render(); toast(`Payment saved · receipt ${receipt}`);
+}
+function receiptHTML(p){
+  const g = Hub.gym || {}, half = p.gstRate ? p.gstRate / 2 : 0, tax = !!g.gstin && p.gst > 0;
+  return `<div class="receipt"><div class="row between" style="align-items:flex-start"><div><b style="font-size:20px">${esc(g.name || gymName())}</b>${g.address ? `<div class="small">${esc(g.address)}</div>` : ""}${g.gstin ? `<div class="small">GSTIN ${esc(g.gstin)}</div>` : ""}</div><div style="text-align:right"><b>${tax ? "Tax invoice" : "Receipt"}</b><div class="small num">${esc(p.receipt || "")}</div><div class="small">${shortDate(p.date)} ${parse(p.date).getFullYear()}</div></div></div>
+  <div class="small"><b>Billed to:</b> ${esc(p.memberName)}${p.phone ? " · " + esc(p.phone) : ""}</div>
+  <table><tr><th>Description</th>${g.sac ? "<th>SAC</th>" : ""}<th style="text-align:right">Amount</th></tr>
+  <tr><td>${p.kind === "dues" ? "Payment towards balance due" : `Gym membership: ${esc(p.planName)} (${shortDate(p.from)} – ${shortDate(p.to)} ${parse(p.to).getFullYear()})`}</td>${g.sac ? `<td>${esc(g.sac)}</td>` : ""}<td class="num" style="text-align:right">${rupee(p.base)}</td></tr>
+  ${tax ? `<tr><td>CGST ${half}%</td>${g.sac ? "<td></td>" : ""}<td class="num" style="text-align:right">${rupee(p.gst / 2)}</td></tr><tr><td>SGST ${half}%</td>${g.sac ? "<td></td>" : ""}<td class="num" style="text-align:right">${rupee(p.gst / 2)}</td></tr>` : ""}
+  <tr><td><b>Total</b></td>${g.sac ? "<td></td>" : ""}<td class="num" style="text-align:right"><b>${rupee(p.total)}</b></td></tr>
+  <tr><td>Received (${esc(modeLabel(p.mode))}${p.ref ? ", ref " + esc(p.ref) : ""})</td>${g.sac ? "<td></td>" : ""}<td class="num" style="text-align:right">${rupee(p.paid)}</td></tr>
+  ${p.due > 0 ? `<tr><td>Balance due</td>${g.sac ? "<td></td>" : ""}<td class="num" style="text-align:right">${rupee(p.due)}</td></tr>` : ""}</table>
+  <div class="small muted">Thank you for training with us.${p.byName ? ` Received by ${esc(p.byName)}.` : ""}</div></div>`;
+}
+const receiptText = p => `${gymName()}\n${p.receipt} · ${shortDate(p.date)}\n${p.kind === "dues" ? "Payment towards balance due" : `Membership: ${p.planName} (${shortDate(p.from)} – ${shortDate(p.to)})`}\nTotal ${rupee(p.total)}${p.gst ? ` incl. GST ${rupee(p.gst)}` : ""}\nReceived ${rupee(p.paid)} by ${modeLabel(p.mode)}${p.due > 0 ? `\nBalance due ${rupee(p.due)}` : ""}\nThank you!`;
+function receiptSheet(){
+  const p = S.sheet.p;
+  return `<h2>Receipt</h2>${receiptHTML(p)}
+  <div class="grid2">${NATIVE ? "" : `<button class="btn blue" data-act="g-print">Print</button>`}${p.phone ? `<a class="btn" href="${esc(waURL(p.phone, receiptText(p)))}" target="_blank" rel="noopener">Send on WhatsApp</a>` : `<button class="btn" data-act="copy-code" data-v="${esc(receiptText(p))}">Copy receipt text</button>`}</div>
+  <button class="btn block" data-act="sheet-close">Done</button>`;
+}
+function downloadText(name, text, title){
+  if (NATIVE) return saveFile(name, text, title);
+  try { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], {type: "text/csv"})); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
+  catch(e){ openSheet({kind: "text", title, text}); }
+}
+const csvCell = c => { let v = String(c ?? ""); if (/^[=+\-@]/.test(v)) v = "'" + v; return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
+async function paysFor(month){
+  if (month >= monthKey(monthStart(prevMonth()))) return Hub.pays.filter(p => monthKey(p.date) === month);
+  if (Hub.payCache[month]) return Hub.payCache[month];
+  const q = await gref("payments").where("date", ">=", monthStart(month)).where("date", "<=", monthEnd(month)).get().catch(() => null);
+  Hub.payCache[month] = q ? q.docs.map(d => ({id: d.id, ...d.data()})).sort((a, b) => (b.date + (b.receipt || "")).localeCompare(a.date + (a.receipt || ""))) : [];
+  render(); return Hub.payCache[month];
+}
+function viewPayments(){
+  const months = [monthKey(today())]; for (let i = 0; i < 5; i++) months.push(prevMonth(months[months.length - 1]));
+  const m = months.includes(S.ui.gpm) ? S.ui.gpm : months[0];
+  const list = m >= monthKey(monthStart(prevMonth())) ? Hub.pays.filter(p => monthKey(p.date) === m) : Hub.payCache[m];
+  if (!list) paysFor(m);
+  const L = list || [], sum = k => L.reduce((a, p) => a + (+p[k] || 0), 0);
+  const byMode = PAY_MODES.map(([k, l]) => [l, L.filter(p => p.mode === k).reduce((a, p) => a + (+p.paid || 0), 0)]).filter(x => x[1] > 0);
+  const owed = Hub.members.filter(x => x.status !== "left").reduce((a, x) => a + (+x.due || 0), 0);
+  return `<div class="row between"><div><span class="eyebrow">${esc(gymName())}</span><h1>Payments</h1></div><button class="btn blue" data-act="g-payopen">Record payment</button></div>
+  <div class="chips">${months.map(k => `<button class="chip ${k === m ? "on" : ""}" data-act="g-pm" data-v="${k}">${esc(monthName(k))}</button>`).join("")}</div>
+  <section class="grid3"><div class="stat"><b class="num">${rupee(sum("paid"))}</b><span>Received</span></div><div class="stat"><b class="num">${L.length}</b><span>Payments</span></div><div class="stat"><b class="num">${rupee(sum("gst"))}</b><span>GST on receipts</span></div>
+  ${isOwner() ? `<div class="stat"><b class="num">${rupee(owed)}</b><span>Balance due now (all members)</span></div>${byMode.map(([l, v]) => `<div class="stat"><b class="num">${rupee(v)}</b><span>${esc(l)}</span></div>`).join("")}` : ""}</section>
+  <section class="card"><div class="row between"><h3>${esc(monthName(m))}</h3>${isOwner() && L.length ? `<button class="btn ghost" data-act="g-paycsv" data-v="${m}">Export .csv</button>` : ""}</div>
+  ${!list ? `<div class="empty">Loading…</div>` : L.length ? `<div class="tbl"><table><tr><th>Date</th><th>Receipt</th><th>Member</th><th>For</th><th>Total</th><th>Received</th><th>Mode</th><th>By</th></tr>${L.map(p => `<tr><td>${shortDate(p.date)}</td><td><button class="btn ghost num" style="padding:0" data-act="g-rcpt" data-id="${p.id}" data-m="${m}">${esc(p.receipt || "–")}</button></td><td>${esc(p.memberName || "")}</td><td>${esc(p.planName || "")}</td><td class="num">${rupee(p.total)}</td><td class="num">${rupee(p.paid)}</td><td>${esc(modeLabel(p.mode))}</td><td>${esc(p.byName || "")}</td></tr>`).join("")}</table></div>` : `<div class="empty">No payments recorded in ${esc(monthName(m))}.</div>`}</section>`;
+}
+async function paymentsCSV(month){
+  const L = await paysFor(month);
+  const rows = [["date", "receipt", "member", "phone", "for", "from", "to", "price", "gst_rate", "gst", "total", "received", "balance_due", "mode", "reference", "recorded_by"],
+    ...[...L].reverse().map(p => [p.date, p.receipt, p.memberName, p.phone, p.planName, p.from, p.to, p.base, p.gstRate, p.gst, p.total, p.paid, p.due, modeLabel(p.mode), p.ref, p.byName])];
+  downloadText(`payments-${month}.csv`, rows.map(r => r.map(csvCell).join(",")).join("\n"), "Payments");
+}
+
+/* ---- owner settings ---- */
+function viewGymSettings(){
+  const g = Hub.gym || {}, plans = Hub.plans;
+  return `<div><span class="eyebrow">${esc(gymName())}</span><h1>Settings</h1></div>
+  <section class="card"><h3>Gym details</h3><span class="small muted">Shown on receipts.</span>
+  <div class="grid2"><label class="f">Gym name<input id="gs-name" value="${esc(g.name || gymName())}"></label><label class="f">GSTIN (optional)<input id="gs-gstin" value="${esc(g.gstin || "")}" autocapitalize="characters" placeholder="29ABCDE1234F1Z5"></label></div>
+  <label class="f">Address<input id="gs-addr" value="${esc(g.address || "")}" placeholder="Street, area, city, PIN"></label>
+  <div class="grid3"><label class="f">GST rate %<input id="gs-rate" inputmode="decimal" value="${esc(g.gstRate ?? 18)}"></label><label class="f">SAC code (optional)<input id="gs-sac" value="${esc(g.sac || "")}" inputmode="numeric"></label><label class="f">Receipt prefix<input id="gs-prefix" value="${esc(g.prefix || rcptPrefix())}" autocapitalize="characters" maxlength="6"></label></div>
+  <span class="small muted">With a GSTIN, receipts become tax invoices and split GST into CGST and SGST (for members in your state). Receipt numbers restart each financial year (April). Check your SAC code and rate with your accountant.</span>
+  <label class="f">Win-back message (sent from the Retention page)<textarea id="gs-offer" placeholder="Use {name} for the member's first name and {gym} for the gym">${esc(g.offer || DEFAULT_OFFER)}</textarea></label>
+  <button class="btn primary block" data-act="g-gsave">Save details</button></section>
+  <section class="card"><div class="row between"><h3>Membership plans</h3><button class="btn blue" data-act="g-planopen">Add plan</button></div>
+  ${plans.length ? `<div class="tbl"><table><tr><th>Plan</th><th>Length</th><th>Price</th><th>With GST</th><th></th></tr>${plans.map(p => `<tr><td>${esc(p.name)}${p.archived ? ` <span class="pill">Not offered</span>` : ""}</td><td>${p.months} month${p.months === 1 ? "" : "s"}</td><td class="num">${rupee(p.price)}</td><td class="num">${rupee(p.price * (1 + gstRate() / 100))}</td><td><button class="btn ghost" data-act="g-planopen" data-id="${p.id}">Edit</button></td></tr>`).join("")}</table></div>` : `<div class="empty">No plans yet. Add your monthly, quarterly, 6-month and yearly prices.</div>`}</section>
+  <section class="card"><h3>Front desk</h3><span class="small">Receptionists install the app (or open the website), create an account as <b>Front desk</b> and enter this code. They can add members, record payments and check people in. They don't see gym figures, trainer follow-ups or these settings.</span>
+  <div class="row between"><div><span class="eyebrow">Front-desk code</span><div style="font-family:var(--f-display);font-size:30px;letter-spacing:.12em" class="num">${esc(g.deskCode || "········")}</div></div><div class="row" style="gap:6px">${g.deskCode ? `<button class="btn" data-act="copy-code" data-v="${esc(g.deskCode)}">Copy</button>` : ""}<button class="btn" data-act="g-deskcode">${g.deskCode ? "New code" : "Create code"}</button></div></div>
+  ${Hub.staff.length ? Hub.staff.map(s => `<div class="row between" style="border-top:1px solid var(--line);padding-top:8px"><span>${esc(s.name || s.email || "Staff")} <span class="small muted">· ${esc(s.email || "")} · since ${s.added ? shortDate(s.added) : ""}</span></span><button class="btn ghost danger" data-act="g-staffdel" data-id="${s.id}">Remove</button></div>`).join("") : `<div class="empty">No front-desk staff yet.</div>`}
+  <span class="small muted">A new code stops the old one working for new joiners; staff already added keep access until you remove them.</span></section>
+  <section class="card"><h3>Account</h3><span class="muted small">Signed in as ${esc(Cloud.user.email)} · Gym owner</span><button class="btn block" data-act="signout">Sign out</button><button class="btn danger block" data-act="ask-delete-account">Delete my account</button></section>`;
+}
+const DEFAULT_OFFER = "Hi {name}, we miss you at {gym}! Come back this month and your first session with your trainer is on us. Reply here and we'll book you in.";
+async function saveGymDetails(){
+  const name = val("gs-name"), gstin = val("gs-gstin").toUpperCase().replace(/\s/g, ""), rate = +val("gs-rate");
+  if (!name) return toast("Enter the gym name.");
+  if (gstin && !/^\d{2}[A-Z]{5}\d{4}[A-Z][A-Z\d]Z[A-Z\d]$/.test(gstin)) return toast("That GSTIN doesn't look right: it has 15 characters, like 29ABCDE1234F1Z5.");
+  if (!(rate >= 0 && rate <= 28)) return toast("Enter a GST rate between 0 and 28.");
+  const data = {name: name.slice(0, 80), gstin: gstin || null, gstRate: rate, address: val("gs-addr").slice(0, 200) || null, sac: val("gs-sac").slice(0, 10) || null,
+    prefix: val("gs-prefix").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6) || null, offer: (document.getElementById("gs-offer").value || "").trim().slice(0, 500) || null};
+  try {
+    await gref().update(data);
+    if (name !== Cloud.me.gymName){ await uref().update({gymName: name}).catch(() => {}); if (Cloud.me.gymCode) await Cloud.db.collection("gymcodes").doc(Cloud.me.gymCode).update({name}).catch(() => {}); if (Hub.gym && Hub.gym.deskCode) await Cloud.db.collection("gymcodes").doc(Hub.gym.deskCode).update({name}).catch(() => {}); }
+  } catch(e){ return toast("Couldn't save: " + (e.code || "error")); }
+  toast("Gym details saved");
+}
+async function newDeskCode(){
+  const A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789", old = Hub.gym && Hub.gym.deskCode;
+  for (let i = 0; i < 6; i++){
+    const code = Array.from({length: 8}, () => A[Math.floor(Math.random() * A.length)]).join("");
+    try {
+      await Cloud.db.collection("gymcodes").doc(code).set({gymId: Cloud.user.uid, name: gymName(), kind: "desk"});
+      await gref().update({deskCode: code});
+      if (old) await Cloud.db.collection("gymcodes").doc(old).delete().catch(() => {});
+      return toast("Front-desk code ready");
+    } catch(e){}
+  }
+  toast("Couldn't create a code. Try again.");
+}
+
+/* ---- owner dashboard additions ---- */
+function revenueAtRisk(){
+  const rows = Hub.members.filter(m => m.status !== "left" && memState(m) !== "expired").map(m => ({m, a: memberActivity(m), v: monthlyFee(m)})).filter(x => ["risk", "inactive"].includes(x.a.st) && x.v > 0).sort((a, b) => b.v - a.v);
+  return {rows, total: rows.reduce((a, x) => a + x.v, 0)};
+}
+function actionLists(){
+  const apps = appMembers(), recent = c => joinedOf(c) && daysBetween(joinedOf(c), today()) <= 30;
+  const needNew = apps.filter(c => !recent(c) && (!c.program || (c.program.weeks && c.program.week > c.program.weeks)));
+  const newNo = apps.filter(c => recent(c) && !c.program);
+  const overdue = Hub.members.filter(isOverdue), ending = Hub.members.filter(m => m.status !== "left" && memState(m) === "ending");
+  return [
+    {k: "needprog", t: "Need a new program", d: "Program finished, or no program", list: needNew.map(c => ({n: c.name, s: c.program ? `${c.program.name} finished` : "No program", tr: c._t}))},
+    {k: "newnoprog", t: "New, no program yet", d: "Joined in the last 30 days", list: newNo.map(c => ({n: c.name, s: `Joined ${shortDate(joinedOf(c))}`, tr: c._t}))},
+    {k: "overdue", t: "Overdue", d: "Membership expired or balance due", list: overdue.map(m => ({n: m.name, s: memState(m) === "expired" ? `Expired ${shortDate(m.end)}${+m.due > 0 ? `, due ${rupee(m.due)}` : ""}` : `Due ${rupee(m.due)}`, tr: trainerName(m.trainerId), id: m.id})), f: "overdue"},
+    {k: "ending", t: "Ending in 30 days", d: "Remind them to renew", list: ending.map(m => ({n: m.name, s: `Ends ${shortDate(m.end)}`, tr: trainerName(m.trainerId), id: m.id})), f: "ending"}
+  ];
+}
+function ownerGymCards(){
+  const cur = Hub.members.filter(m => m.status !== "left"), active = cur.filter(m => ["active", "ending"].includes(memState(m))).length;
+  const got = Hub.pays.filter(p => monthKey(p.date) === monthKey(today())).reduce((a, p) => a + (+p.paid || 0), 0);
+  const owed = cur.reduce((a, m) => a + (+m.due || 0), 0), exp = cur.filter(m => memState(m) === "expired").length, rr = revenueAtRisk();
+  let out = `<section class="grid3"><div class="stat"><b class="num">${active}</b><span>Paid-up members</span></div><div class="stat"><b class="num">${rupee(got)}</b><span>Received this month</span></div><div class="stat"><b class="num">${rupee(owed)}</b><span>Balance due${exp ? ` · ${exp} expired` : ""}</span></div></section>`;
+  out += `<section class="card"><div class="row between"><h3>Revenue at risk</h3><b class="num" style="font-size:22px;color:var(--warn)">${rupee(rr.total)}<span class="small muted"> a month</span></b></div><span class="small muted">Monthly value of paid-up members who are training well below their usual pace or haven't visited in 2 weeks.</span>
+  ${rr.rows.length ? `<div class="tbl"><table><tr><th>Member</th><th>Why</th><th>Trainer</th><th>Plan</th><th>A month</th></tr>${rr.rows.slice(0, 8).map(x => `<tr><td><button class="btn ghost" style="padding:0" data-act="g-mopen" data-id="${x.m.id}">${esc(x.m.name)}</button></td><td style="white-space:normal">${esc(x.a.why || "")}</td><td>${esc(trainerName(x.m.trainerId) || "–")}</td><td>${esc(x.m.planName || "")}</td><td class="num">${rupee(x.v)}</td></tr>`).join("")}</table></div>` : `<div class="empty">No paid-up members at risk right now.</div>`}</section>`;
+  out += `<section class="card"><h3>To do</h3><div class="grid2" style="align-items:start">${actionLists().map(a => `<div style="border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:6px;min-width:0"><div class="row between"><b>${esc(a.t)}</b><span class="pill ${a.list.length ? "warn" : ""}">${a.list.length}</span></div><span class="small muted">${esc(a.d)}</span>
+    ${a.list.slice(0, 5).map(x => `<div class="small">${x.id ? `<button class="btn ghost" style="padding:0;font-size:inherit" data-act="g-mopen" data-id="${x.id}">${esc(x.n || "Member")}</button>` : `<b>${esc(x.n || "Member")}</b>`} · ${esc(x.s)}${x.tr ? ` <span class="muted">· ${esc(x.tr)}</span>` : ""}</div>`).join("")}${a.list.length > 5 && a.f ? `<button class="btn ghost" style="align-self:flex-start;padding:0" data-act="g-mfgo" data-v="${a.f}">See all ${a.list.length}</button>` : a.list.length > 5 ? `<span class="small muted">and ${a.list.length - 5} more</span>` : ""}</div>`).join("")}</div></section>`;
+  return out;
+}
+
+/* ---- retention additions: win-back, exit reasons, trainer ranking ---- */
+function winBackList(){
+  const out = [], seen = new Set();
+  Hub.members.forEach(m => {
+    const st = memState(m), a = memberActivity(m);
+    const lapsed = st === "expired" && daysBetween(m.end, today()) <= 180;
+    const leftRecent = m.status === "left" && m.exitReason !== "moved" && m.leftOn && daysBetween(m.leftOn, today()) <= 180;
+    const gone = m.status !== "left" && a.st === "inactive";
+    if (!(lapsed || leftRecent || gone)) return;
+    if (m.uid) seen.add(m.uid);
+    out.push({n: m.name, phone: m.phone, tr: trainerName(m.trainerId), why: leftRecent ? `Left ${m.leftOn ? shortDate(m.leftOn) : ""}: ${exitLabel(m.exitReason)}` : lapsed ? `Membership expired ${shortDate(m.end)}` : a.why, id: m.id});
+  });
+  appMembers().forEach(c => { if (seen.has(c.id) || Hub.members.some(m => m.uid === c.id)) return; const r = riskOf(c); if (r.st === "inactive") out.push({n: c.name, tr: c._t, why: r.why}); });
+  return out;
+}
+function winBackCard(){
+  const L = winBackList(), offer = (Hub.gym && Hub.gym.offer) || DEFAULT_OFFER;
+  const msg = n => offer.replace(/\{name\}/g, firstOf(n)).replace(/\{gym\}/g, gymName());
+  return `<section class="card"><div class="row between"><h3>Win-back list</h3><span class="pill ${L.length ? "warn" : ""}">${L.length}</span></div><span class="small muted">Members who stopped coming, let their membership lapse or left in the last 6 months (not those who moved away). The message is set in Settings.</span>
+  ${L.length ? `<div class="tbl"><table><tr><th>Member</th><th>Why</th><th>Trainer</th><th></th></tr>${L.map(x => `<tr><td>${x.id ? `<button class="btn ghost" style="padding:0" data-act="g-mopen" data-id="${x.id}">${esc(x.n || "Member")}</button>` : esc(x.n || "Member")}</td><td style="white-space:normal;min-width:160px">${esc(x.why || "")}</td><td>${esc(x.tr || "–")}</td><td>${x.phone ? `<a class="btn" href="${esc(waURL(x.phone, msg(x.n)))}" target="_blank" rel="noopener">WhatsApp offer</a>` : `<span class="small muted">No phone: add them on Members</span>`}</td></tr>`).join("")}</table></div>` : `<div class="empty">Nobody to win back right now.</div>`}</section>`;
+}
+function exitReasonsCard(){
+  const left = Hub.members.filter(m => m.status === "left" && m.leftOn && daysBetween(m.leftOn, today()) <= 365), n = left.length;
+  return `<section class="card"><h3>Why members left</h3><span class="small muted">Reasons recorded when a member is marked as left, last 12 months.</span>
+  ${n ? EXIT_WHY.map(([k, l]) => { const c = left.filter(m => (m.exitReason || "other") === k).length; return c ? `<div class="row" style="gap:10px;flex-wrap:nowrap"><span style="width:130px;flex:none" class="small">${esc(l)}</span><div style="flex:1;height:14px;background:var(--sunk);border-radius:7px;overflow:hidden"><i style="display:block;height:100%;width:${Math.round(c / n * 100)}%;background:var(--accent)"></i></div><b class="small num" style="width:70px;text-align:right">${c} · ${Math.round(c / n * 100)}%</b></div>` : ""; }).join("") : `<div class="empty">No one has been marked as left yet.</div>`}</section>`;
+}
+function trainerRankingCard(){
+  const rows = Owner.trainers.map(t => { const cl = Owner.clients[t.id] || [], r = retCells(cl), calls = Owner.calls[t.id] || [];
+    const gm = Hub.members.filter(m => m.trainerId === t.id), months = gm.filter(m => m.start).map(m => daysBetween(m.start, m.status === "left" && m.leftOn ? m.leftOn : today()) / 30.4);
+    return {t, n: cl.length, r, risk: cl.filter(c => ["risk", "inactive"].includes(riskOf(c).st)).length, calls, avg: months.length ? months.reduce((a, b) => a + b, 0) / months.length : null}; })
+    .sort((a, b) => ((b.r[1] || {}).p ?? -1) - ((a.r[1] || {}).p ?? -1) || ((b.r[0] || {}).p ?? -1) - ((a.r[0] || {}).p ?? -1) || (b.avg || 0) - (a.avg || 0));
+  return `<section class="card"><h3>Trainer ranking</h3><span class="small muted">Ranked by how many clients are still training at 90 days, then 30 days. Follow-ups are from each trainer's weekly call list (last 8 weeks).</span>
+  <div class="tbl"><table><tr><th>#</th><th>Trainer</th><th>Clients</th><th>30 days</th><th>90 days</th><th>180 days</th><th>Avg. membership</th><th>At risk</th><th>Follow-ups</th><th>Back training</th><th>Lost</th></tr>
+  ${rows.map((x, i) => `<tr><td><b>${i + 1}</b></td><td>${esc(x.t.name || x.t.email)}</td><td>${x.n}</td>${x.r.map(c => `<td>${retCell(c)}</td>`).join("")}<td>${x.avg != null ? fmt(x.avg, 1) + " mo" : "–"}</td><td>${x.risk}</td><td>${x.calls.length}</td><td>${x.calls.filter(c => c.outcome === "back").length}</td><td>${x.calls.filter(c => c.outcome === "lost").length}</td></tr>`).join("") || `<tr><td colspan="11" class="muted">No trainers yet.</td></tr>`}</table></div></section>`;
 }
 
 /* ============ Start over ============ */

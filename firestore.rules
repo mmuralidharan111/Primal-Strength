@@ -85,14 +85,19 @@ service cloud.firestore {
       allow write: if isMe(gid);
     }
     match /gyms/{gid}/members/{mid} {
-      allow read: if gymTeam(gid);
-      allow create, update: if gymTeam(gid)
-        && request.resource.data.keys().hasOnly(['name', 'phone', 'email', 'trainerId', 'start', 'notes', 'uid', 'status', 'due', 'created', 'by',
+      function memberOK(d) {
+        return d.keys().hasOnly(['name', 'phone', 'email', 'trainerId', 'start', 'notes', 'uid', 'status', 'due', 'created', 'by',
              'planId', 'planName', 'months', 'fee', 'from', 'end', 'leftOn', 'exitReason', 'exitNote', 'lastVisit'])
-        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
-        && textUpTo(request.resource.data, 'phone', 20) && textUpTo(request.resource.data, 'email', 120) && textUpTo(request.resource.data, 'notes', 300)
-        && textUpTo(request.resource.data, 'exitNote', 200) && isNum(request.resource.data, 'due') && isNum(request.resource.data, 'fee')
-        && (isMe(gid) || request.resource.data.get('uid', null) == (resource == null ? null : resource.data.get('uid', null)));
+          && d.name is string && d.name.size() > 0 && d.name.size() <= 120
+          && textUpTo(d, 'phone', 20) && textUpTo(d, 'email', 120) && textUpTo(d, 'notes', 300)
+          && textUpTo(d, 'exitNote', 200) && isNum(d, 'due') && isNum(d, 'fee');
+      }
+      allow read: if gymTeam(gid);
+      // Only the owner links a member to an app account
+      allow create: if gymTeam(gid) && memberOK(request.resource.data)
+        && (isMe(gid) || request.resource.data.get('uid', null) == null);
+      allow update: if gymTeam(gid) && memberOK(request.resource.data)
+        && (isMe(gid) || request.resource.data.get('uid', null) == resource.data.get('uid', null));
       allow delete: if isMe(gid);
     }
     match /gyms/{gid}/payments/{pid} {
@@ -113,8 +118,9 @@ service cloud.firestore {
     }
     match /gyms/{gid}/counters/{cid} {
       allow read: if gymTeam(gid);
-      allow write: if gymTeam(gid) && request.resource.data.keys().hasOnly(['n']) && request.resource.data.n is int
-        && request.resource.data.n == (resource == null ? 0 : resource.data.n) + 1;
+      // Receipt numbers only ever go up by one
+      allow create: if gymTeam(gid) && request.resource.data.keys().hasOnly(['n']) && request.resource.data.n == 1;
+      allow update: if gymTeam(gid) && request.resource.data.keys().hasOnly(['n']) && request.resource.data.n == resource.data.n + 1;
     }
     match /gyms/{gid}/staff/{sid} {
       allow read: if isMe(gid) || isMe(sid);

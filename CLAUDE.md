@@ -65,8 +65,8 @@ Open `www/index.html` in a browser for a quick look: without `www/vendor/` Fireb
 
 ## Current state (24 Nov 2026)
 
-- Latest release: coach tools build (after build-48). Release = push to `main`.
-- Retention build (number 2 in `BACKLOG.md`) is built and tested on branch `claude/inspiring-euler-p66uye`; not yet on `main`. Database rules changed — Manas must paste `firestore.rules` after release.
+- Latest release: retention build = build-54 (24 Nov 2026). Release = push to `main`. Database rules changed in it (Manas was given them to paste).
+- `docs/ARCHITECTURE.md` (architecture + outside code-review guide) is on branch `claude/inspiring-euler-p66uye`, not yet on `main` — it goes out with the next release.
 - Next: number 3, events and community. Ask where race listings should come from.
 - Parallel: iPhone app is his priority — needs his Apple Developer Program account first.
 - See `BACKLOG.md` for the build plan and full details.
